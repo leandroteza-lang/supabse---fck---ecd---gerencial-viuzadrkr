@@ -583,6 +583,7 @@ export default function App() {
   const [openPieDropdownId, setOpenPieDropdownId] = useState(null)
   const [pieChartAccountSearch, setPieChartAccountSearch] = useState('')
   const [piePeriods, setPiePeriods] = useState<Record<string, { from: string; to: string }>>({})
+  const [hiddenTop5Lines, setHiddenTop5Lines] = useState<Record<string, boolean>>({})
 
   // Sincronização Automática (Auto-Save) com o navegador e nuvem
   useEffect(() => {
@@ -1973,14 +1974,15 @@ export default function App() {
     const top10Total = top10.reduce((acc: any, curr: any) => acc + curr.valor, 0)
     const paretoPct = totalExpenses > 0 ? (top10Total / totalExpenses) * 100 : 0
 
-    // Trend Analysis for Top 5 over all periods
+    // Trend Analysis for Top 5 over last 12 periods
     const top5 = top10.slice(0, 5)
-    const trendData = monthlyData.periods.map((period: any) => {
+    const last12Periods = monthlyData.periods.slice(-12)
+    const trendData = last12Periods.map((period: any) => {
       const datePart = period.split(' a ')[0]
       const [dd, mm, yyyy] = datePart.split('/')
       const date = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd))
       const monthName = date.toLocaleString('pt-BR', { month: 'short' }).replace('.', '')
-      const formattedMonth = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)}/${yyyy.substring(2)}`
+      const formattedMonth = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)}`
 
       const dataPoint: any = { period: formattedMonth, fullPeriod: period }
       top5.forEach((item: any) => {
@@ -5667,16 +5669,26 @@ export default function App() {
                             />
                             <YAxis
                               tick={{ fontSize: 10, fill: '#94a3b8' }}
-                              tickFormatter={(v) => formatCompact(v)}
-                              width={60}
+                              tickFormatter={(v) => `R$ ${formatCompact(v)}`}
+                              width={80}
                             />
                             <Tooltip content={<CustomTooltip />} />
-                            <Legend wrapperStyle={{ fontSize: 11, fontWeight: 600 }} />
+                            <Legend
+                              wrapperStyle={{ fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                              onClick={(e) => {
+                                const { dataKey } = e
+                                setHiddenTop5Lines((prev) => ({
+                                  ...prev,
+                                  [dataKey]: !prev[dataKey],
+                                }))
+                              }}
+                            />
                             {topExpensesData.top5.map((item: any, idx: number) => (
                               <Line
                                 key={item.conta}
                                 type="monotone"
                                 dataKey={item.nome}
+                                hide={hiddenTop5Lines[item.nome]}
                                 stroke={CHART_COLORS[idx % CHART_COLORS.length].hex}
                                 strokeWidth={2.5}
                                 dot={{ r: 3, strokeWidth: 2, fill: '#fff' }}
@@ -5705,6 +5717,10 @@ export default function App() {
                               paddingAngle={3}
                               dataKey="value"
                               stroke="none"
+                              label={({ percent }) =>
+                                percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''
+                              }
+                              labelLine={false}
                             >
                               {topExpensesData.distributionData.map((entry: any, index: number) => (
                                 <Cell
