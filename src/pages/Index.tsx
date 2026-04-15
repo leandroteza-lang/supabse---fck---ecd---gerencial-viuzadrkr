@@ -74,6 +74,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Progress } from '@/components/ui/progress'
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+} from '@/components/ui/chart'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
@@ -2102,7 +2109,7 @@ export default function App() {
       const formattedMonth = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)}`
 
       const dataPoint: any = { period: formattedMonth, fullPeriod: period }
-      top5.forEach((item: any) => {
+      top5.forEach((item: any, idx: number) => {
         let periodVal = 0
         if (item.isGrouped) {
           item.subAccounts.forEach((accCode: string) => {
@@ -2131,7 +2138,7 @@ export default function App() {
             }
           }
         }
-        dataPoint[item.nome] = periodVal
+        dataPoint[`item${idx}`] = periodVal
       })
       return dataPoint
     })
@@ -2141,7 +2148,12 @@ export default function App() {
         name: name.replace(/^[0-9.]+\s*\(-\)\s*/, '').replace(/^[0-9.]+\s*/, ''), // Clean up DRE prefix
         value,
       }))
-      .sort((a, b) => b.value - a.value)
+      .sort((a: any, b: any) => b.value - a.value)
+      .map((d, idx) => ({
+        ...d,
+        distKey: `dist${idx}`,
+        fill: `var(--color-dist${idx})`,
+      }))
 
     const displayRangeLabel =
       fromPeriod === toPeriod
@@ -5885,102 +5897,71 @@ export default function App() {
                             Evolução das Top 5 Despesas
                           </h3>
                           <p className="text-xs font-medium text-slate-500 mt-1">
-                            Análise temporal dos maiores ofensores
+                            Análise temporal empilhada dos maiores ofensores
                           </p>
                         </div>
                       </div>
                       <div className="h-[320px] w-full flex-1">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart
-                            data={topExpensesData.trendData}
-                            margin={{ top: 5, right: 10, left: -10, bottom: 5 }}
-                          >
-                            <defs>
-                              {topExpensesData.top5.map((item: any, idx: number) => (
-                                <linearGradient
-                                  key={`color-${idx}`}
-                                  id={`color-${idx}`}
-                                  x1="0"
-                                  y1="0"
-                                  x2="0"
-                                  y2="1"
-                                >
-                                  <stop
-                                    offset="5%"
-                                    stopColor={CHART_COLORS[idx % CHART_COLORS.length].hex}
-                                    stopOpacity={0.3}
+                        {(() => {
+                          const top5Config = topExpensesData.top5.reduce(
+                            (acc: any, item: any, idx: number) => {
+                              acc[`item${idx}`] = {
+                                label: item.nome,
+                                color: CHART_COLORS[idx % CHART_COLORS.length].hex,
+                              }
+                              return acc
+                            },
+                            {} as any,
+                          )
+
+                          return (
+                            <ChartContainer config={top5Config} className="h-full w-full">
+                              <BarChart
+                                data={topExpensesData.trendData}
+                                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                              >
+                                <CartesianGrid
+                                  vertical={false}
+                                  strokeDasharray="3 3"
+                                  stroke="#f1f5f9"
+                                />
+                                <XAxis
+                                  dataKey="period"
+                                  tickLine={false}
+                                  axisLine={false}
+                                  tickMargin={10}
+                                  tickFormatter={(value) => value.slice(0, 3)}
+                                  tick={{ fontSize: 11, fill: '#64748b' }}
+                                />
+                                <YAxis
+                                  tickLine={false}
+                                  axisLine={false}
+                                  tickFormatter={(v) => `R$ ${formatCompact(v)}`}
+                                  width={100}
+                                  tick={{ fontSize: 11, fill: '#64748b' }}
+                                />
+                                <ChartTooltip
+                                  cursor={{ fill: '#f8fafc' }}
+                                  content={<ChartTooltipContent indicator="dot" />}
+                                />
+                                <ChartLegend content={<ChartLegendContent />} />
+                                {topExpensesData.top5.map((item: any, idx: number) => (
+                                  <Bar
+                                    key={item.conta}
+                                    dataKey={`item${idx}`}
+                                    stackId="a"
+                                    fill={`var(--color-item${idx})`}
+                                    radius={
+                                      idx === topExpensesData.top5.length - 1
+                                        ? [4, 4, 0, 0]
+                                        : [0, 0, 0, 0]
+                                    }
                                   />
-                                  <stop
-                                    offset="95%"
-                                    stopColor={CHART_COLORS[idx % CHART_COLORS.length].hex}
-                                    stopOpacity={0}
-                                  />
-                                </linearGradient>
-                              ))}
-                            </defs>
-                            <CartesianGrid
-                              strokeDasharray="3 3"
-                              stroke="#f1f5f9"
-                              vertical={false}
-                            />
-                            <XAxis
-                              dataKey="period"
-                              tick={{ fontSize: 11, fill: '#64748b', fontWeight: 500 }}
-                              axisLine={false}
-                              tickLine={false}
-                              dy={10}
-                            />
-                            <YAxis
-                              tick={{ fontSize: 11, fill: '#64748b', fontWeight: 500 }}
-                              tickFormatter={(v) => `R$ ${formatCompact(v)}`}
-                              width={80}
-                              axisLine={false}
-                              tickLine={false}
-                            />
-                            <Tooltip
-                              content={<CustomTooltip />}
-                              cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }}
-                            />
-                            <Legend
-                              wrapperStyle={{
-                                fontSize: 12,
-                                fontWeight: 500,
-                                paddingTop: '10px',
-                                cursor: 'pointer',
-                              }}
-                              iconType="circle"
-                              onClick={(e) => {
-                                const { dataKey } = e
-                                setHiddenTop5Lines((prev) => ({
-                                  ...prev,
-                                  [dataKey]: !prev[dataKey],
-                                }))
-                              }}
-                            />
-                            {topExpensesData.top5.map((item: any, idx: number) => (
-                              <Line
-                                key={item.conta}
-                                type="monotone"
-                                dataKey={item.nome}
-                                hide={hiddenTop5Lines[item.nome]}
-                                stroke={CHART_COLORS[idx % CHART_COLORS.length].hex}
-                                strokeWidth={3}
-                                dot={{
-                                  r: 4,
-                                  strokeWidth: 2,
-                                  fill: '#fff',
-                                  stroke: CHART_COLORS[idx % CHART_COLORS.length].hex,
-                                }}
-                                activeDot={{
-                                  r: 6,
-                                  strokeWidth: 0,
-                                  fill: CHART_COLORS[idx % CHART_COLORS.length].hex,
-                                  style: { filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.2))' },
-                                }}
-                              />
-                            ))}
-                          </LineChart>
-                        </ResponsiveContainer>
+                                ))}
+                              </BarChart>
+                            </ChartContainer>
+                          )
+                        })()}
                       </div>
                     </div>
 
@@ -5998,43 +5979,48 @@ export default function App() {
                         </div>
                       </div>
                       <div className="h-[320px] w-full flex-1 relative">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <RechartsPieChart>
-                            <Pie
-                              data={topExpensesData.distributionData}
-                              cx="45%"
-                              cy="50%"
-                              innerRadius={75}
-                              outerRadius={105}
-                              paddingAngle={4}
-                              dataKey="value"
-                              stroke="none"
-                              cornerRadius={6}
-                              label={({ percent }) =>
-                                percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''
+                        {(() => {
+                          const distConfig = topExpensesData.distributionData.reduce(
+                            (acc: any, item: any, idx: number) => {
+                              acc[`dist${idx}`] = {
+                                label: item.name,
+                                color: CHART_COLORS[idx % CHART_COLORS.length].hex,
                               }
-                              labelLine={false}
-                            >
-                              {topExpensesData.distributionData.map((entry: any, index: number) => (
-                                <Cell
-                                  key={`cell-${index}`}
-                                  fill={CHART_COLORS[index % CHART_COLORS.length].hex}
-                                  className="hover:opacity-80 transition-opacity duration-300"
+                              return acc
+                            },
+                            { value: { label: 'Valor (R$)' } } as any,
+                          )
+
+                          return (
+                            <ChartContainer config={distConfig} className="h-full w-full">
+                              <RechartsPieChart>
+                                <ChartTooltip
+                                  cursor={false}
+                                  content={<ChartTooltipContent hideLabel indicator="dot" />}
                                 />
-                              ))}
-                            </Pie>
-                            <Tooltip content={<CustomPieTooltip />} />
-                            <Legend
-                              wrapperStyle={{ fontSize: 12, fontWeight: 500 }}
-                              layout="vertical"
-                              verticalAlign="middle"
-                              align="right"
-                              iconType="circle"
-                            />
-                          </RechartsPieChart>
-                        </ResponsiveContainer>
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none pr-[10%] lg:pr-[15%]">
-                          <div className="text-center bg-white/90 backdrop-blur-sm px-4 py-3 rounded-full shadow-sm border border-slate-100">
+                                <Pie
+                                  data={topExpensesData.distributionData}
+                                  dataKey="value"
+                                  nameKey="name"
+                                  innerRadius={75}
+                                  outerRadius={105}
+                                  strokeWidth={3}
+                                  stroke="#ffffff"
+                                  paddingAngle={2}
+                                />
+                                <ChartLegend
+                                  content={<ChartLegendContent />}
+                                  layout="vertical"
+                                  verticalAlign="middle"
+                                  align="right"
+                                  className="w-[120px] lg:w-[150px] text-xs"
+                                />
+                              </RechartsPieChart>
+                            </ChartContainer>
+                          )
+                        })()}
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none pr-[25%] sm:pr-[20%]">
+                          <div className="text-center bg-white/95 backdrop-blur-sm px-4 py-3 rounded-full shadow-sm border border-slate-100">
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">
                               Total Geral
                             </p>
@@ -6047,57 +6033,54 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="space-y-4 mt-8">
-                    {topExpensesData.items.map((item: any, index) => {
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 mt-8">
+                    {topExpensesData.items.map((item: any, index: number) => {
                       const widthPct = (item.valor / topExpensesData.maxVal) * 100
+                      const isTop3 = index < 3
                       return (
                         <div
                           key={item.conta}
-                          className="bg-white p-5 md:p-6 rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] flex flex-col gap-5 relative overflow-hidden group hover:border-indigo-200 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] transition-all duration-300"
+                          className="group relative flex flex-col bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all duration-300"
                         >
-                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 z-10 relative">
-                            <div className="flex items-center gap-4 w-full md:w-auto">
-                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-50 to-rose-100 border border-rose-200/60 text-rose-600 font-black flex items-center justify-center text-sm shrink-0 shadow-sm group-hover:scale-110 transition-transform duration-300">
+                          <div className="flex justify-between items-start mb-4">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ${isTop3 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-600'} transition-colors`}
+                              >
                                 {index + 1}
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="text-slate-800 font-bold text-base truncate pr-4">
+                              <div className="flex-1 min-w-0 pr-2">
+                                <h4
+                                  className="text-slate-800 font-bold text-sm leading-tight line-clamp-2"
+                                  title={item.nome}
+                                >
                                   {item.nome}
                                 </h4>
-                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                  <span className="font-mono text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200/60 shadow-sm">
-                                    {item.isGrouped
-                                      ? `Agrupado (${item.subAccounts.length} contas)`
-                                      : item.conta}
-                                  </span>
-                                  <span className="text-[10px] bg-indigo-50 border border-indigo-100/50 text-indigo-600 px-2 py-0.5 rounded-md uppercase tracking-wider font-bold shadow-sm">
-                                    {item.grupo.split('.')[0]}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex flex-row md:flex-col items-center md:items-end justify-between w-full md:w-auto gap-4 md:gap-2">
-                              <div className="text-left md:text-right">
-                                <p className="text-xl font-black text-slate-800 whitespace-nowrap">
-                                  R${' '}
-                                  {item.valor.toLocaleString('pt-BR', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
-                                </p>
-                                <p className="text-xs font-bold text-rose-500 mt-0.5 flex items-center gap-1 md:justify-end">
-                                  <TrendingUp className="w-3 h-3" />
-                                  {((item.valor / topExpensesData.totalExpenses) * 100).toFixed(1)}%
-                                  do total
+                                <p className="text-[11px] text-slate-500 mt-1 truncate font-medium">
+                                  {item.isGrouped
+                                    ? `Agrupado (${item.subAccounts.length} contas)`
+                                    : item.conta}{' '}
+                                  • {item.grupo.split('.')[0]}
                                 </p>
                               </div>
                             </div>
                           </div>
-                          <div className="w-full relative h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className="absolute top-0 left-0 h-full bg-gradient-to-r from-rose-400 to-rose-500 rounded-full transition-all duration-1000 ease-out"
-                              style={{ width: widthPct + '%' }}
-                            />
+
+                          <div className="mt-auto">
+                            <div className="flex justify-between items-end mb-2">
+                              <p className="text-xl font-black text-slate-800 tracking-tight">
+                                R$ {formatCompact(item.valor)}
+                              </p>
+                              <p className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
+                                {((item.valor / topExpensesData.totalExpenses) * 100).toFixed(1)}%
+                              </p>
+                            </div>
+                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-1000 ease-out ${isTop3 ? 'bg-indigo-500' : 'bg-slate-300 group-hover:bg-indigo-400'}`}
+                                style={{ width: widthPct + '%' }}
+                              />
+                            </div>
                           </div>
                         </div>
                       )
