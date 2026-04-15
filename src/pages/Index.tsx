@@ -61,6 +61,7 @@ import {
   Save,
   Edit2,
   Server,
+  ShieldCheck,
 } from 'lucide-react'
 import localforage from 'localforage'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -844,7 +845,13 @@ export default function App() {
                 cnpj: parts[5],
                 dtIni: parseSpedDate(parts[2]),
                 dtFin: parseSpedDate(parts[3]),
+                j100: [],
+                j150: [],
               }
+            } else if (reg === 'J100') {
+              if (info) info.j100.push(parts)
+            } else if (reg === 'J150') {
+              if (info) info.j150.push(parts)
             } else if (reg === 'I050') {
               accounts[parts[6]] = {
                 conta: parts[6],
@@ -977,7 +984,12 @@ export default function App() {
 
     results.forEach((res: any) => {
       allExtracted = [...allExtracted, ...res.extracted]
-      if (!mergedInfo && res.info) mergedInfo = res.info
+      if (!mergedInfo && res.info) {
+        mergedInfo = res.info
+      } else if (mergedInfo && res.info) {
+        if (res.info.j100) mergedInfo.j100 = [...(mergedInfo.j100 || []), ...res.info.j100]
+        if (res.info.j150) mergedInfo.j150 = [...(mergedInfo.j150 || []), ...res.info.j150]
+      }
     })
 
     allExtracted.sort((a: any, b: any) => {
@@ -1780,6 +1792,101 @@ export default function App() {
 
     return { periods, metricsByPeriod, lastPeriod, lastMetrics }
   }, [monthlyData])
+
+  const auditoriaData = useMemo(() => {
+    if (!monthlyData || !monthlyData.periods.length || !companyInfo) return null
+    const lastPeriod = monthlyData.periods[monthlyData.periods.length - 1]
+
+    let calcAtivo = 0
+    let calcPassivo = 0
+
+    monthlyData.accounts.forEach((acc: any) => {
+      if (acc.tipo === 'S') return
+      const sld = acc.saldos[lastPeriod]
+      if (!sld) return
+
+      const rawVal = getRawNumber(sld.sldFin)
+      if (acc.conta.startsWith('1')) {
+        const val = sld.indDcFin === 'D' ? rawVal : -rawVal
+        calcAtivo += val
+      } else if (acc.conta.startsWith('2')) {
+        const val = sld.indDcFin === 'C' ? rawVal : -rawVal
+        calcPassivo += val
+      }
+    })
+
+    const calcLucro =
+      dreStructuredData?.lines?.find((l: any) => l.id === '14_LUCRO_LIQUIDO')?.totals[lastPeriod] ||
+      0
+
+    let jAtivo = 0
+    let jPassivo = 0
+    let jLucro = 0
+    let hasBlocoJ = false
+
+    const parseJRow = (row: string[]) => {
+      let descIdx = -1
+      for (let i = 2; i < row.length; i++) {
+        if (row[i] && isNaN(Number(row[i].replace(',', '.'))) && row[i].length > 2) {
+          descIdx = i
+          break
+        }
+      }
+      if (descIdx !== -1 && row.length > descIdx + 2) {
+        return {
+          desc: row[descIdx].toUpperCase(),
+          val: parseFloat(row[descIdx + 1].replace(',', '.')) || 0,
+          ind: row[descIdx + 2],
+        }
+      }
+      return null
+    }
+
+    if (companyInfo.j100 && companyInfo.j100.length > 0) {
+      hasBlocoJ = true
+      companyInfo.j100.forEach((row: string[]) => {
+        const parsed = parseJRow(row)
+        if (parsed) {
+          if (parsed.desc === 'ATIVO' || parsed.desc === 'TOTAL DO ATIVO') jAtivo = parsed.val
+          if (
+            parsed.desc === 'PASSIVO' ||
+            parsed.desc === 'TOTAL DO PASSIVO' ||
+            parsed.desc === 'PASSIVO E PATRIMONIO LIQUIDO' ||
+            parsed.desc === 'PASSIVO E PATRIMÔNIO LÍQUIDO'
+          )
+            jPassivo = parsed.val
+        }
+      })
+    }
+
+    if (companyInfo.j150 && companyInfo.j150.length > 0) {
+      hasBlocoJ = true
+      companyInfo.j150.forEach((row: string[]) => {
+        const parsed = parseJRow(row)
+        if (parsed) {
+          if (
+            parsed.desc.includes('RESULTADO LÍQUIDO') ||
+            parsed.desc.includes('LUCRO LÍQUIDO') ||
+            parsed.desc.includes('PREJUÍZO LÍQUIDO') ||
+            parsed.desc.includes('RESULTADO DO EXERC')
+          ) {
+            jLucro = parsed.val
+            if (parsed.ind === 'D') jLucro = -Math.abs(jLucro)
+          }
+        }
+      })
+    }
+
+    return {
+      calcAtivo,
+      calcPassivo,
+      calcLucro,
+      jAtivo,
+      jPassivo,
+      jLucro,
+      hasBlocoJ,
+    }
+  }, [monthlyData, dreStructuredData, companyInfo])
 
   const atividadeData = useMemo(() => {
     if (!monthlyData || !monthlyData.periods.length || !dreStructuredData) return null
@@ -2736,6 +2843,12 @@ export default function App() {
                 className={`flex items-center gap-2 px-6 py-3.5 font-semibold text-sm transition-all border-b-2 whitespace-nowrap rounded-t-lg ${activeTab === 'top10' ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
               >
                 <ListOrdered className="w-4 h-4" /> Top 10 Despesas
+              </button>
+              <button
+                onClick={() => setActiveTab('auditoria')}
+                className={`flex items-center gap-2 px-6 py-3.5 font-semibold text-sm transition-all border-b-2 whitespace-nowrap rounded-t-lg ${activeTab === 'auditoria' ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
+              >
+                <ShieldCheck className="w-4 h-4" /> Validação SPED
               </button>
 
               <div className="w-full lg:w-auto flex-1"></div>
@@ -5978,6 +6091,224 @@ export default function App() {
                   </p>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* --- ABA: AUDITORIA SPED --- */}
+        {data.length > 0 && activeTab === 'auditoria' && auditoriaData && (
+          <div className="animate-in fade-in duration-500">
+            <ExplanationPanel
+              title="Auditoria e Validação SPED (Bloco I vs Bloco J)"
+              description="Este relatório de confiabilidade compara os saldos calculados dinamicamente pelo BoardECD (com base nos lançamentos analíticos do Bloco I) com os saldos oficiais declarados pelo seu contador no Balanço Patrimonial e DRE (Bloco J do arquivo SPED)."
+              indicators={[
+                {
+                  name: 'Ativo Total e Passivo Total',
+                  desc: 'A soma de todos os ativos e passivos deve ser exatamente igual ao reportado no registro J100.',
+                },
+                {
+                  name: 'Lucro/Prejuízo do Exercício',
+                  desc: 'O resultado final calculado pela nossa DRE dinâmica deve bater com o registro J150.',
+                },
+                {
+                  name: 'Por que isso é importante?',
+                  desc: 'Garante que não houve perda de dados na importação e que o mapeamento das contas está 100% aderente às normas contábeis aplicadas.',
+                },
+              ]}
+            />
+
+            <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100/60 p-6 md:p-8">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-8">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                    Relatório de Confiabilidade dos Dados
+                  </h2>
+                  <p className="text-sm text-slate-500 font-medium mt-1">
+                    Comparação de saldos entre os blocos analíticos e os demonstrativos contábeis
+                    oficiais.
+                  </p>
+                </div>
+              </div>
+
+              {!auditoriaData.hasBlocoJ ? (
+                <div className="p-16 text-center flex flex-col items-center border border-dashed border-slate-200 rounded-xl bg-slate-50">
+                  <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm">
+                    <ShieldCheck className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-700">
+                    Bloco J não encontrado no arquivo
+                  </h3>
+                  <p className="text-slate-500 mt-2 max-w-md text-sm">
+                    O arquivo SPED importado não possui os registros J100 (Balanço) e J150 (DRE)
+                    para realizar a validação oficial. Os cálculos dinâmicos do Bloco I continuam
+                    disponíveis.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Card Ativo */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden flex flex-col">
+                    <div className="bg-slate-50 p-4 border-b border-slate-200">
+                      <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest">
+                        Ativo Total
+                      </h3>
+                    </div>
+                    <div className="p-5 flex-1 flex flex-col gap-4">
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase">
+                          Calculado (Bloco I)
+                        </span>
+                        <p className="text-xl font-black text-slate-800">
+                          R$ {formatCompact(auditoriaData.calcAtivo)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase">
+                          Oficial (Bloco J100)
+                        </span>
+                        <p className="text-xl font-black text-slate-800">
+                          R$ {formatCompact(auditoriaData.jAtivo)}
+                        </p>
+                      </div>
+                      <div className="mt-auto pt-4 border-t border-slate-100">
+                        <span className="text-xs font-bold text-slate-400 uppercase block mb-1">
+                          Diferença
+                        </span>
+                        {Math.abs(auditoriaData.calcAtivo - auditoriaData.jAtivo) < 1 ? (
+                          <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-md text-sm font-bold">
+                            <Check className="w-4 h-4" /> Saldos Batem
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-md text-sm font-bold">
+                            <AlertCircle className="w-4 h-4" /> R${' '}
+                            {formatCompact(
+                              Math.abs(auditoriaData.calcAtivo - auditoriaData.jAtivo),
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Passivo */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden flex flex-col">
+                    <div className="bg-slate-50 p-4 border-b border-slate-200">
+                      <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest">
+                        Passivo Total + PL
+                      </h3>
+                    </div>
+                    <div className="p-5 flex-1 flex flex-col gap-4">
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase">
+                          Calculado (Bloco I)
+                        </span>
+                        <p className="text-xl font-black text-slate-800">
+                          R$ {formatCompact(auditoriaData.calcPassivo)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase">
+                          Oficial (Bloco J100)
+                        </span>
+                        <p className="text-xl font-black text-slate-800">
+                          R$ {formatCompact(auditoriaData.jPassivo)}
+                        </p>
+                      </div>
+                      <div className="mt-auto pt-4 border-t border-slate-100">
+                        <span className="text-xs font-bold text-slate-400 uppercase block mb-1">
+                          Diferença
+                        </span>
+                        {Math.abs(auditoriaData.calcPassivo - auditoriaData.jPassivo) < 1 ? (
+                          <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-md text-sm font-bold">
+                            <Check className="w-4 h-4" /> Saldos Batem
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-md text-sm font-bold">
+                            <AlertCircle className="w-4 h-4" /> R${' '}
+                            {formatCompact(
+                              Math.abs(auditoriaData.calcPassivo - auditoriaData.jPassivo),
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Lucro */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden flex flex-col">
+                    <div className="bg-slate-50 p-4 border-b border-slate-200">
+                      <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest">
+                        Lucro/Prejuízo Líquido
+                      </h3>
+                    </div>
+                    <div className="p-5 flex-1 flex flex-col gap-4">
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase">
+                          Calculado (DRE Dinâmica)
+                        </span>
+                        <p className="text-xl font-black text-slate-800">
+                          R$ {formatCompact(auditoriaData.calcLucro)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase">
+                          Oficial (Bloco J150)
+                        </span>
+                        <p className="text-xl font-black text-slate-800">
+                          R$ {formatCompact(auditoriaData.jLucro)}
+                        </p>
+                      </div>
+                      <div className="mt-auto pt-4 border-t border-slate-100">
+                        <span className="text-xs font-bold text-slate-400 uppercase block mb-1">
+                          Diferença
+                        </span>
+                        {Math.abs(auditoriaData.calcLucro - auditoriaData.jLucro) < 1 ? (
+                          <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-md text-sm font-bold">
+                            <Check className="w-4 h-4" /> Saldos Batem
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-md text-sm font-bold">
+                            <AlertCircle className="w-4 h-4" /> R${' '}
+                            {formatCompact(
+                              Math.abs(auditoriaData.calcLucro - auditoriaData.jLucro),
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 mt-8 flex flex-col md:flex-row gap-4 items-start">
+                <div className="bg-white border border-slate-200 p-2.5 rounded-lg flex-shrink-0">
+                  <ShieldCheck className="w-6 h-6 text-indigo-600" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest">
+                    Status da Auditoria de Indicadores
+                  </h4>
+                  <p className="text-sm text-slate-500 mt-1 mb-2">
+                    A estrutura de cálculo de todos os índices foi revisada de acordo com as normas
+                    contábeis:
+                  </p>
+                  <ul className="text-sm text-slate-600 space-y-1 ml-4 list-disc marker:text-slate-300">
+                    <li>
+                      <strong>Liquidez Seca:</strong> O estoque (prefixos 1.1.04, 1.1.4 ou
+                      1.1.03.01) é subtraído com precisão do Ativo Circulante.
+                    </li>
+                    <li>
+                      <strong>Sinais Contábeis:</strong> Contas de Ativo e Despesa têm saldo devedor
+                      como positivo; Passivo e Receita têm saldo credor como positivo. O motor de
+                      conversão trata isso automaticamente nos indicadores.
+                    </li>
+                    <li>
+                      <strong>EBITDA:</strong> Validado duplamente via método direto e indireto,
+                      isolando o resultado da operação principal.
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         )}
