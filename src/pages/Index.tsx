@@ -73,6 +73,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Progress } from '@/components/ui/progress'
+import { useAuth } from '@/hooks/use-auth'
+import { supabase } from '@/lib/supabase/client'
 
 const CHART_COLORS = [
   {
@@ -333,6 +335,7 @@ const EditableTitle = ({
 }
 
 export default function App() {
+  const { user, signOut } = useAuth()
   const [data, setData] = useState([])
   const [companyInfo, setCompanyInfo] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -436,7 +439,7 @@ export default function App() {
   const [pieChartAccountSearch, setPieChartAccountSearch] = useState('')
   const [piePeriods, setPiePeriods] = useState<Record<string, { from: string; to: string }>>({})
 
-  // Sincronização Automática (Auto-Save) com o navegador
+  // Sincronização Automática (Auto-Save) com o navegador e nuvem
   useEffect(() => {
     const configData = {
       charts,
@@ -449,6 +452,57 @@ export default function App() {
       expenseRange,
     }
     localStorage.setItem('boardecd_config', JSON.stringify(configData))
+
+    if (user && companyInfo?.cnpj) {
+      const saveToCloud = async () => {
+        try {
+          let { data: company } = await supabase
+            .from('companies')
+            .select('id')
+            .eq('cnpj', companyInfo.cnpj)
+            .single()
+
+          if (!company) {
+            const { data: newCompany } = await supabase
+              .from('companies')
+              .insert({
+                user_id: user.id,
+                cnpj: companyInfo.cnpj,
+                name: companyInfo.nome,
+              })
+              .select('id')
+              .single()
+            company = newCompany
+          }
+
+          if (company) {
+            const { data: existingConfig } = await supabase
+              .from('user_configs')
+              .select('id')
+              .eq('company_id', company.id)
+              .eq('user_id', user.id)
+              .single()
+
+            if (existingConfig) {
+              await supabase
+                .from('user_configs')
+                .update({ config_data: configData, updated_at: new Date().toISOString() })
+                .eq('id', existingConfig.id)
+            } else {
+              await supabase.from('user_configs').insert({
+                user_id: user.id,
+                company_id: company.id,
+                config_data: configData,
+              })
+            }
+          }
+        } catch (e) {
+          console.error('Failed to sync to cloud', e)
+        }
+      }
+      const timeout = setTimeout(saveToCloud, 2000)
+      return () => clearTimeout(timeout)
+    }
   }, [
     charts,
     pieCharts,
@@ -458,6 +512,8 @@ export default function App() {
     customExpenseGroups,
     expenseAccountToGroup,
     expenseRange,
+    user,
+    companyInfo,
   ])
 
   useEffect(() => {
@@ -2309,6 +2365,12 @@ export default function App() {
                 </div>
               )}
 
+              <button
+                onClick={signOut}
+                className="text-sm font-bold text-slate-500 hover:text-rose-600 transition-colors mr-2 hidden sm:block"
+              >
+                Sair
+              </button>
               <div className="relative">
                 <input
                   type="file"
@@ -2406,13 +2468,12 @@ export default function App() {
         <Alert className="bg-indigo-50/50 border-indigo-200 text-indigo-900 shadow-sm relative overflow-hidden">
           <Server className="h-5 w-5 text-indigo-600 mt-0.5" />
           <AlertTitle className="font-bold text-indigo-800 text-base">
-            Armazenamento Local (IndexedDB)
+            Sincronização Ativa (Supabase)
           </AlertTitle>
           <AlertDescription className="text-indigo-700/80 font-medium text-sm mt-1">
-            Os seus dados SPED ECD estão sendo processados de forma segura e armazenados apenas no
-            seu navegador local. Para habilitar a persistência na nuvem, backups automáticos e
-            acesso compartilhado com a equipe, será necessária a integração futura com um backend
-            (ex: Skip Cloud ou Supabase).
+            Olá, {user?.email}! Seus mapeamentos e configurações de layout estão sendo salvos na
+            nuvem automaticamente. Os dados brutos do SPED permanecem no seu navegador (IndexedDB)
+            para garantir máxima performance.
           </AlertDescription>
           <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-100 rounded-full opacity-50 blur-2xl"></div>
         </Alert>
