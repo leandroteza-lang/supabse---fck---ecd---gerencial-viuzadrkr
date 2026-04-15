@@ -1616,7 +1616,12 @@ export default function App() {
           if (acc.conta.startsWith('1.1')) {
             AC += val
             if (acc.conta.startsWith('1.1.01') || acc.conta.startsWith('1.1.1')) DISP += val
-            if (acc.conta.startsWith('1.1.04') || acc.conta.startsWith('1.1.4')) ESTOQUES += val
+            if (
+              acc.conta.startsWith('1.1.04') ||
+              acc.conta.startsWith('1.1.4') ||
+              acc.conta.startsWith('1.1.03.01')
+            )
+              ESTOQUES += val
           } else if (
             acc.conta.startsWith('1.2.01') ||
             acc.conta.startsWith('1.2.1') ||
@@ -4972,10 +4977,10 @@ export default function App() {
                   <p className="text-sm text-slate-500 mt-1">
                     Os cálculos de liquidez utilizam os saldos consolidados identificados pelos
                     prefixos padrões dos Planos de Contas brasileiros (ex: 1.1 para Ativo
-                    Circulante, 2.1 para Passivo Circulante, 1.1.04 para Estoques). Valores iguais a
-                    0 podem indicar ausência de saldo ou utilização de uma hierarquia de contas não
-                    padrão (excluindo os prefixos típicos) pelo contador na geração do ficheiro
-                    SPED.
+                    Circulante, 2.1 para Passivo Circulante, 1.1.04 ou 1.1.03.01 para Estoques).
+                    Valores iguais a 0 podem indicar ausência de saldo ou utilização de uma
+                    hierarquia de contas não padrão (excluindo os prefixos típicos) pelo contador na
+                    geração do ficheiro SPED.
                   </p>
                 </div>
               </div>
