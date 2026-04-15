@@ -5652,29 +5652,78 @@ export default function App() {
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     {/* Gráfico de Evolução (Trend Analysis) das Top 5 */}
-                    <div className="bg-slate-50/50 rounded-xl border border-slate-100 p-6 flex flex-col">
-                      <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4">
-                        Evolução das Top 5 Despesas
-                      </h3>
-                      <div className="h-[280px] w-full flex-1">
+                    <div className="bg-white rounded-2xl border border-slate-200/60 p-6 flex flex-col shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+                            <TrendingUp className="w-5 h-5 text-indigo-500" />
+                            Evolução das Top 5 Despesas
+                          </h3>
+                          <p className="text-xs font-medium text-slate-500 mt-1">
+                            Análise temporal dos maiores ofensores
+                          </p>
+                        </div>
+                      </div>
+                      <div className="h-[320px] w-full flex-1">
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart
                             data={topExpensesData.trendData}
-                            margin={{ top: 5, right: 5, left: 0, bottom: 5 }}
+                            margin={{ top: 5, right: 10, left: -10, bottom: 5 }}
                           >
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <defs>
+                              {topExpensesData.top5.map((item: any, idx: number) => (
+                                <linearGradient
+                                  key={`color-${idx}`}
+                                  id={`color-${idx}`}
+                                  x1="0"
+                                  y1="0"
+                                  x2="0"
+                                  y2="1"
+                                >
+                                  <stop
+                                    offset="5%"
+                                    stopColor={CHART_COLORS[idx % CHART_COLORS.length].hex}
+                                    stopOpacity={0.3}
+                                  />
+                                  <stop
+                                    offset="95%"
+                                    stopColor={CHART_COLORS[idx % CHART_COLORS.length].hex}
+                                    stopOpacity={0}
+                                  />
+                                </linearGradient>
+                              ))}
+                            </defs>
+                            <CartesianGrid
+                              strokeDasharray="3 3"
+                              stroke="#f1f5f9"
+                              vertical={false}
+                            />
                             <XAxis
                               dataKey="period"
-                              tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }}
+                              tick={{ fontSize: 11, fill: '#64748b', fontWeight: 500 }}
+                              axisLine={false}
+                              tickLine={false}
+                              dy={10}
                             />
                             <YAxis
-                              tick={{ fontSize: 10, fill: '#94a3b8' }}
+                              tick={{ fontSize: 11, fill: '#64748b', fontWeight: 500 }}
                               tickFormatter={(v) => `R$ ${formatCompact(v)}`}
                               width={80}
+                              axisLine={false}
+                              tickLine={false}
                             />
-                            <Tooltip content={<CustomTooltip />} />
+                            <Tooltip
+                              content={<CustomTooltip />}
+                              cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }}
+                            />
                             <Legend
-                              wrapperStyle={{ fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                              wrapperStyle={{
+                                fontSize: 12,
+                                fontWeight: 500,
+                                paddingTop: '10px',
+                                cursor: 'pointer',
+                              }}
+                              iconType="circle"
                               onClick={(e) => {
                                 const { dataKey } = e
                                 setHiddenTop5Lines((prev) => ({
@@ -5690,9 +5739,19 @@ export default function App() {
                                 dataKey={item.nome}
                                 hide={hiddenTop5Lines[item.nome]}
                                 stroke={CHART_COLORS[idx % CHART_COLORS.length].hex}
-                                strokeWidth={2.5}
-                                dot={{ r: 3, strokeWidth: 2, fill: '#fff' }}
-                                activeDot={{ r: 5 }}
+                                strokeWidth={3}
+                                dot={{
+                                  r: 4,
+                                  strokeWidth: 2,
+                                  fill: '#fff',
+                                  stroke: CHART_COLORS[idx % CHART_COLORS.length].hex,
+                                }}
+                                activeDot={{
+                                  r: 6,
+                                  strokeWidth: 0,
+                                  fill: CHART_COLORS[idx % CHART_COLORS.length].hex,
+                                  style: { filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.2))' },
+                                }}
                               />
                             ))}
                           </LineChart>
@@ -5701,22 +5760,31 @@ export default function App() {
                     </div>
 
                     {/* Gráfico de Distribuição por Grupo Contábil */}
-                    <div className="bg-slate-50/50 rounded-xl border border-slate-100 p-6 flex flex-col">
-                      <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4">
-                        Distribuição por Grupo Contábil
-                      </h3>
-                      <div className="h-[280px] w-full flex-1 relative">
+                    <div className="bg-white rounded-2xl border border-slate-200/60 p-6 flex flex-col shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+                            <PieChart className="w-5 h-5 text-emerald-500" />
+                            Distribuição por Grupo Contábil
+                          </h3>
+                          <p className="text-xs font-medium text-slate-500 mt-1">
+                            Representatividade das naturezas
+                          </p>
+                        </div>
+                      </div>
+                      <div className="h-[320px] w-full flex-1 relative">
                         <ResponsiveContainer width="100%" height="100%">
                           <RechartsPieChart>
                             <Pie
                               data={topExpensesData.distributionData}
-                              cx="50%"
+                              cx="45%"
                               cy="50%"
-                              innerRadius={70}
-                              outerRadius={100}
-                              paddingAngle={3}
+                              innerRadius={75}
+                              outerRadius={105}
+                              paddingAngle={4}
                               dataKey="value"
                               stroke="none"
+                              cornerRadius={6}
                               label={({ percent }) =>
                                 percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''
                               }
@@ -5726,21 +5794,23 @@ export default function App() {
                                 <Cell
                                   key={`cell-${index}`}
                                   fill={CHART_COLORS[index % CHART_COLORS.length].hex}
+                                  className="hover:opacity-80 transition-opacity duration-300"
                                 />
                               ))}
                             </Pie>
                             <Tooltip content={<CustomPieTooltip />} />
                             <Legend
-                              wrapperStyle={{ fontSize: 11, fontWeight: 600 }}
+                              wrapperStyle={{ fontSize: 12, fontWeight: 500 }}
                               layout="vertical"
                               verticalAlign="middle"
                               align="right"
+                              iconType="circle"
                             />
                           </RechartsPieChart>
                         </ResponsiveContainer>
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none pr-[120px] md:pr-[200px]">
-                          <div className="text-center bg-white/80 backdrop-blur px-3 py-2 rounded-full shadow-sm">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none pr-[10%] lg:pr-[15%]">
+                          <div className="text-center bg-white/90 backdrop-blur-sm px-4 py-3 rounded-full shadow-sm border border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">
                               Total Geral
                             </p>
                             <p className="text-sm font-black text-slate-800">
@@ -5752,61 +5822,62 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-4 mt-8">
                     {topExpensesData.items.map((item: any, index) => {
                       const widthPct = (item.valor / topExpensesData.maxVal) * 100
                       return (
                         <div
                           key={item.conta}
-                          className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex flex-col gap-4 relative overflow-hidden group hover:border-rose-200 transition-colors"
+                          className="bg-white p-5 md:p-6 rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] flex flex-col gap-5 relative overflow-hidden group hover:border-indigo-200 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] transition-all duration-300"
                         >
-                          <div className="flex justify-between items-start md:items-center gap-4 z-10 relative">
-                            <div className="flex items-center gap-4">
-                              <div className="w-8 h-8 rounded-full bg-rose-50 border border-rose-100 text-rose-600 font-black flex items-center justify-center text-sm shrink-0 shadow-sm">
+                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 z-10 relative">
+                            <div className="flex items-center gap-4 w-full md:w-auto">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-50 to-rose-100 border border-rose-200/60 text-rose-600 font-black flex items-center justify-center text-sm shrink-0 shadow-sm group-hover:scale-110 transition-transform duration-300">
                                 {index + 1}
                               </div>
-                              <div>
-                                <h4 className="text-slate-800 font-bold text-[15px]">
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-slate-800 font-bold text-base truncate pr-4">
                                   {item.nome}
                                 </h4>
-                                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                  <span className="font-mono text-xs font-bold text-slate-400">
+                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                  <span className="font-mono text-[11px] font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200/60 shadow-sm">
                                     {item.isGrouped
                                       ? `Agrupado (${item.subAccounts.length} contas)`
                                       : item.conta}
                                   </span>
-                                  <span className="text-[10px] bg-slate-50 border border-slate-200 text-slate-500 px-2 py-0.5 rounded uppercase tracking-wider font-bold shadow-sm">
+                                  <span className="text-[10px] bg-indigo-50 border border-indigo-100/50 text-indigo-600 px-2 py-0.5 rounded-md uppercase tracking-wider font-bold shadow-sm">
                                     {item.grupo.split('.')[0]}
                                   </span>
                                 </div>
                               </div>
                             </div>
-                            <div className="flex flex-col items-end pl-4 gap-2">
-                              <div className="text-right">
-                                <p className="text-lg font-black text-slate-800 whitespace-nowrap">
+                            <div className="flex flex-row md:flex-col items-center md:items-end justify-between w-full md:w-auto gap-4 md:gap-2">
+                              <div className="text-left md:text-right">
+                                <p className="text-xl font-black text-slate-800 whitespace-nowrap">
                                   R${' '}
                                   {item.valor.toLocaleString('pt-BR', {
                                     minimumFractionDigits: 2,
                                     maximumFractionDigits: 2,
                                   })}
                                 </p>
-                                <p className="text-xs font-bold text-rose-500 mt-0.5">
+                                <p className="text-xs font-bold text-rose-500 mt-0.5 flex items-center gap-1 md:justify-end">
+                                  <TrendingUp className="w-3 h-3" />
                                   {((item.valor / topExpensesData.totalExpenses) * 100).toFixed(1)}%
                                   do total
                                 </p>
                               </div>
                               <button
                                 onClick={() => setSelectedExpenseDetail(item)}
-                                className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                                className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-600 hover:text-white px-4 py-2 rounded-lg transition-colors shadow-sm w-full md:w-auto"
                               >
-                                <Search className="w-3 h-3" /> Ver Detalhes
+                                <Search className="w-3.5 h-3.5" /> Detalhes
                               </button>
                             </div>
                           </div>
-                          <div className="w-full flex items-center gap-3">
-                            <Progress
-                              value={widthPct}
-                              className="h-2 bg-rose-50 [&>div]:bg-rose-500"
+                          <div className="w-full relative h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className="absolute top-0 left-0 h-full bg-gradient-to-r from-rose-400 to-rose-500 rounded-full transition-all duration-1000 ease-out"
+                              style={{ width: widthPct + '%' }}
                             />
                           </div>
                         </div>
