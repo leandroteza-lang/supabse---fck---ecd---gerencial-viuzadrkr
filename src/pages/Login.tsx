@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { useNavigate, Navigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
+import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,7 +19,21 @@ export default function Login() {
   const [email, setEmail] = useState('leandro_teza@hotmail.com')
   const [password, setPassword] = useState('Skip@Pass')
   const [isLoading, setIsLoading] = useState(false)
-  const { signIn } = useAuth()
+  const { signIn, user, loading } = useAuth()
+  const navigate = useNavigate()
+  const { toast } = useToast()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  if (user) {
+    return <Navigate to="/" replace />
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -25,6 +41,17 @@ export default function Login() {
     const { error } = await signIn(email, password)
     if (error) {
       console.error(error)
+      toast({
+        variant: 'destructive',
+        title: 'Falha na autenticação',
+        description: 'Verifique suas credenciais e tente novamente.',
+      })
+    } else {
+      toast({
+        title: 'Acesso liberado',
+        description: 'Você foi autenticado com sucesso.',
+      })
+      navigate('/')
     }
     setIsLoading(false)
   }
