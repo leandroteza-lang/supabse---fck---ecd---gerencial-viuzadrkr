@@ -62,6 +62,7 @@ import {
   Edit2,
   Server,
   ShieldCheck,
+  Info,
 } from 'lucide-react'
 import localforage from 'localforage'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -81,6 +82,14 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from '@/components/ui/chart'
+import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
@@ -265,6 +274,23 @@ const parseSpedDate = (dateStr: string) => {
   if (!dateStr || dateStr.length !== 8) return dateStr
   return `${dateStr.substring(0, 2)}/${dateStr.substring(2, 4)}/${dateStr.substring(4, 8)}`
 }
+
+const parseSpedDateDb = (dateStr: string) => {
+  if (!dateStr || dateStr.length !== 8) return null
+  return `${dateStr.substring(4, 8)}-${dateStr.substring(2, 4)}-${dateStr.substring(0, 2)}`
+}
+
+const IndicatorTooltip = ({ text, example }: { text: string; example: string }) => (
+  <UITooltip delayDuration={300}>
+    <TooltipTrigger asChild>
+      <Info className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-500 cursor-help ml-1.5 inline-block" />
+    </TooltipTrigger>
+    <TooltipContent className="max-w-[300px] p-3 text-xs leading-relaxed shadow-xl border-slate-200 z-50 bg-white">
+      <p className="font-semibold text-slate-700 mb-1">{text}</p>
+      <p className="text-slate-500 italic">{example}</p>
+    </TooltipContent>
+  </UITooltip>
+)
 
 const dateStrToMs = (dateStr: string) => {
   if (!dateStr || dateStr.length < 10) return 0
@@ -630,6 +656,81 @@ export default function App() {
   )
   const [hiddenTop5Lines, setHiddenTop5Lines] = useState<Record<string, boolean>>({})
 
+  const [selectedAccountForRazao, setSelectedAccountForRazao] = useState<any>(null)
+  const [razaoTransactions, setRazaoTransactions] = useState<any[]>([])
+  const [isLoadingRazao, setIsLoadingRazao] = useState(false)
+  const [razaoSearch, setRazaoSearch] = useState('')
+
+  const openRazao = async (acc: any) => {
+    if (acc.tipo === 'S') return
+    setSelectedAccountForRazao(acc)
+    setIsLoadingRazao(true)
+    setRazaoSearch('')
+    setRazaoTransactions([])
+
+    try {
+      const cachedTx = (await localforage.getItem('ecd_transactions')) as any[]
+      if (cachedTx && cachedTx.length > 0) {
+        const accTx = cachedTx.filter((t: any) => t.conta === acc.conta)
+        if (accTx.length > 0) {
+          setRazaoTransactions(accTx)
+          setIsLoadingRazao(false)
+          return
+        }
+      }
+
+      if (companyInfo && user) {
+        const { data: companies } = await supabase
+          .from('companies')
+          .select('id')
+          .eq('cnpj', companyInfo.cnpj)
+          .single()
+
+        if (companies) {
+          const { data: accounts } = await supabase
+            .from('accounts')
+            .select('id')
+            .eq('company_id', companies.id)
+            .eq('code', acc.conta)
+            .single()
+
+          if (accounts) {
+            const { data: txs } = await supabase
+              .from('transactions')
+              .select('*')
+              .eq('account_id', accounts.id)
+              .order('date', { ascending: true })
+
+            if (txs) {
+              const formattedTxs = txs.map((t) => ({
+                data: t.date ? t.date.split('-').reverse().join('/') : '',
+                valor: t.amount.toString().replace('.', ','),
+                indDc: t.indicator,
+                historico: t.history,
+              }))
+              setRazaoTransactions(formattedTxs)
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsLoadingRazao(false)
+    }
+  }
+
+  const filteredRazaoTransactions = useMemo(() => {
+    if (!razaoSearch) return razaoTransactions
+    const lower = razaoSearch.toLowerCase()
+    return razaoTransactions.filter(
+      (tx) =>
+        tx.historico.toLowerCase().includes(lower) ||
+        tx.valor.toString().includes(lower) ||
+        tx.data.includes(lower),
+    )
+  }, [razaoTransactions, razaoSearch])
+
   // Sincronização Automática (Auto-Save) com o navegador e nuvem
   useEffect(() => {
     const configData = {
@@ -848,6 +949,7 @@ export default function App() {
     // setExpenseAccountToGroup({});
 
     let allExtracted = []
+    let allExtractedTx = []
     let mergedInfo = null
 
     const readFile = (file: any) => {
@@ -859,8 +961,11 @@ export default function App() {
 
           let accounts = {}
           let currentPeriod = ''
+          let currentLctoDate = ''
+          let currentLctoDateDb = ''
           let periodsMap = {}
           let info = null
+          let extractedTx = []
 
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim()
@@ -884,6 +989,18 @@ export default function App() {
               if (info) info.j100.push(parts)
             } else if (reg === 'J150') {
               if (info) info.j150.push(parts)
+            } else if (reg === 'I200') {
+              currentLctoDate = parseSpedDate(parts[3])
+              currentLctoDateDb = parseSpedDateDb(parts[3])
+            } else if (reg === 'I250') {
+              extractedTx.push({
+                conta: parts[2],
+                data: currentLctoDate,
+                dataDb: currentLctoDateDb,
+                valor: parts[4],
+                indDc: parts[5],
+                historico: parts[8] || '',
+              })
             } else if (reg === 'I050') {
               accounts[parts[6]] = {
                 conta: parts[6],
@@ -1006,7 +1123,7 @@ export default function App() {
             Object.values(periodsMap[period]).forEach((row: any) => extracted.push(row))
           })
 
-          resolve({ extracted, info })
+          resolve({ extracted, info, extractedTx })
         }
         reader.readAsText(file, 'ISO-8859-1')
       })
@@ -1016,6 +1133,7 @@ export default function App() {
 
     results.forEach((res: any) => {
       allExtracted = [...allExtracted, ...res.extracted]
+      allExtractedTx = [...allExtractedTx, ...(res.extractedTx || [])]
       if (!mergedInfo && res.info) {
         mergedInfo = res.info
       } else if (mergedInfo && res.info) {
@@ -1038,14 +1156,15 @@ export default function App() {
     await localforage.setItem('ecd_parsed_data', allExtracted)
     await localforage.setItem('ecd_company_info', mergedInfo)
     await localforage.setItem('ecd_company_cnpj', mergedInfo.cnpj)
+    await localforage.setItem('ecd_transactions', allExtractedTx)
 
     // Save to Supabase (in background to not block UI entirely, but wait to show toast)
-    saveToSupabase(mergedInfo, allExtracted)
+    saveToSupabase(mergedInfo, allExtracted, allExtractedTx)
 
     setLoading(false)
   }
 
-  const saveToSupabase = async (info: any, extractedData: any[]) => {
+  const saveToSupabase = async (info: any, extractedData: any[], extractedTx: any[]) => {
     if (!user) return
     try {
       toast({
@@ -1114,6 +1233,37 @@ export default function App() {
           .upsert(chunk, { onConflict: 'account_id, period' })
 
         if (balError) throw balError
+      }
+
+      if (extractedTx && extractedTx.length > 0) {
+        const validTxs = extractedTx
+          .filter((t) => accountIdMap.has(t.conta) && t.dataDb)
+          .map((t) => ({
+            company_id: companyId,
+            account_id: accountIdMap.get(t.conta),
+            date: t.dataDb,
+            amount: parseFloat(t.valor.toString().replace(/\./g, '').replace(',', '.')) || 0,
+            indicator: t.indDc,
+            history: t.historico,
+          }))
+
+        if (validTxs.length > 0) {
+          const dates = [...new Set(validTxs.map((t) => t.date))].sort()
+          const minDate = dates[0]
+          const maxDate = dates[dates.length - 1]
+
+          await supabase
+            .from('transactions')
+            .delete()
+            .eq('company_id', companyId)
+            .gte('date', minDate)
+            .lte('date', maxDate)
+
+          for (let i = 0; i < validTxs.length; i += 2000) {
+            const chunk = validTxs.slice(i, i + 2000)
+            await supabase.from('transactions').insert(chunk)
+          }
+        }
       }
 
       toast({
@@ -4095,8 +4245,12 @@ export default function App() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                   <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 relative overflow-hidden">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
                       EBITDA (Último Período)
+                      <IndicatorTooltip
+                        text="Dinheiro que sobrou só da operação (vender menos gastos operacionais)."
+                        example="Ex: Se for negativo, a empresa está 'sangrando' dinheiro todo mês só para tentar existir."
+                      />
                     </span>
                     <p className="text-3xl font-black text-indigo-700 mt-2">
                       R${' '}
@@ -4107,15 +4261,19 @@ export default function App() {
                     </p>
                   </div>
                   <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 relative overflow-hidden">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
                       Margem EBITDA
+                      <IndicatorTooltip
+                        text="Eficiência do negócio em gerar caixa."
+                        example="Ex: Margem de 20% significa que de R$ 100 vendidos, sobram R$ 20 limpos antes de pagar impostos e juros."
+                      />
                     </span>
                     <p className="text-3xl font-black text-emerald-600 mt-2">
                       {ebitdaData.lastMetrics.margin.toFixed(1)}%
                     </p>
                   </div>
                   <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 relative overflow-hidden">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
                       Resultado Operacional (EBIT)
                     </span>
                     <p className="text-3xl font-black text-slate-700 mt-2">
@@ -4127,7 +4285,7 @@ export default function App() {
                     </p>
                   </div>
                   <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 relative overflow-hidden">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
                       Lucro Líquido Final
                     </span>
                     <p className="text-3xl font-black text-slate-700 mt-2">
@@ -4856,9 +5014,13 @@ export default function App() {
                   className={`p-5 rounded-xl border relative overflow-hidden ${liquidityData.lastMetrics.liqCorrente >= 1 ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}
                 >
                   <span
-                    className={`text-xs font-bold uppercase tracking-widest ${liquidityData.lastMetrics.liqCorrente >= 1 ? 'text-emerald-700' : 'text-rose-700'}`}
+                    className={`text-xs font-bold uppercase tracking-widest flex items-center ${liquidityData.lastMetrics.liqCorrente >= 1 ? 'text-emerald-700' : 'text-rose-700'}`}
                   >
                     Liquidez Corrente
+                    <IndicatorTooltip
+                      text="Capacidade de pagar contas de curto prazo com o que tem em caixa, estoque e a receber."
+                      example="Ex: '1.50' significa que para cada R$ 1 devido, você tem R$ 1,50."
+                    />
                   </span>
                   <p
                     className={`text-3xl font-black mt-2 ${liquidityData.lastMetrics.liqCorrente >= 1 ? 'text-emerald-600' : 'text-rose-600'}`}
@@ -4870,9 +5032,13 @@ export default function App() {
                   className={`p-5 rounded-xl border relative overflow-hidden ${liquidityData.lastMetrics.liqSeca >= 1 ? 'bg-emerald-50 border-emerald-100' : liquidityData.lastMetrics.liqSeca > 0.5 ? 'bg-amber-50 border-amber-100' : 'bg-rose-50 border-rose-100'}`}
                 >
                   <span
-                    className={`text-xs font-bold uppercase tracking-widest ${liquidityData.lastMetrics.liqSeca >= 1 ? 'text-emerald-700' : liquidityData.lastMetrics.liqSeca > 0.5 ? 'text-amber-700' : 'text-rose-700'}`}
+                    className={`text-xs font-bold uppercase tracking-widest flex items-center ${liquidityData.lastMetrics.liqSeca >= 1 ? 'text-emerald-700' : liquidityData.lastMetrics.liqSeca > 0.5 ? 'text-amber-700' : 'text-rose-700'}`}
                   >
                     Liquidez Seca
+                    <IndicatorTooltip
+                      text="Capacidade de pagar contas sem depender da venda do Estoque."
+                      example="Ex: Se for '0.80', faltarão 20 centavos para cada R$ 1 devido se não conseguir vender nada."
+                    />
                   </span>
                   <p
                     className={`text-3xl font-black mt-2 ${liquidityData.lastMetrics.liqSeca >= 1 ? 'text-emerald-600' : liquidityData.lastMetrics.liqSeca > 0.5 ? 'text-amber-600' : 'text-rose-600'}`}
@@ -4881,8 +5047,12 @@ export default function App() {
                   </p>
                 </div>
                 <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 relative overflow-hidden">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
                     Liquidez Imediata
+                    <IndicatorTooltip
+                      text="Capacidade de pagamento considerando APENAS o dinheiro vivo na conta do banco/cofre."
+                      example="Ex: '0.10' significa que o dinheiro no banco hoje cobre apenas 10% das dívidas do mês."
+                    />
                   </span>
                   <p className="text-3xl font-black text-slate-700 mt-2">
                     {liquidityData.lastMetrics.liqImediata.toFixed(2)}
@@ -4892,9 +5062,13 @@ export default function App() {
                   className={`p-5 rounded-xl border relative overflow-hidden ${liquidityData.lastMetrics.liqGeral >= 1 ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}
                 >
                   <span
-                    className={`text-xs font-bold uppercase tracking-widest ${liquidityData.lastMetrics.liqGeral >= 1 ? 'text-emerald-700' : 'text-rose-700'}`}
+                    className={`text-xs font-bold uppercase tracking-widest flex items-center ${liquidityData.lastMetrics.liqGeral >= 1 ? 'text-emerald-700' : 'text-rose-700'}`}
                   >
                     Liquidez Geral
+                    <IndicatorTooltip
+                      text="Capacidade de quitar TODAS as dívidas (curto e longo prazo) com todos os bens."
+                      example="Ex: Compara financiamentos longos com seus imóveis e dinheiro. Se fechar a empresa, consegue pagar tudo?"
+                    />
                   </span>
                   <p
                     className={`text-3xl font-black mt-2 ${liquidityData.lastMetrics.liqGeral >= 1 ? 'text-emerald-600' : 'text-rose-600'}`}
@@ -5460,16 +5634,24 @@ export default function App() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                 <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 relative overflow-hidden">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
                     Giro do Ativo
+                    <IndicatorTooltip
+                      text="Quantas vezes a empresa faturou o equivalente ao seu patrimônio total."
+                      example="Ex: Giro de '2.5x' significa que a empresa vendeu 2,5 vezes o valor das suas máquinas e estrutura."
+                    />
                   </span>
                   <p className="text-3xl font-black text-indigo-600 mt-2">
                     {atividadeData.lastMetrics.giroAtivo.toFixed(2)}x
                   </p>
                 </div>
                 <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 relative overflow-hidden">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
                     Prazo Médio Recebimento
+                    <IndicatorTooltip
+                      text="Dias que o dinheiro fica 'preso' no bolso do cliente antes de você receber."
+                      example="Ex: '45 dias' significa que demora um mês e meio desde a venda até o dinheiro cair na conta."
+                    />
                   </span>
                   <p className="text-3xl font-black text-slate-700 mt-2">
                     {atividadeData.lastMetrics.pmr.toFixed(0)}{' '}
@@ -5477,8 +5659,12 @@ export default function App() {
                   </p>
                 </div>
                 <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 relative overflow-hidden">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
                     Prazo Médio Pagamento
+                    <IndicatorTooltip
+                      text="Dias de fôlego que você consegue segurar o dinheiro antes de pagar o fornecedor."
+                      example="Ex: '30 dias' significa que você demora um mês para pagar após receber a mercadoria."
+                    />
                   </span>
                   <p className="text-3xl font-black text-slate-700 mt-2">
                     {atividadeData.lastMetrics.pmp.toFixed(0)}{' '}
@@ -6033,58 +6219,80 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 mt-8">
-                    {topExpensesData.items.map((item: any, index: number) => {
-                      const widthPct = (item.valor / topExpensesData.maxVal) * 100
-                      const isTop3 = index < 3
-                      return (
-                        <div
-                          key={item.conta}
-                          className="group relative flex flex-col bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all duration-300"
+                  <div className="bg-white rounded-2xl border border-slate-200/60 p-6 flex flex-col shadow-sm hover:shadow-md transition-shadow mt-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+                          <BarChart3 className="w-5 h-5 text-rose-500" />
+                          Ranking Detalhado (Top 10)
+                        </h3>
+                        <p className="text-xs font-medium text-slate-500 mt-1">
+                          Maiores despesas do período selecionado
+                        </p>
+                      </div>
+                    </div>
+                    <div className="h-[450px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          layout="vertical"
+                          data={topExpensesData.items.map((item: any, i: number) => ({
+                            name: item.nome,
+                            conta: item.isGrouped
+                              ? `Agrupado (${item.subAccounts.length} contas)`
+                              : item.conta,
+                            valor: item.valor,
+                            fill: CHART_COLORS[i % CHART_COLORS.length].hex,
+                          }))}
+                          margin={{ top: 0, right: 30, left: 0, bottom: 0 }}
                         >
-                          <div className="flex justify-between items-start mb-4">
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ${isTop3 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-600'} transition-colors`}
-                              >
-                                {index + 1}
-                              </div>
-                              <div className="flex-1 min-w-0 pr-2">
-                                <h4
-                                  className="text-slate-800 font-bold text-sm leading-tight line-clamp-2"
-                                  title={item.nome}
-                                >
-                                  {item.nome}
-                                </h4>
-                                <p className="text-[11px] text-slate-500 mt-1 truncate font-medium">
-                                  {item.isGrouped
-                                    ? `Agrupado (${item.subAccounts.length} contas)`
-                                    : item.conta}{' '}
-                                  • {item.grupo.split('.')[0]}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="mt-auto">
-                            <div className="flex justify-between items-end mb-2">
-                              <p className="text-xl font-black text-slate-800 tracking-tight">
-                                R$ {formatCompact(item.valor)}
-                              </p>
-                              <p className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
-                                {((item.valor / topExpensesData.totalExpenses) * 100).toFixed(1)}%
-                              </p>
-                            </div>
-                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-all duration-1000 ease-out ${isTop3 ? 'bg-indigo-500' : 'bg-slate-300 group-hover:bg-indigo-400'}`}
-                                style={{ width: widthPct + '%' }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            horizontal={true}
+                            vertical={false}
+                            stroke="#f1f5f9"
+                          />
+                          <XAxis type="number" hide />
+                          <YAxis
+                            dataKey="name"
+                            type="category"
+                            width={220}
+                            tick={{ fontSize: 11, fill: '#475569', fontWeight: 600 }}
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={(val) =>
+                              val.length > 35 ? val.substring(0, 35) + '...' : val
+                            }
+                          />
+                          <Tooltip
+                            cursor={{ fill: '#f8fafc' }}
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                const data = payload[0].payload
+                                return (
+                                  <div className="bg-white/95 backdrop-blur-sm border border-slate-200 p-3 rounded-lg shadow-xl z-50">
+                                    <p className="font-bold text-slate-800 text-sm mb-1">
+                                      {data.name}
+                                    </p>
+                                    <p className="text-xs text-slate-500 font-mono mb-2">
+                                      {data.conta}
+                                    </p>
+                                    <p className="font-black text-rose-600">
+                                      R$ {formatCompact(data.valor)}
+                                    </p>
+                                  </div>
+                                )
+                              }
+                              return null
+                            }}
+                          />
+                          <Bar dataKey="valor" radius={[0, 4, 4, 0]} barSize={28}>
+                            {topExpensesData.items.map((entry: any, index: number) => (
+                              <Cell key={`cell-${index}`} fill={entry.fill} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
                 </>
               ) : (
@@ -6426,9 +6634,13 @@ export default function App() {
                       return (
                         <tr
                           key={acc.conta}
-                          className={`hover:bg-slate-50/80 transition-colors ${isSintetica ? 'bg-slate-50/50' : 'bg-white'}`}
+                          onClick={() => !isSintetica && openRazao(acc)}
+                          className={`transition-colors ${isSintetica ? 'bg-slate-50/50' : 'bg-white cursor-pointer hover:bg-indigo-50'}`}
                         >
-                          <td className="p-3 px-6 font-mono text-[12px] text-slate-600 border-r border-slate-50">
+                          <td className="p-3 px-6 font-mono text-[12px] text-slate-600 border-r border-slate-50 group">
+                            {isSintetica ? null : (
+                              <Search className="w-3.5 h-3.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity inline mr-1" />
+                            )}
                             {isSintetica ? <strong>{acc.conta}</strong> : acc.conta}
                           </td>
                           <td
@@ -7040,6 +7252,106 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* --- RAZÃO CONTÁBIL DRILL-DOWN --- */}
+      <Sheet
+        open={!!selectedAccountForRazao}
+        onOpenChange={(open) => !open && setSelectedAccountForRazao(null)}
+      >
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-2xl overflow-y-auto bg-white border-l border-slate-200"
+        >
+          <SheetHeader className="mb-6">
+            <SheetTitle className="text-xl font-black text-slate-800">Razão Contábil</SheetTitle>
+            <SheetDescription>
+              Detalhe de lançamentos da conta{' '}
+              <strong className="text-indigo-600">{selectedAccountForRazao?.conta}</strong> -{' '}
+              {selectedAccountForRazao?.nome}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mb-6">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar histórico, data ou valor..."
+                value={razaoSearch}
+                onChange={(e) => setRazaoSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+              />
+            </div>
+          </div>
+
+          {isLoadingRazao ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-4" />
+              <p className="text-slate-500 text-sm font-medium">
+                Buscando lançamentos detalhados...
+              </p>
+            </div>
+          ) : razaoTransactions.length > 0 ? (
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+              <Table>
+                <TableHeader className="bg-slate-50 border-b-2 border-slate-200">
+                  <TableRow>
+                    <TableHead className="w-[100px] font-bold text-slate-500 uppercase text-[10px] tracking-widest">
+                      Data
+                    </TableHead>
+                    <TableHead className="font-bold text-slate-500 uppercase text-[10px] tracking-widest">
+                      Histórico
+                    </TableHead>
+                    <TableHead className="text-right font-bold text-slate-500 uppercase text-[10px] tracking-widest">
+                      Valor
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="divide-y divide-slate-100">
+                  {filteredRazaoTransactions.map((tx, i) => (
+                    <TableRow key={i} className="hover:bg-slate-50/80 transition-colors">
+                      <TableCell className="font-mono text-[11px] text-slate-500 py-3">
+                        {tx.data}
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-700 font-medium py-3">
+                        {tx.historico}
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap py-3">
+                        <span
+                          className={`text-[13px] font-bold flex items-center justify-end gap-2 ${tx.indDc === 'D' ? 'text-blue-600' : 'text-rose-600'}`}
+                        >
+                          {tx.valor}{' '}
+                          <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">
+                            {tx.indDc}
+                          </span>
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredRazaoTransactions.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-8 text-slate-500 text-sm">
+                        Nenhum lançamento encontrado para a sua busca.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center py-16 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+              <Files className="w-10 h-10 text-slate-300 mx-auto mb-4" />
+              <h3 className="text-sm font-bold text-slate-700 mb-1">
+                Nenhum Lançamento Encontrado
+              </h3>
+              <p className="text-slate-500 text-xs">
+                Os registros I250 não constam ou não correspondem a esta conta analítica no arquivo
+                SPED importado.
+              </p>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <style
         dangerouslySetInnerHTML={{
