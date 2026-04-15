@@ -506,6 +506,7 @@ export default function App() {
               if (conf.charts) setCharts(conf.charts)
               if (conf.pieCharts) setPieCharts(conf.pieCharts)
               if (conf.piePeriods) setPiePeriods(conf.piePeriods)
+              if (conf.chartPeriods) setChartPeriods(conf.chartPeriods)
               if (conf.customMapping) setCustomMapping(conf.customMapping)
               if (conf.customDaMapping) setCustomDaMapping(conf.customDaMapping)
               if (conf.customExpenseGroups) setCustomExpenseGroups(conf.customExpenseGroups)
@@ -582,7 +583,12 @@ export default function App() {
   )
   const [openPieDropdownId, setOpenPieDropdownId] = useState(null)
   const [pieChartAccountSearch, setPieChartAccountSearch] = useState('')
-  const [piePeriods, setPiePeriods] = useState<Record<string, { from: string; to: string }>>({})
+  const [piePeriods, setPiePeriods] = useState<Record<string, { from: string; to: string }>>(() =>
+    getSavedState('piePeriods', {}),
+  )
+  const [chartPeriods, setChartPeriods] = useState<Record<string, { from: string; to: string }>>(
+    () => getSavedState('chartPeriods', {}),
+  )
   const [hiddenTop5Lines, setHiddenTop5Lines] = useState<Record<string, boolean>>({})
 
   // Sincronização Automática (Auto-Save) com o navegador e nuvem
@@ -591,6 +597,7 @@ export default function App() {
       charts,
       pieCharts,
       piePeriods,
+      chartPeriods,
       customMapping,
       customDaMapping,
       customExpenseGroups,
@@ -657,6 +664,7 @@ export default function App() {
     charts,
     pieCharts,
     piePeriods,
+    chartPeriods,
     customMapping,
     customDaMapping,
     customExpenseGroups,
@@ -735,6 +743,7 @@ export default function App() {
       charts,
       pieCharts,
       piePeriods,
+      chartPeriods,
       customMapping,
       customDaMapping,
       customExpenseGroups,
@@ -759,6 +768,7 @@ export default function App() {
         if (configData.charts) setCharts(configData.charts)
         if (configData.pieCharts) setPieCharts(configData.pieCharts)
         if (configData.piePeriods) setPiePeriods(configData.piePeriods)
+        if (configData.chartPeriods) setChartPeriods(configData.chartPeriods)
         if (configData.customMapping) setCustomMapping(configData.customMapping)
         if (configData.customDaMapping) setCustomDaMapping(configData.customDaMapping)
         if (configData.customExpenseGroups) setCustomExpenseGroups(configData.customExpenseGroups)
@@ -2107,6 +2117,17 @@ export default function App() {
         chartConf.accounts.includes(a.conta),
       )
 
+      const chartRange = chartPeriods[chartConf.id]
+      const fromPeriod = chartRange?.from || monthlyData.periods[0] || lastPeriod
+      const toPeriod = chartRange?.to || lastPeriod
+
+      const periodsInRange = monthlyData.periods.filter((p: any) => {
+        const pMs = dateStrToMs(p.split(' a ')[0])
+        const fromMs = dateStrToMs(fromPeriod.split(' a ')[0])
+        const toMs = dateStrToMs(toPeriod.split(' a ')[0])
+        return pMs >= fromMs && pMs <= toMs
+      })
+
       let chartData = []
       let globalMaxVal = 0
 
@@ -2115,7 +2136,7 @@ export default function App() {
         let firstVal = null
         let lastVal = 0
 
-        monthlyData.periods.forEach((period, pIdx) => {
+        periodsInRange.forEach((period: any) => {
           const sld = acc.saldos[period]
           let val = 0
           if (sld) {
@@ -2152,7 +2173,7 @@ export default function App() {
       })
 
       if (selectedAccountsInfo.length > 0) {
-        chartData = monthlyData.periods.map((period) => {
+        chartData = periodsInRange.map((period: any) => {
           const periodData = {
             period,
             shortPeriod: period.split(' a ')[0].substring(3, 10),
@@ -2278,7 +2299,7 @@ export default function App() {
     })
 
     return { macroAccounts, lastPeriod, chartsData, pieChartsData }
-  }, [monthlyData, charts, pieCharts, isAccumulated, piePeriods])
+  }, [monthlyData, charts, pieCharts, isAccumulated, piePeriods, chartPeriods])
 
   const toggleAccountSelection = (chartId: any, conta: any) => {
     setCharts((prev: any) =>
@@ -3275,7 +3296,66 @@ export default function App() {
                       </p>
                     </div>
 
-                    <div className="flex gap-3 items-center w-full lg:w-auto">
+                    <div className="flex flex-col xl:flex-row gap-3 items-start xl:items-center w-full lg:w-auto">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full xl:w-auto">
+                        <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 w-full sm:w-auto">
+                          <CalendarDays className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
+                          <span className="text-xs font-bold text-slate-400 mr-2 uppercase tracking-wider shrink-0">
+                            De
+                          </span>
+                          <select
+                            value={
+                              chartPeriods[chartConf.id]?.from ||
+                              monthlyData.periods[0] ||
+                              dashboardData.lastPeriod
+                            }
+                            onChange={(e) =>
+                              setChartPeriods((prev) => ({
+                                ...prev,
+                                [chartConf.id]: {
+                                  from: e.target.value,
+                                  to: prev[chartConf.id]?.to || dashboardData.lastPeriod,
+                                },
+                              }))
+                            }
+                            className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none cursor-pointer pr-6 w-full"
+                          >
+                            {monthlyData.periods.map((p: any) => (
+                              <option key={p} value={p}>
+                                {p.split(' a ')[0].substring(3)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 w-full sm:w-auto">
+                          <CalendarDays className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
+                          <span className="text-xs font-bold text-slate-400 mr-2 uppercase tracking-wider shrink-0">
+                            Até
+                          </span>
+                          <select
+                            value={chartPeriods[chartConf.id]?.to || dashboardData.lastPeriod}
+                            onChange={(e) =>
+                              setChartPeriods((prev) => ({
+                                ...prev,
+                                [chartConf.id]: {
+                                  from:
+                                    prev[chartConf.id]?.from ||
+                                    monthlyData.periods[0] ||
+                                    dashboardData.lastPeriod,
+                                  to: e.target.value,
+                                },
+                              }))
+                            }
+                            className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none cursor-pointer pr-6 w-full"
+                          >
+                            {monthlyData.periods.map((p: any) => (
+                              <option key={p} value={p}>
+                                {p.split(' a ')[0].substring(3)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
                       <div className="w-full lg:w-[450px] relative chart-dropdown-container">
                         <div
                           className="flex flex-wrap items-center gap-2 w-full min-h-[50px] p-2 bg-slate-50/80 hover:bg-slate-100 border border-slate-200 rounded-xl cursor-pointer transition-colors"
