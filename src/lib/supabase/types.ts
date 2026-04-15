@@ -179,7 +179,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_expense_distribution: {
+        Args: { p_company_id: string; p_periods: string[] }
+        Returns: {
+          group_name: string
+          total_value: number
+        }[]
+      }
+      get_top_expenses: {
+        Args: { p_company_id: string; p_periods: string[] }
+        Returns: {
+          account_code: string
+          account_name: string
+          percentage: number
+          total_value: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
@@ -398,6 +413,72 @@ export const Constants = {
 // Table: user_configs
 //   Policy "Users can manage own configs" (ALL, PERMISSIVE) roles={public}
 //     USING: (auth.uid() = user_id)
+
+// --- DATABASE FUNCTIONS ---
+// FUNCTION get_expense_distribution(uuid, text[])
+//   CREATE OR REPLACE FUNCTION public.get_expense_distribution(p_company_id uuid, p_periods text[])
+//    RETURNS TABLE(group_name text, total_value numeric)
+//    LANGUAGE plpgsql
+//    SECURITY DEFINER
+//   AS $function$
+//   BEGIN
+//     RETURN QUERY
+//     SELECT
+//       COALESCE(a.nature, 'OUTRAS DESPESAS') AS group_name,
+//       SUM(ABS(b.debit - b.credit)) AS total_value
+//     FROM balances b
+//     JOIN accounts a ON a.id = b.account_id
+//     WHERE a.company_id = p_company_id
+//       AND a.type = 'A'
+//       AND (a.code LIKE '4%' OR a.code LIKE '5%')
+//       AND b.period = ANY(p_periods)
+//     GROUP BY a.nature
+//     HAVING SUM(ABS(b.debit - b.credit)) > 0
+//     ORDER BY total_value DESC;
+//   END;
+//   $function$
+//
+// FUNCTION get_top_expenses(uuid, text[])
+//   CREATE OR REPLACE FUNCTION public.get_top_expenses(p_company_id uuid, p_periods text[])
+//    RETURNS TABLE(account_code text, account_name text, total_value numeric, percentage numeric)
+//    LANGUAGE plpgsql
+//    SECURITY DEFINER
+//   AS $function$
+//   DECLARE
+//     v_total_expenses NUMERIC;
+//   BEGIN
+//     -- Calculate total expenses for percentage calculation
+//     SELECT COALESCE(SUM(ABS(b.debit - b.credit)), 0) INTO v_total_expenses
+//     FROM balances b
+//     JOIN accounts a ON a.id = b.account_id
+//     WHERE a.company_id = p_company_id
+//       AND a.type = 'A'
+//       AND (a.code LIKE '4%' OR a.code LIKE '5%')
+//       AND b.period = ANY(p_periods);
+//
+//     IF v_total_expenses = 0 THEN
+//       v_total_expenses := 1; -- Avoid division by zero
+//     END IF;
+//
+//     RETURN QUERY
+//     SELECT
+//       a.code AS account_code,
+//       a.name AS account_name,
+//       SUM(ABS(b.debit - b.credit)) AS total_value,
+//       (SUM(ABS(b.debit - b.credit)) / v_total_expenses) * 100 AS percentage
+//     FROM balances b
+//     JOIN accounts a ON a.id = b.account_id
+//     WHERE a.company_id = p_company_id
+//       AND a.type = 'A'
+//       AND (a.code LIKE '4%' OR a.code LIKE '5%')
+//       AND b.period = ANY(p_periods)
+//     GROUP BY a.code, a.name
+//     HAVING SUM(ABS(b.debit - b.credit)) > 0
+//     ORDER BY total_value DESC
+//     LIMIT 10;
+//   END;
+//   $function$
+//
 
 // --- INDEXES ---
 // Table: accounts

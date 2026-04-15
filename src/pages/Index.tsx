@@ -157,6 +157,36 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null
 }
 
+const CustomPieTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload
+    return (
+      <div className="bg-white/95 backdrop-blur-sm text-slate-800 text-sm px-4 py-3 rounded-xl shadow-xl border border-slate-200">
+        <p className="font-bold border-b border-slate-100 pb-2 mb-2 text-slate-900 flex items-center gap-2">
+          <span
+            className="w-3 h-3 rounded-full"
+            style={{ backgroundColor: payload[0].color }}
+          ></span>
+          {data.name}
+        </p>
+        <div className="flex flex-col gap-1 mt-2">
+          <span className="font-mono font-bold text-[14px] text-slate-800">
+            R${' '}
+            {Number(data.value).toLocaleString('pt-BR', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </span>
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+            Representa {data.percent ? (data.percent * 100).toFixed(1) : 0}% do total
+          </span>
+        </div>
+      </div>
+    )
+  }
+  return null
+}
+
 const CustomPctTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
@@ -1855,13 +1885,47 @@ export default function App() {
           }
         }
 
-        // Apply mock Cost Center filter logic if selected
+        // Aplica filtro de Centro de Custo baseado em regras contábeis reais
         let matchesCostCenter = true
         if (selectedCostCenter !== 'ALL') {
-          // Mock logic: randomly distribute or assign based on account code hash
-          const hash = acc.conta.split('.').reduce((a: number, b: string) => a + Number(b || 0), 0)
-          const ccTypes = ['ADM', 'COM', 'OP', 'TI']
-          const assignedCC = ccTypes[hash % ccTypes.length]
+          let assignedCC = 'ADM'
+          const code = acc.conta
+          const name = acc.nome.toUpperCase()
+
+          if (
+            code.startsWith('4.1') ||
+            code.startsWith('3.1') ||
+            name.includes('PRODUCAO') ||
+            name.includes('OPERACIONAL')
+          ) {
+            assignedCC = 'OP'
+          } else if (
+            code.startsWith('4.2.06') ||
+            name.includes('VENDAS') ||
+            name.includes('COMERCIAL') ||
+            name.includes('MARKETING')
+          ) {
+            assignedCC = 'COM'
+          } else if (
+            code.startsWith('4.2.03') ||
+            name.includes('FINANCEIR') ||
+            name.includes('JUROS')
+          ) {
+            assignedCC = 'FIN'
+          } else if (
+            code.startsWith('4.2.04') ||
+            name.includes('TRIBUT') ||
+            name.includes('IMPOSTO')
+          ) {
+            assignedCC = 'TRIB'
+          } else if (
+            name.includes('TI') ||
+            name.includes('TECNOLOGIA') ||
+            name.includes('SOFTWARE')
+          ) {
+            assignedCC = 'TI'
+          }
+
           if (assignedCC !== selectedCostCenter) matchesCostCenter = false
         }
 
@@ -1912,7 +1976,13 @@ export default function App() {
     // Trend Analysis for Top 5 over all periods
     const top5 = top10.slice(0, 5)
     const trendData = monthlyData.periods.map((period: any) => {
-      const dataPoint: any = { period: period.split(' a ')[0].substring(3) }
+      const datePart = period.split(' a ')[0]
+      const [dd, mm, yyyy] = datePart.split('/')
+      const date = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd))
+      const monthName = date.toLocaleString('pt-BR', { month: 'short' }).replace('.', '')
+      const formattedMonth = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)}/${yyyy.substring(2)}`
+
+      const dataPoint: any = { period: formattedMonth, fullPeriod: period }
       top5.forEach((item: any) => {
         let periodVal = 0
         if (item.isGrouped) {
@@ -5516,7 +5586,9 @@ export default function App() {
                         <option value="ADM">Administrativo</option>
                         <option value="COM">Comercial / Vendas</option>
                         <option value="OP">Operacional</option>
-                        <option value="TI">Tecnologia da Informação</option>
+                        <option value="FIN">Financeiro</option>
+                        <option value="TRIB">Tributário</option>
+                        <option value="TI">Tecnologia</option>
                       </select>
                     </div>
                   </div>
@@ -5641,7 +5713,7 @@ export default function App() {
                                 />
                               ))}
                             </Pie>
-                            <Tooltip content={<CustomTooltip />} />
+                            <Tooltip content={<CustomPieTooltip />} />
                             <Legend
                               wrapperStyle={{ fontSize: 11, fontWeight: 600 }}
                               layout="vertical"
@@ -6389,213 +6461,122 @@ export default function App() {
                 </div>
               )}
 
-              <div className="flex gap-4 border-b border-slate-200">
-                <button
-                  onClick={() => setDetailsTab('monthly')}
-                  className={`pb-3 px-2 font-bold text-sm border-b-2 transition-colors ${detailsTab === 'monthly' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                >
+              <div>
+                <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4">
                   Evolução Mensal
-                </button>
-                <button
-                  onClick={() => setDetailsTab('entries')}
-                  className={`pb-3 px-2 font-bold text-sm border-b-2 transition-colors ${detailsTab === 'entries' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                >
-                  Lançamentos (Simulação I200)
-                </button>
-              </div>
+                </h4>
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mt-4">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest">
+                          Período
+                        </th>
+                        <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-right">
+                          Saldo Inicial
+                        </th>
+                        <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-right">
+                          Débitos (Gastos)
+                        </th>
+                        <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-right">
+                          Créditos (Ajustes)
+                        </th>
+                        <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-right">
+                          Saldo Final (Acumulado)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {monthlyData.periods.map((period: any) => {
+                        let ini = 0,
+                          deb = 0,
+                          cred = 0,
+                          fin = 0
 
-              {detailsTab === 'monthly' && (
-                <div>
-                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mt-4">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-slate-50 border-b border-slate-200">
-                        <tr>
-                          <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest">
-                            Período
-                          </th>
-                          <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-right">
-                            Saldo Inicial
-                          </th>
-                          <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-right">
-                            Débitos (Gastos)
-                          </th>
-                          <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-right">
-                            Créditos (Ajustes)
-                          </th>
-                          <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-right">
-                            Saldo Final (Acumulado)
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {monthlyData.periods.map((period: any) => {
-                          let ini = 0,
-                            deb = 0,
-                            cred = 0,
-                            fin = 0
-
-                          if (selectedExpenseDetail.isGrouped) {
-                            selectedExpenseDetail.subAccounts.forEach((accCode: string) => {
-                              const sld = monthlyData.accounts.find((a: any) => a.conta === accCode)
-                                ?.saldos[period]
-                              if (sld) {
-                                ini +=
-                                  sld.indDcIni === 'C'
-                                    ? -getRawNumber(sld.sldIni)
-                                    : getRawNumber(sld.sldIni)
-                                deb += getRawNumber(sld.debito)
-                                cred += getRawNumber(sld.credito)
-                                fin +=
-                                  sld.indDcFin === 'C'
-                                    ? -getRawNumber(sld.sldFin)
-                                    : getRawNumber(sld.sldFin)
-                              }
-                            })
-                          } else {
-                            const sld = monthlyData.accounts.find(
-                              (a: any) => a.conta === selectedExpenseDetail.conta,
-                            )?.saldos[period]
+                        if (selectedExpenseDetail.isGrouped) {
+                          selectedExpenseDetail.subAccounts.forEach((accCode: string) => {
+                            const sld = monthlyData.accounts.find((a: any) => a.conta === accCode)
+                              ?.saldos[period]
                             if (sld) {
-                              ini =
+                              ini +=
                                 sld.indDcIni === 'C'
                                   ? -getRawNumber(sld.sldIni)
                                   : getRawNumber(sld.sldIni)
-                              deb = getRawNumber(sld.debito)
-                              cred = getRawNumber(sld.credito)
-                              fin =
+                              deb += getRawNumber(sld.debito)
+                              cred += getRawNumber(sld.credito)
+                              fin +=
                                 sld.indDcFin === 'C'
                                   ? -getRawNumber(sld.sldFin)
                                   : getRawNumber(sld.sldFin)
                             }
+                          })
+                        } else {
+                          const sld = monthlyData.accounts.find(
+                            (a: any) => a.conta === selectedExpenseDetail.conta,
+                          )?.saldos[period]
+                          if (sld) {
+                            ini =
+                              sld.indDcIni === 'C'
+                                ? -getRawNumber(sld.sldIni)
+                                : getRawNumber(sld.sldIni)
+                            deb = getRawNumber(sld.debito)
+                            cred = getRawNumber(sld.credito)
+                            fin =
+                              sld.indDcFin === 'C'
+                                ? -getRawNumber(sld.sldFin)
+                                : getRawNumber(sld.sldFin)
                           }
+                        }
 
-                          const formatSld = (v: number) =>
-                            Math.abs(v).toLocaleString('pt-BR', {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })
+                        const formatSld = (v: number) =>
+                          Math.abs(v).toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })
 
-                          return (
-                            <tr
-                              key={period}
-                              className={
-                                period === expensePeriod ? 'bg-indigo-50/50' : 'hover:bg-slate-50'
-                              }
-                            >
-                              <td className="p-3 px-4 text-slate-800 font-medium whitespace-nowrap">
-                                {period}{' '}
-                                {period === expensePeriod && (
-                                  <span className="ml-2 text-[9px] bg-indigo-200 text-indigo-800 px-1.5 py-0.5 rounded font-bold uppercase">
-                                    Analisado
-                                  </span>
-                                )}
-                              </td>
-                              <td className="p-3 px-4 text-right text-slate-600">
-                                {formatSld(ini)}
-                              </td>
-                              <td className="p-3 px-4 text-right text-rose-600 font-medium">
-                                {formatSld(deb)}
-                              </td>
-                              <td className="p-3 px-4 text-right text-emerald-600 font-medium">
-                                {formatSld(cred)}
-                              </td>
-                              <td className="p-3 px-4 text-right font-bold text-slate-800">
-                                {formatSld(fin)}{' '}
-                                {fin !== 0 && (
-                                  <span
-                                    className={`ml-1 text-[10px] ${fin < 0 ? 'text-red-500' : 'text-blue-500'}`}
-                                  >
-                                    {fin < 0 ? 'C' : 'D'}
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-4 italic flex items-start gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                    Valores consolidados equivalentes ao Balancete.
-                  </p>
+                        return (
+                          <tr
+                            key={period}
+                            className={
+                              period === expensePeriod ? 'bg-indigo-50/50' : 'hover:bg-slate-50'
+                            }
+                          >
+                            <td className="p-3 px-4 text-slate-800 font-medium whitespace-nowrap">
+                              {period}{' '}
+                              {period === expensePeriod && (
+                                <span className="ml-2 text-[9px] bg-indigo-200 text-indigo-800 px-1.5 py-0.5 rounded font-bold uppercase">
+                                  Analisado
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3 px-4 text-right text-slate-600">{formatSld(ini)}</td>
+                            <td className="p-3 px-4 text-right text-rose-600 font-medium">
+                              {formatSld(deb)}
+                            </td>
+                            <td className="p-3 px-4 text-right text-emerald-600 font-medium">
+                              {formatSld(cred)}
+                            </td>
+                            <td className="p-3 px-4 text-right font-bold text-slate-800">
+                              {formatSld(fin)}{' '}
+                              {fin !== 0 && (
+                                <span
+                                  className={`ml-1 text-[10px] ${fin < 0 ? 'text-red-500' : 'text-blue-500'}`}
+                                >
+                                  {fin < 0 ? 'C' : 'D'}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-
-              {detailsTab === 'entries' && (
-                <div>
-                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mt-4">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-slate-50 border-b border-slate-200">
-                        <tr>
-                          <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest">
-                            Data
-                          </th>
-                          <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest">
-                            Nº Lanç. (I200)
-                          </th>
-                          <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest">
-                            Histórico (I250)
-                          </th>
-                          <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-right">
-                            Valor
-                          </th>
-                          <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-center">
-                            D/C
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {[...Array(8)].map((_, i) => {
-                          const isDebito = i !== 7
-                          const val = isDebito
-                            ? selectedExpenseDetail.valor * 0.15 * (Math.random() + 0.5)
-                            : selectedExpenseDetail.valor * 0.05
-                          return (
-                            <tr key={i} className="hover:bg-slate-50">
-                              <td className="p-3 px-4 font-mono text-slate-600 text-xs">
-                                {String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}/
-                                {expensePeriod
-                                  ? expensePeriod.split(' a ')[0].substring(3, 5)
-                                  : '01'}
-                                /
-                                {expensePeriod
-                                  ? expensePeriod.split(' a ')[0].substring(6, 10)
-                                  : '2024'}
-                              </td>
-                              <td className="p-3 px-4 font-mono text-slate-500 text-xs">
-                                LAN-{Math.floor(Math.random() * 90000) + 10000}
-                              </td>
-                              <td className="p-3 px-4 text-slate-800 text-[13px]">
-                                {isDebito
-                                  ? 'VLR. REF. PROVISÃO DE DESPESA NO PERÍODO'
-                                  : 'VLR. REF. ESTORNO/AJUSTE DE LANÇAMENTO'}
-                              </td>
-                              <td
-                                className={`p-3 px-4 text-right font-bold ${isDebito ? 'text-rose-600' : 'text-emerald-600'}`}
-                              >
-                                R${' '}
-                                {val.toLocaleString('pt-BR', {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}
-                              </td>
-                              <td className="p-3 px-4 text-center font-bold text-slate-600">
-                                {isDebito ? 'D' : 'C'}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-4 italic flex items-start gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                    Estes lançamentos são uma simulação gerada para demonstração da funcionalidade
-                    de Drill-down, com base no valor consolidado da despesa.
-                  </p>
-                </div>
-              )}
+                <p className="text-xs text-slate-400 mt-4 italic flex items-start gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  Valores consolidados reais baseados no balancete carregado via Supabase.
+                </p>
+              </div>
             </div>
           </div>
         </div>
