@@ -6641,6 +6641,134 @@ export default function App() {
             </div>
 
             <div className="overflow-y-auto flex-1 p-6 custom-scrollbar space-y-8 bg-slate-50/50">
+              <div>
+                <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <ListOrdered className="w-5 h-5 text-indigo-500" />
+                  Detalhamento de Lançamentos (Ordem Decrescente)
+                </h4>
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest">
+                          Período (Data)
+                        </th>
+                        <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest">
+                          Conta Analítica
+                        </th>
+                        <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest">
+                          Descrição
+                        </th>
+                        <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-right">
+                          Valor
+                        </th>
+                        <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-center">
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(() => {
+                        const lancamentos = []
+                        monthlyData.periods.forEach((period) => {
+                          if (selectedExpenseDetail.isGrouped) {
+                            selectedExpenseDetail.subAccounts.forEach((accCode) => {
+                              const accObj = monthlyData.accounts.find((a) => a.conta === accCode)
+                              if (accObj) {
+                                const sld = accObj.saldos[period]
+                                if (sld) {
+                                  let val = 0
+                                  if (!isAccumulated) {
+                                    val = Math.abs(
+                                      getRawNumber(sld.debito) - getRawNumber(sld.credito),
+                                    )
+                                  } else {
+                                    val = Math.abs(getRawNumber(sld.sldFin))
+                                  }
+                                  if (val > 0) {
+                                    lancamentos.push({
+                                      data: period.split(' a ')[0],
+                                      conta: accCode,
+                                      descricao: accObj.nome,
+                                      valor: val,
+                                      status: 'Consolidado',
+                                    })
+                                  }
+                                }
+                              }
+                            })
+                          } else {
+                            const accObj = monthlyData.accounts.find(
+                              (a) => a.conta === selectedExpenseDetail.conta,
+                            )
+                            if (accObj) {
+                              const sld = accObj.saldos[period]
+                              if (sld) {
+                                let val = 0
+                                if (!isAccumulated) {
+                                  val = Math.abs(
+                                    getRawNumber(sld.debito) - getRawNumber(sld.credito),
+                                  )
+                                } else {
+                                  val = Math.abs(getRawNumber(sld.sldFin))
+                                }
+                                if (val > 0) {
+                                  lancamentos.push({
+                                    data: period.split(' a ')[0],
+                                    conta: accObj.conta,
+                                    descricao: accObj.nome,
+                                    valor: val,
+                                    status: 'Consolidado',
+                                  })
+                                }
+                              }
+                            }
+                          }
+                        })
+
+                        lancamentos.sort((a, b) => b.valor - a.valor)
+
+                        if (lancamentos.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={5} className="p-8 text-center text-slate-500">
+                                Nenhum lançamento encontrado com valor maior que zero.
+                              </td>
+                            </tr>
+                          )
+                        }
+
+                        return lancamentos.map((lanc, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                            <td className="p-3 px-4 text-slate-800 font-medium whitespace-nowrap">
+                              {lanc.data}
+                            </td>
+                            <td className="p-3 px-4 font-mono text-slate-600 text-xs">
+                              {lanc.conta}
+                            </td>
+                            <td className="p-3 px-4 text-slate-800 font-medium">
+                              {lanc.descricao}
+                            </td>
+                            <td className="p-3 px-4 text-right font-black text-rose-600">
+                              R${' '}
+                              {lanc.valor.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </td>
+                            <td className="p-3 px-4 text-center">
+                              <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                                {lanc.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               {selectedExpenseDetail.isGrouped && (
                 <div>
                   <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4">
