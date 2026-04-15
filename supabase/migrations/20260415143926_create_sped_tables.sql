@@ -101,15 +101,15 @@ DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 DROP POLICY IF EXISTS "Users can manage own companies" ON public.companies;
-CREATE POLICY "Users can manage own companies" ON public.companies ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage own companies" ON public.companies FOR ALL USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can manage accounts of own companies" ON public.accounts;
-CREATE POLICY "Users can manage accounts of own companies" ON public.accounts ALL USING (
+CREATE POLICY "Users can manage accounts of own companies" ON public.accounts FOR ALL USING (
   EXISTS (SELECT 1 FROM public.companies WHERE id = accounts.company_id AND user_id = auth.uid())
 );
 
 DROP POLICY IF EXISTS "Users can manage balances of own companies" ON public.balances;
-CREATE POLICY "Users can manage balances of own companies" ON public.balances ALL USING (
+CREATE POLICY "Users can manage balances of own companies" ON public.balances FOR ALL USING (
   EXISTS (
     SELECT 1 FROM public.accounts a
     JOIN public.companies c ON c.id = a.company_id
@@ -118,4 +118,4 @@ CREATE POLICY "Users can manage balances of own companies" ON public.balances AL
 );
 
 DROP POLICY IF EXISTS "Users can manage own configs" ON public.user_configs;
-CREATE POLICY "Users can manage own configs" ON public.user_configs ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage own configs" ON public.user_configs FOR ALL USING (auth.uid() = user_id);
