@@ -63,6 +63,9 @@ import {
   Server,
   ShieldCheck,
   Info,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from 'lucide-react'
 import localforage from 'localforage'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -667,6 +670,10 @@ export default function App() {
   const [razaoValueMax, setRazaoValueMax] = useState('')
   const [razaoIndDc, setRazaoIndDc] = useState('ALL')
   const [showRazaoFilters, setShowRazaoFilters] = useState(false)
+  const [razaoSortConfig, setRazaoSortConfig] = useState<{
+    key: 'data' | 'valor' | null
+    direction: 'asc' | 'desc'
+  }>({ key: null, direction: 'asc' })
 
   const clearRazaoFilters = () => {
     setRazaoSearch('')
@@ -675,6 +682,7 @@ export default function App() {
     setRazaoValueMin('')
     setRazaoValueMax('')
     setRazaoIndDc('ALL')
+    setRazaoSortConfig({ key: null, direction: 'asc' })
   }
 
   const openRazao = async (acc: any) => {
@@ -783,6 +791,45 @@ export default function App() {
     razaoValueMax,
     razaoIndDc,
   ])
+
+  const sortedRazaoTransactions = useMemo(() => {
+    let sortableItems = [...filteredRazaoTransactions]
+    if (razaoSortConfig.key !== null) {
+      sortableItems.sort((a, b) => {
+        if (razaoSortConfig.key === 'data') {
+          const parseDate = (str: string) => {
+            if (!str) return 0
+            const [d, m, y] = str.split('/')
+            return new Date(`${y}-${m}-${d}T12:00:00`).getTime()
+          }
+          const dateA = parseDate(a.data)
+          const dateB = parseDate(b.data)
+          if (dateA < dateB) return razaoSortConfig.direction === 'asc' ? -1 : 1
+          if (dateA > dateB) return razaoSortConfig.direction === 'asc' ? 1 : -1
+          return 0
+        }
+        if (razaoSortConfig.key === 'valor') {
+          const parseVal = (str: string) =>
+            parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0
+          const valA = parseVal(a.valor)
+          const valB = parseVal(b.valor)
+          if (valA < valB) return razaoSortConfig.direction === 'asc' ? -1 : 1
+          if (valA > valB) return razaoSortConfig.direction === 'asc' ? 1 : -1
+          return 0
+        }
+        return 0
+      })
+    }
+    return sortableItems
+  }, [filteredRazaoTransactions, razaoSortConfig])
+
+  const handleSortRazao = (key: 'data' | 'valor') => {
+    let direction: 'asc' | 'desc' = 'asc'
+    if (razaoSortConfig.key === key && razaoSortConfig.direction === 'asc') {
+      direction = 'desc'
+    }
+    setRazaoSortConfig({ key, direction })
+  }
 
   // Sincronização Automática (Auto-Save) com o navegador e nuvem
   useEffect(() => {
@@ -7434,19 +7481,47 @@ export default function App() {
               <Table>
                 <TableHeader className="bg-slate-50 border-b-2 border-slate-200">
                   <TableRow>
-                    <TableHead className="w-[100px] font-bold text-slate-500 uppercase text-[10px] tracking-widest">
-                      Data
+                    <TableHead
+                      className="w-[120px] font-bold text-slate-500 uppercase text-[10px] tracking-widest cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => handleSortRazao('data')}
+                    >
+                      <div className="flex items-center gap-1 select-none">
+                        Data
+                        {razaoSortConfig.key === 'data' ? (
+                          razaoSortConfig.direction === 'asc' ? (
+                            <ArrowUp className="w-3 h-3" />
+                          ) : (
+                            <ArrowDown className="w-3 h-3" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 opacity-30" />
+                        )}
+                      </div>
                     </TableHead>
                     <TableHead className="font-bold text-slate-500 uppercase text-[10px] tracking-widest">
                       Histórico
                     </TableHead>
-                    <TableHead className="text-right font-bold text-slate-500 uppercase text-[10px] tracking-widest">
-                      Valor
+                    <TableHead
+                      className="text-right font-bold text-slate-500 uppercase text-[10px] tracking-widest cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => handleSortRazao('valor')}
+                    >
+                      <div className="flex items-center justify-end gap-1 select-none">
+                        {razaoSortConfig.key === 'valor' ? (
+                          razaoSortConfig.direction === 'asc' ? (
+                            <ArrowUp className="w-3 h-3" />
+                          ) : (
+                            <ArrowDown className="w-3 h-3" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 opacity-30" />
+                        )}
+                        Valor
+                      </div>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="divide-y divide-slate-100">
-                  {filteredRazaoTransactions.map((tx, i) => (
+                  {sortedRazaoTransactions.map((tx, i) => (
                     <TableRow key={i} className="hover:bg-slate-50/80 transition-colors">
                       <TableCell className="font-mono text-[11px] text-slate-500 py-3">
                         {tx.data}
@@ -7466,7 +7541,7 @@ export default function App() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {filteredRazaoTransactions.length === 0 && (
+                  {sortedRazaoTransactions.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={3} className="text-center py-8 text-slate-500 text-sm">
                         Nenhum lançamento encontrado para a sua busca.
