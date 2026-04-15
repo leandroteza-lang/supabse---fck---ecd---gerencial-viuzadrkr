@@ -2933,23 +2933,23 @@ export default function App() {
           <div className="animate-in fade-in duration-500">
             <ExplanationPanel
               title="O que é o Dashboard de Evolução e como usá-lo?"
-              description="O Dashboard de Evolução é o centro de comando estratégico da sua empresa. Assim como o painel de um avião, ele traduz milhares de dados complexos em gráficos visuais simples, permitindo que você identifique rapidamente tendências de crescimento, picos de gastos e a saúde geral do negócio ao longo dos meses."
+              description="O Dashboard de Evolução é o painel de controle principal da sua empresa. Ele transforma milhares de números em gráficos fáceis de ler, ajudando você a ver se as vendas estão subindo, onde os gastos estão disparando e como está a saúde geral do negócio. Exemplo prático: se você quer saber se os gastos com marketing no ano valeram a pena, pode comparar a linha de 'Despesas com Marketing' com a de 'Receitas de Vendas' mês a mês."
               indicators={[
                 {
                   name: 'Lente: Mensal Isolado vs Acumulado',
-                  desc: "O botão no topo altera a lente da sua análise. Use 'Mensal Isolado' para investigar a performance de um mês específico (ex: Março foi bom ou ruim?). Use 'Acumulado' para ver a soma contínua desde Janeiro (ex: como está o ano até agora?).",
+                  desc: "O botão no topo muda a forma como você vê os números. 'Mensal Isolado' mostra apenas o que aconteceu naquele mês (Ex: Lucramos 10 mil em Março?). 'Acumulado' soma tudo desde Janeiro (Ex: Lucramos 30 mil no ano até agora?).",
                 },
                 {
                   name: 'Cards de Resumo (O Placar)',
-                  desc: 'Exibem o saldo final das grandes categorias do seu negócio (como Ativos, Passivos e Despesas). A cor indica a saúde: verde significa um cenário favorável (entrou mais dinheiro ou a dívida caiu), vermelho indica alerta.',
+                  desc: 'Mostram os saldos mais importantes (como todo o dinheiro que a empresa tem, o que deve e o que gastou). A cor verde significa que a situação melhorou (mais dinheiro ou menos dívida); vermelho significa alerta.',
                 },
                 {
                   name: 'Gráficos Comparativos Livres',
-                  desc: "Uma ferramenta poderosa para investigar relações. Quer saber se as 'Despesas Administrativas' subiram junto com as 'Vendas'? Selecione ambas no mesmo gráfico e acompanhe a dança das barras ao longo dos meses.",
+                  desc: "Permitem colocar diferentes contas lado a lado. Exemplo: você pode selecionar 'Despesas com Pessoal' e 'Vendas' para ver se a contratação de novos funcionários realmente aumentou o faturamento.",
                 },
                 {
                   name: 'Pico Registrado e Crescimento',
-                  desc: 'A lateral do gráfico avisa automaticamente qual foi o pior (ou melhor) mês daquela conta e calcula a percentagem de crescimento. Perfeito para descobrir o mês em que a operação perdeu a eficiência.',
+                  desc: 'Mostra automaticamente o maior valor alcançado e o quanto cresceu (ou caiu). Exemplo: ajuda a descobrir rapidamente que em Julho a conta de energia elétrica atingiu o valor mais alto do ano.',
                 },
               ]}
             />
@@ -3848,23 +3848,23 @@ export default function App() {
           <div className="animate-in fade-in duration-500">
             <ExplanationPanel
               title="Como entender a Demonstração do Resultado (DRE)?"
-              description="A DRE é como se fosse um 'raio-x' da empresa. Ela responde de forma exata e estruturada a pergunta mais importante de todas: 'A empresa deu lucro ou prejuízo no fim do mês?'. A tabela funciona como uma escada de subtrações, partindo de tudo o que foi vendido até chegar no que sobrou no bolso do dono."
+              description="A DRE é o 'raio-x' financeiro da empresa. Ela responde à pergunta de ouro: 'A empresa deu lucro ou prejuízo?'. Imagine uma escada onde você começa com todo o dinheiro das vendas no topo e vai descendo degrau por degrau, pagando custos, despesas e impostos, até chegar ao que realmente sobra no bolso do dono no final."
               indicators={[
                 {
-                  name: '1. Receita Bruta',
-                  desc: 'É o topo da escada. Representa 100% de tudo aquilo que a empresa faturou e vendeu para clientes, sem ter descontado impostos ou mercadorias devolvidas.',
+                  name: '1. Receita Bruta (Tudo que entrou)',
+                  desc: 'É o topo da escada. Representa tudo o que você faturou. Exemplo: Se sua padaria vendeu 1000 pães a R$ 1,00, sua Receita Bruta é de R$ 1.000,00 (antes de descontar farinha, funcionários ou impostos).',
                 },
                 {
-                  name: 'Visão Mensal vs Acumulada',
-                  desc: 'Use o botão acima da tabela para decidir se quer ver o Lucro/Prejuízo gerado apenas naquele mês isolado, ou o resultado acumulado do ano desde Janeiro.',
+                  name: '4. Custos Operacionais (O preço do produto)',
+                  desc: 'É quanto custou para fazer ou comprar o que você vendeu. Exemplo: Para vender aqueles 1000 pães, você gastou R$ 300,00 em farinha, fermento e padeiro. Esse é o seu custo direto.',
                 },
                 {
-                  name: '4. Custos Operacionais (CMV/CPV)',
-                  desc: 'É o valor exato que a empresa pagou para comprar (ou fabricar) aquilo que ela acabou de vender. Sem esse gasto, o produto não existiria para ser vendido.',
+                  name: '6. Despesas Operacionais (Manter as portas abertas)',
+                  desc: 'São os gastos gerais que não estão no produto em si, mas fazem a empresa funcionar. Exemplo: O aluguel da padaria, o contador, a conta de internet e o salário do gerente.',
                 },
                 {
-                  name: '6. Despesas Operacionais',
-                  desc: "São os 'gastos para manter a porta aberta' da empresa, mas que não estão ligados diretamente à fabricação de um produto. Exemplos: salários administrativos, aluguel, conta de luz e internet.",
+                  name: '14. Lucro Líquido (A sobra final)',
+                  desc: 'É a última linha. Depois de pegar os R$ 1.000,00 das vendas, pagar os ingredientes, o aluguel e os impostos, o que sobrar aqui é o verdadeiro lucro (ou prejuízo) que o negócio gerou.',
                 },
               ]}
             />
@@ -4033,24 +4033,24 @@ export default function App() {
         {data.length > 0 && activeTab === 'ebitda' && ebitdaData && (
           <div className="animate-in fade-in duration-500">
             <ExplanationPanel
-              title="O que é o EBITDA (Geração de Caixa) e como avaliá-lo?"
-              description="O EBITDA (ou LAJIDA em português) é o indicador mais amado por investidores e bancos. Ele responde: 'A sua operação principal dá dinheiro?'. Imagine uma padaria muito boa, que vende pão com lucro, mas que paga juros enormes ao banco devido a um empréstimo antigo. O Lucro Líquido será péssimo (culpa do banco), mas o EBITDA será excelente (mérito da padaria). O EBITDA isola e avalia apenas o seu negócio principal, removendo ruídos de dívidas e impostos."
+              title="O que é o EBITDA e como ele mede a força do seu negócio?"
+              description="O EBITDA é a resposta para a pergunta: 'A essência do meu negócio dá dinheiro?'. Ele isola a sua operação das dívidas e impostos. Exemplo prático: Imagine uma padaria que faz um pão incrível e vende muito. Porém, o dono pegou um empréstimo gigante no passado e paga juros altíssimos. O Lucro Final (Líquido) será ruim (culpa da dívida), mas o EBITDA será ótimo (mérito da operação da padaria). Bancos e investidores olham o EBITDA para saber se a empresa é viável."
               indicators={[
                 {
-                  name: 'EBITDA (O Valor Gerencial)',
-                  desc: 'É o valor em dinheiro que a sua operação (comprar, fazer, vender e pagar funcionários) gerou ou consumiu. Se o EBITDA for negativo, o coração da empresa está doente e não se sustenta.',
+                  name: 'EBITDA em Dinheiro (R$)',
+                  desc: 'É o dinheiro que sobrou só da operação (vender menos os gastos para funcionar). Se esse valor for negativo, a empresa está "sangrando" dinheiro todo mês só para tentar existir.',
                 },
                 {
-                  name: 'Margem EBITDA',
-                  desc: 'É a prova da sua eficiência. Uma margem de 15% significa que, para cada R$ 100 em vendas faturadas, sobram R$ 15 limpos na operação, antes de pagar os bancos e o governo.',
+                  name: 'Margem EBITDA (%)',
+                  desc: 'É a eficiência do negócio. Exemplo: Uma margem de 20% significa que de cada R$ 100,00 que entram no caixa pelas vendas, sobram R$ 20,00 limpos antes de pagar o governo e os juros do banco.',
                 },
                 {
-                  name: 'Abordagem Direta vs Indireta',
-                  desc: 'A tabela apresenta dois caminhos matemáticos que chegam ao mesmo resultado. O Direto é lógico: parte das Vendas e vai retirando os custos. O Indireto é o método contábil da lei: parte do Lucro Final e soma as coisas de volta (juros, impostos).',
+                  name: 'Por que ignorar impostos e juros aqui?',
+                  desc: 'Impostos mudam por decisões do governo e juros dependem de como você financiou a empresa. O EBITDA ignora isso para focar apenas se o seu produto/serviço consegue gerar dinheiro sozinho.',
                 },
                 {
                   name: 'Por que somar a Depreciação de volta?',
-                  desc: "A depreciação é o desgaste de um bem. Ela diminui o seu lucro contábil na DRE, mas você não tem que 'pagar em dinheiro' esse desgaste todo mês. Logo, somamos isso de volta para achar o 'Caixa' real gerado.",
+                  desc: "Depreciação é o carro envelhecendo, mas você não tira dinheiro do bolso hoje para pagar isso. O EBITDA devolve esse valor à conta porque quer descobrir quanto dinheiro real ('caixa') sobrou naquele mês.",
                 },
               ]}
             />
@@ -4439,23 +4439,23 @@ export default function App() {
           <div className="animate-in fade-in duration-500">
             <ExplanationPanel
               title="Para que servem os Indicadores de Rentabilidade?"
-              description="Estes índices respondem à pergunta de ouro: 'A empresa faturou milhões, mas no fim do dia, qual é o verdadeiro percentual de ganho que sobrou no bolso?'. Eles medem a eficiência do modelo de negócio em converter vendas e investimentos em lucro real."
+              description="Faturar muito não significa ganhar muito. Estes índices mostram exatamente qual é a fatia do bolo que fica com você. Eles medem o poder da sua empresa em transformar vendas em lucro de verdade."
               indicators={[
                 {
-                  name: 'Margem Bruta (O Fôlego do Produto)',
-                  desc: 'Indica o ganho direto sobre o que foi vendido. Se você vende um bolo por R$ 100 e gasta R$ 60 só com ingredientes, a sua Margem Bruta é de 40%. É a força do seu produto antes de pagar as despesas do escritório.',
+                  name: 'Margem Bruta (O peso do produto)',
+                  desc: 'Exemplo: Se você vende uma blusa por R$ 100 e a fábrica cobrou R$ 60 para fazê-la, sobraram R$ 40. Sua Margem Bruta é de 40%. Se for muito baixa, seu produto está muito barato ou custando muito caro para ser feito.',
                 },
                 {
-                  name: 'Margem Líquida (A Sobra Real)',
-                  desc: 'A verdadeira sobra final. Daqueles R$ 100 do bolo, depois de pagar os ingredientes, a conta de luz, o contador, os juros e os impostos, sobrou quanto? Se sobraram R$ 10 limpos, a Margem Líquida é de 10%.',
+                  name: 'Margem Líquida (A sobra final)',
+                  desc: 'Exemplo: Dos mesmos R$ 100 da blusa, você ainda pagou o aluguel da loja, a vendedora e os impostos. No final, sobraram R$ 8 limpos. A sua Margem Líquida é de 8%. É o que realmente pode ir para o bolso do dono.',
                 },
                 {
-                  name: 'ROE (Retorno sobre Patrimônio Líquido)',
-                  desc: 'Mede o retorno gerado em cima do dinheiro que você (o sócio) colocou na empresa. Se você investiu R$ 100 mil na empresa e o ROE deu 15%, significa que a empresa está a dar mais retorno do que investimentos comuns em bancos.',
+                  name: 'ROE (O negócio rende mais que a poupança?)',
+                  desc: 'Exemplo: Você investiu R$ 100 mil do seu dinheiro para abrir o negócio. Se o ROE é de 20% ao ano, significa que o negócio te devolveu R$ 20 mil de lucro. É melhor do que deixar o dinheiro parado no banco!',
                 },
                 {
-                  name: 'ROA (Retorno sobre o Ativo)',
-                  desc: 'Mostra o quão eficiente a gestão é em usar toda a infraestrutura (caixa, estoques, máquinas e veículos). Se você tem uma fábrica gigante e cara (Ativo Alto), mas dá pouco lucro, o ROA será baixo, revelando ineficiência.',
+                  name: 'ROA (As máquinas estão se pagando?)',
+                  desc: 'Exemplo: Se a empresa tem R$ 1 Milhão em equipamentos, caminhões e computadores (Ativos) e dá pouco lucro, o ROA será baixo (ex: 2%). Isso indica que você tem muito luxo e pouca eficiência em gerar dinheiro com isso.',
                 },
               ]}
             />
@@ -4799,24 +4799,24 @@ export default function App() {
         {data.length > 0 && activeTab === 'liquidez' && liquidityData && (
           <div className="animate-in fade-in duration-500">
             <ExplanationPanel
-              title="O que são os Indicadores de Liquidez?"
-              description="A Liquidez é o 'teste de sobrevivência' e de fôlego financeiro da empresa. Imagine que aconteceu uma grande crise mundial e, amanhã, todos os fornecedores, funcionários e bancos batessem à sua porta exigindo o pagamento de tudo o que você deve. A sua empresa teria dinheiro vivo ou bens rápidos de vender para pagar tudo sem falir? É isso que a liquidez mede."
+              title="O que são os Indicadores de Liquidez (Fôlego Financeiro)?"
+              description="A liquidez mede o quão fácil a sua empresa consegue pagar as contas dela. Exemplo prático: se todo mundo que você deve batesse na sua porta hoje cobrando, você teria dinheiro ou bens fáceis de vender (como estoque e contas a receber) para pagar tudo sem fechar as portas?"
               indicators={[
                 {
-                  name: 'Liquidez Corrente (O Curto Prazo)',
-                  desc: 'Compara tudo o que você tem para receber e em caixa no próximo ano (Ativo Circulante) com tudo o que você deve pagar neste ano (Passivo Circulante). Se o resultado for 1.5, significa que para cada R$ 1,00 de dívida, você tem R$ 1,50 para pagar. Estar acima de 1 é a zona de segurança.',
+                  name: 'Liquidez Corrente (O Teste do Ano)',
+                  desc: 'Exemplo: O número "1.50" significa que para cada R$ 1,00 que você deve pagar nos próximos meses, você tem R$ 1,50 em caixa, estoque e dinheiro a receber. Valores acima de 1 mostram que a empresa tem folga.',
                 },
                 {
                   name: 'Liquidez Seca (A Prova de Fogo)',
-                  desc: 'É igual à anterior, mas removemos o seu Estoque da conta. Porquê? Porque se a crise apertar de verdade, você não consegue vender o seu estoque de uma hora para a outra para gerar dinheiro vivo. É um teste muito mais rigoroso da sua solvência.',
+                  desc: 'Exemplo: Se tirarmos o seu Estoque da conta (porque estoque pode demorar meses para ser vendido), a empresa ainda consegue pagar o que deve? Se este número for "0.80", você precisará de 20 centavos emprestados para cada real devido se não conseguir vender nada.',
                 },
                 {
                   name: 'Liquidez Imediata (O Dia de Hoje)',
-                  desc: "É o cenário de pânico absoluto. Considera apenas o dinheiro 'vivo' que você tem exatamente agora (conta no banco e dinheiro no cofre) dividido por todas as dívidas de curto prazo.",
+                  desc: "É o cenário mais extremo. Compara apenas o dinheiro 'vivo' (na conta do banco e no cofre) contra as dívidas que estão vencendo. Exemplo: '0.10' significa que o dinheiro no banco hoje cobre apenas 10% das contas do mês.",
                 },
                 {
-                  name: 'Liquidez Geral (O Longo Prazo)',
-                  desc: 'Mede a saúde da empresa pensando no futuro distante. Junta todos os seus bens e todos os direitos de longo prazo contra absolutamente todas as dívidas, incluindo financiamentos de 10 anos, por exemplo.',
+                  name: 'Liquidez Geral (O Futuro)',
+                  desc: 'Olha para todas as dívidas, inclusive financiamentos longos (ex: 5 anos), comparando com todos os bens da empresa (como os próprios imóveis e equipamentos). Mede se, no fim da vida da empresa, tudo que ela tem cobre tudo que ela deve.',
                 },
               ]}
             />
@@ -5131,23 +5131,23 @@ export default function App() {
           <div className="animate-in fade-in duration-500">
             <ExplanationPanel
               title="Para que servem os Indicadores de Endividamento?"
-              description="Toda empresa precisa de dinheiro para operar e crescer. Esse dinheiro pode vir do bolso dos próprios donos (Capital Próprio) ou de empréstimos com bancos e prazos com fornecedores (Capital de Terceiros). Esta aba responde à seguinte pergunta vital: 'De quem é realmente o dinheiro que financia a empresa?'. Se a maior parte vier de fora, a empresa corre mais riscos em períodos de crise."
+              description="Eles respondem: 'Quem é o verdadeiro dono da empresa, você ou o banco?'. Estes indicadores mostram o quanto a sua empresa depende de dinheiro de fora (empréstimos, prazo de fornecedores) para continuar aberta."
               indicators={[
                 {
-                  name: 'Grau de Endividamento',
-                  desc: 'Mostra a proporção dos bens da empresa que foram comprados com dinheiro de terceiros. Se a empresa tem R$ 1 Milhão em bens, mas deve R$ 800 Mil, seu grau de endividamento é de 80%. Valores muito próximos de 100% indicam alavancagem excessiva e alto risco.',
+                  name: 'Grau de Endividamento (Quem bancou a festa?)',
+                  desc: 'Exemplo: Se a sua empresa tem R$ 1 Milhão de bens, e o grau de endividamento é de 80%, significa que R$ 800 mil vieram de dívidas (bancos/fornecedores) e só R$ 200 mil vieram do seu bolso. Passar dos 70% é um sinal de alerta.',
                 },
                 {
-                  name: 'Composição do Endividamento (O Risco do Prazo)',
-                  desc: "Mostra qual é o peso das dívidas de 'Curto Prazo' em relação ao total da dívida. Se o número for muito alto (ex: 90%), significa que quase toda a dívida da empresa vence amanhã, o que pode sufocar o caixa de forma severa.",
+                  name: 'Composição da Dívida (O Sufoco)',
+                  desc: 'De tudo o que você deve, quanto vence rápido? Exemplo: Se a composição for de 90%, significa que de todas as dívidas da empresa, 90% delas vencem no próximo ano. É um grande risco de sufoco no caixa.',
                 },
                 {
                   name: 'Capital de Terceiros',
-                  desc: "É a soma bruta de todas as suas obrigações: Passivo Circulante (Contas a Pagar este ano) + Passivo Não Circulante (Empréstimos longos). Literalmente, todo o dinheiro da empresa que 'pertence aos outros'.",
+                  desc: 'É o valor em Reais (R$) de todo o dinheiro que você está usando, mas não é seu. Junta os boletos de fornecedores, salários a pagar, impostos não pagos e empréstimos bancários.',
                 },
                 {
-                  name: 'Qual é o nível ideal?',
-                  desc: 'Depende muito do setor (fábricas tendem a ter mais dívida do que consultorias, por exemplo). Contudo, de forma geral, um grau de endividamento superior a 60% ou 70% acende um sinal amarelo de alerta na contabilidade.',
+                  name: 'A dívida é sempre ruim?',
+                  desc: 'Nem sempre. Se você pega um empréstimo pagando 1% ao mês, e consegue gerar 3% de lucro com esse dinheiro, a dívida foi inteligente ("alavancagem"). Mas se a dívida servir apenas para tapar buracos e pagar contas atrasadas, ela é tóxica.',
                 },
               ]}
             />
@@ -5404,24 +5404,24 @@ export default function App() {
         {data.length > 0 && activeTab === 'atividade' && atividadeData && (
           <div className="animate-in fade-in duration-500">
             <ExplanationPanel
-              title="Para que servem os Indicadores de Atividade (Eficiência)?"
-              description="Estes indicadores revelam o quão rápido a 'roda financeira' da empresa está a girar. Eles avaliam a eficiência da gestão em cobrar o dinheiro dos clientes que compraram a prazo e a velocidade com que a empresa paga aos seus próprios fornecedores. Resumindo: quanto tempo o seu dinheiro fica preso?"
+              title="Para que servem os Indicadores de Atividade (Velocidade)?"
+              description="Eles mostram a velocidade da 'roda financeira' da sua empresa. Basicamente, medem quanto tempo o seu dinheiro fica preso no bolso do cliente e quanto tempo você consegue segurar o dinheiro antes de pagar um fornecedor."
               indicators={[
                 {
-                  name: 'Prazo Médio de Recebimento (PMR)',
-                  desc: 'É o tempo médio que os clientes demoram a pagar-lhe. Exemplo: se o PMR for de 45 dias, significa que, em média, desde o dia em que você emite a nota fiscal até ao dia em que o dinheiro cai na conta, passam-se 45 dias. Quanto menor, melhor e mais rápido o dinheiro entra.',
+                  name: 'PMR - Prazo de Recebimento (Seu dinheiro com os clientes)',
+                  desc: 'Exemplo: Um PMR de "45 dias" significa que você espera, em média, um mês e meio desde o dia que entregou o serviço/produto até o dia que o dinheiro realmente cai na conta. Quanto menor, melhor.',
                 },
                 {
-                  name: 'Prazo Médio de Pagamento (PMP)',
-                  desc: 'É o tempo médio que a empresa demora a pagar os seus próprios fornecedores (o leite, a farinha, o material de escritório). Quanto maior for esse número, mais prazo a sua empresa tem para respirar e trabalhar com o dinheiro do fornecedor.',
+                  name: 'PMP - Prazo de Pagamento (O dinheiro dos fornecedores)',
+                  desc: 'Exemplo: Um PMP de "30 dias" significa que você demora, em média, 30 dias para pagar os fornecedores após receber a mercadoria. Quanto maior o prazo que você negociar, mais fôlego sua empresa tem.',
                 },
                 {
-                  name: 'A Dica de Ouro (Ciclo de Caixa)',
-                  desc: 'O cenário financeiro ideal e mais seguro é que o seu PMP seja MAIOR que o seu PMR. Isso significa que você recebe o dinheiro do seu cliente ANTES de ter que pagar a conta do fornecedor. Se ocorrer o inverso, você terá um buraco no caixa e precisará recorrer a empréstimos bancários (Capital de Giro) para cobrir essa diferença de dias.',
+                  name: 'O Buraco no Caixa (Ciclo)',
+                  desc: 'Exemplo prático: Se você paga o fornecedor em 30 dias, mas dá 45 dias para o cliente pagar você, existem 15 dias em que a empresa fica sem dinheiro e terá que usar capital próprio ou empréstimo para sobreviver. O ideal é sempre receber antes de pagar.',
                 },
                 {
-                  name: 'Giro do Ativo',
-                  desc: 'Indica se todo o patrimônio investido na empresa (máquinas, caixa, estoque) está a gerar vendas proporcionais. Se você tem R$ 1 Milhão em estrutura de ativos e vende R$ 2 Milhões no ano, o giro é 2x. A máquina está a trabalhar muito bem.',
+                  name: 'Giro do Ativo (As máquinas rodam rápido?)',
+                  desc: 'Exemplo: Um Giro de "2.5x" significa que a empresa gerou de faturamento duas vezes e meia o valor que ela possui em maquinário, carros e dinheiro. Indica que a estrutura não está ociosa.',
                 },
               ]}
             />
@@ -5697,19 +5697,19 @@ export default function App() {
           <div className="animate-in fade-in duration-500">
             <ExplanationPanel
               title="Para que serve o Ranking de Top 10 Despesas?"
-              description="Pense no orçamento da sua casa. Se no final do mês faltou dinheiro, a primeira coisa que você faz é olhar a fatura do cartão de crédito para procurar onde gastou mais (Aluguel, Supermercado, Carro). Esta tela faz exatamente isso pela sua empresa: ela lista os 10 maiores 'ralos' por onde o dinheiro está a sair, organizando tudo num ranking decrescente."
+              description="Funciona como a fatura do seu cartão de crédito. Se o dinheiro no final do mês faltou, essa tela te mostra exatamente os 10 maiores 'ralos' por onde o dinheiro da empresa está escapando."
               indicators={[
                 {
-                  name: 'Gráfico de Barras Proporcional',
-                  desc: 'A barra de fundo cor-de-rosa indica de forma visual o tamanho daquela despesa. Se a barra estiver cheia até ao fim, é porque aquela é a despesa número um (a mais cara de todas as contas).',
+                  name: 'Barras Visuais (O Tamanho do Gasto)',
+                  desc: 'A cor de fundo rosa mostra o peso visual da conta. Se a barra de "Folha de Pagamento" estiver quase cheia e a de "Material de Limpeza" pequenininha, fica claro onde você deve focar seus esforços para cortar custos.',
                 },
                 {
-                  name: 'Visão Mensal vs Acumulada',
-                  desc: 'Se escolher a visão Acumulada, verá o ranking das despesas que mais custaram dinheiro desde Janeiro somadas. Na visão Mensal Isolada, verá as despesas vilãs apenas daquele mês específico selecionado no filtro.',
+                  name: 'Análise Trimestral ou Anual',
+                  desc: 'Você não precisa olhar mês a mês. Exemplo: você pode selecionar o filtro "YTD" (Desde Janeiro) para descobrir qual foi a conta que mais "roubou" dinheiro da empresa ao longo de todo o ano.',
                 },
                 {
-                  name: 'Agrupamento Personalizado (Pastas)',
-                  desc: "Se você quiser ver 'todas as despesas com frota' numa única linha (em vez de ver gasolina, mecânico e pedágio separados, o que dilui o impacto no top 10), clique em 'Agrupar Despesas', crie a pasta 'Frota' e some tudo.",
+                  name: 'Agrupamento Personalizado (Juntar Contas)',
+                  desc: "Exemplo prático: O contador lançou as manutenções dos caminhões separadas em peças, mecânico, funilaria... Isso esconde o problema. Crie um grupo 'Gastos com Frota' e jogue tudo dentro para ver o valor somado no Top 10.",
                 },
               ]}
             />
@@ -6124,20 +6124,20 @@ export default function App() {
         {data.length > 0 && activeTab === 'auditoria' && auditoriaData && (
           <div className="animate-in fade-in duration-500">
             <ExplanationPanel
-              title="Auditoria e Validação SPED (Bloco I vs Bloco J)"
-              description="Este relatório de confiabilidade compara os saldos calculados dinamicamente pelo BoardECD (com base nos lançamentos analíticos do Bloco I) com os saldos oficiais declarados pelo seu contador no Balanço Patrimonial e DRE (Bloco J do arquivo SPED)."
+              title="Para que serve a Auditoria e Validação SPED?"
+              description="Este é o teste do 'bater o ponto'. Ele serve para garantir que as informações que estamos exibindo no painel (que foram construídas linha a linha) batem perfeitamente com os documentos finais oficias que o contador enviou para a Receita Federal."
               indicators={[
                 {
-                  name: 'Ativo Total e Passivo Total',
-                  desc: 'A soma de todos os ativos e passivos deve ser exatamente igual ao reportado no registro J100.',
+                  name: 'Ativo e Passivo (A Matemática Fecha?)',
+                  desc: 'Exemplo: Se a aba de Dashboard mostrou que a empresa tem R$ 5 Milhões em Ativos, mas o documento oficial do contador (Bloco J) diz R$ 5.1 Milhões, o sistema avisará aqui em vermelho que está faltando alguma coisa no meio do caminho.',
                 },
                 {
-                  name: 'Lucro/Prejuízo do Exercício',
-                  desc: 'O resultado final calculado pela nossa DRE dinâmica deve bater com o registro J150.',
+                  name: 'Lucro Líquido (A Prova Real)',
+                  desc: 'Garante que o lucro final apontado pelos nossos gráficos é exatamente o mesmo número que foi usado para calcular o imposto da empresa.',
                 },
                 {
-                  name: 'Por que isso é importante?',
-                  desc: 'Garante que não houve perda de dados na importação e que o mapeamento das contas está 100% aderente às normas contábeis aplicadas.',
+                  name: 'Por que isso me dá tranquilidade?',
+                  desc: 'Com esses alertas todos com o selo "Saldos Batem" em verde, você pode apresentar o painel para o banco ou para sócios com 100% de segurança de que os números estão corretos e fiéis à contabilidade.',
                 },
               ]}
             />
@@ -6343,15 +6343,19 @@ export default function App() {
           <div className="animate-in fade-in duration-500">
             <ExplanationPanel
               title="Como utilizar o Balancete Comparativo?"
-              description="Esta visão lado a lado permite acompanhar a evolução do saldo de todas as contas contábeis ao longo dos meses. Excelente para identificar contas que 'estouraram' subitamente ou para bater saldos com o sistema de auditoria e contabilidade."
+              description="O Balancete é a 'tabela-mãe' de toda a contabilidade. Em vez de ver gráficos ou resumos, aqui você pode investigar a origem de qualquer número, conta a conta, lado a lado em todos os meses."
               indicators={[
                 {
-                  name: 'Busca Rápida',
-                  desc: 'Utilize a barra de pesquisa para encontrar rapidamente uma conta específica pelo código ou pela descrição.',
+                  name: 'Investigação (Modo Lupa)',
+                  desc: 'Exemplo prático: O gráfico do painel mostrou que em Agosto as despesas explodiram. Você vem nesta tabela, busca por "Manutenção", e enxerga que em Agosto o valor foi de R$ 50 mil, enquanto no resto do ano era de apenas R$ 5 mil.',
                 },
                 {
-                  name: 'Visão Mensal vs Acumulada',
-                  desc: 'Alterne a visão para analisar a movimentação líquida do mês isolado (Débitos contra Créditos para contas de Resultado) ou o saldo final acumulado de cada conta (padrão de apresentação de balancetes).',
+                  name: 'AV% (Análise Vertical)',
+                  desc: 'Marque essa caixinha para ver a porcentagem que aquela conta representa do bolo total. Exemplo: saber que a conta "Telefonia" representa 3% de todas as despesas da empresa naquele mês.',
+                },
+                {
+                  name: 'AH% (Análise Horizontal)',
+                  desc: 'Marque para ver o quanto aquela conta cresceu em relação ao mês anterior. Exemplo: um "AH: +20%" verde na receita indica que você vendeu 20% a mais do que no mês passado.',
                 },
               ]}
             />
