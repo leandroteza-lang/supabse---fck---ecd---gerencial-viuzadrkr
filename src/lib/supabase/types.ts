@@ -361,13 +361,16 @@ export const Constants = {
 
 // --- CONSTRAINTS ---
 // Table: accounts
+//   UNIQUE accounts_company_id_code_key: UNIQUE (company_id, code)
 //   FOREIGN KEY accounts_company_id_fkey: FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
 //   PRIMARY KEY accounts_pkey: PRIMARY KEY (id)
 // Table: balances
 //   FOREIGN KEY balances_account_id_fkey: FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+//   UNIQUE balances_account_id_period_key: UNIQUE (account_id, period)
 //   PRIMARY KEY balances_pkey: PRIMARY KEY (id)
 // Table: companies
 //   PRIMARY KEY companies_pkey: PRIMARY KEY (id)
+//   UNIQUE companies_user_id_cnpj_key: UNIQUE (user_id, cnpj)
 //   FOREIGN KEY companies_user_id_fkey: FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
 // Table: profiles
 //   FOREIGN KEY profiles_id_fkey: FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
@@ -395,3 +398,11 @@ export const Constants = {
 // Table: user_configs
 //   Policy "Users can manage own configs" (ALL, PERMISSIVE) roles={public}
 //     USING: (auth.uid() = user_id)
+
+// --- INDEXES ---
+// Table: accounts
+//   CREATE UNIQUE INDEX accounts_company_id_code_key ON public.accounts USING btree (company_id, code)
+// Table: balances
+//   CREATE UNIQUE INDEX balances_account_id_period_key ON public.balances USING btree (account_id, period)
+// Table: companies
+//   CREATE UNIQUE INDEX companies_user_id_cnpj_key ON public.companies USING btree (user_id, cnpj)
