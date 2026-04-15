@@ -563,7 +563,6 @@ export default function App() {
   const [ebitdaMappingSearch, setEbitdaMappingSearch] = useState('')
   const [expenseRange, setExpenseRange] = useState(() => getSavedState('expenseRange', null))
   const [expensePeriod, setExpensePeriod] = useState<string | null>(null)
-  const [selectedCostCenter, setSelectedCostCenter] = useState('ALL')
   const [detailsTab, setDetailsTab] = useState('monthly')
 
   const [isExpenseGroupModalOpen, setIsExpenseGroupModalOpen] = useState(false)
@@ -1911,51 +1910,7 @@ export default function App() {
           }
         }
 
-        // Aplica filtro de Centro de Custo baseado em regras contábeis reais
-        let matchesCostCenter = true
-        if (selectedCostCenter !== 'ALL') {
-          let assignedCC = 'ADM'
-          const code = acc.conta
-          const name = acc.nome.toUpperCase()
-
-          if (
-            code.startsWith('4.1') ||
-            code.startsWith('3.1') ||
-            name.includes('PRODUCAO') ||
-            name.includes('OPERACIONAL')
-          ) {
-            assignedCC = 'OP'
-          } else if (
-            code.startsWith('4.2.06') ||
-            name.includes('VENDAS') ||
-            name.includes('COMERCIAL') ||
-            name.includes('MARKETING')
-          ) {
-            assignedCC = 'COM'
-          } else if (
-            code.startsWith('4.2.03') ||
-            name.includes('FINANCEIR') ||
-            name.includes('JUROS')
-          ) {
-            assignedCC = 'FIN'
-          } else if (
-            code.startsWith('4.2.04') ||
-            name.includes('TRIBUT') ||
-            name.includes('IMPOSTO')
-          ) {
-            assignedCC = 'TRIB'
-          } else if (
-            name.includes('TI') ||
-            name.includes('TECNOLOGIA') ||
-            name.includes('SOFTWARE')
-          ) {
-            assignedCC = 'TI'
-          }
-
-          if (assignedCC !== selectedCostCenter) matchesCostCenter = false
-        }
-
-        if (val > 0 && matchesCostCenter) {
+        if (val > 0) {
           const groupLabel = DRE_GROUPS_OPTIONS.find((g: any) => g.id === groupId)?.label || groupId
           if (!expensesByGroup[groupLabel]) expensesByGroup[groupLabel] = 0
           expensesByGroup[groupLabel] += val
@@ -2074,7 +2029,6 @@ export default function App() {
     customExpenseGroups,
     expenseAccountToGroup,
     isAccumulated,
-    selectedCostCenter,
   ])
 
   const dashboardData = useMemo(() => {
@@ -5720,26 +5674,6 @@ export default function App() {
                           ))}
                         </select>
                       </div>
-                    </div>
-
-                    <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 w-full sm:w-auto">
-                      <Filter className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
-                      <span className="text-[10px] font-bold text-slate-400 mr-2 uppercase tracking-tight shrink-0">
-                        C.Custo
-                      </span>
-                      <select
-                        value={selectedCostCenter}
-                        onChange={(e) => setSelectedCostCenter(e.target.value)}
-                        className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none cursor-pointer pr-4 w-full"
-                      >
-                        <option value="ALL">Todos os Centros</option>
-                        <option value="ADM">Administrativo</option>
-                        <option value="COM">Comercial / Vendas</option>
-                        <option value="OP">Operacional</option>
-                        <option value="FIN">Financeiro</option>
-                        <option value="TRIB">Tributário</option>
-                        <option value="TI">Tecnologia</option>
-                      </select>
                     </div>
                   </div>
                   <button
