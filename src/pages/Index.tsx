@@ -74,6 +74,7 @@ import {
 } from '@/components/ui/table'
 import { Progress } from '@/components/ui/progress'
 import { useAuth } from '@/hooks/use-auth'
+import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 
 const CHART_COLORS = [
@@ -196,6 +197,17 @@ const DRE_GROUPS_OPTIONS = [
   { id: '11_TRIBUTOS', label: '11. (-) Provisão para Tributos sobre Lucro' },
   { id: '13_PARTICIPACOES', label: '13. (-) Participações e Contribuições' },
 ]
+
+const parseSpedDate = (dateStr: string) => {
+  if (!dateStr || dateStr.length !== 8) return dateStr
+  return `${dateStr.substring(0, 2)}/${dateStr.substring(2, 4)}/${dateStr.substring(4, 8)}`
+}
+
+const dateStrToMs = (dateStr: string) => {
+  if (!dateStr || dateStr.length < 10) return 0
+  const [d, m, y] = dateStr.split('/')
+  return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10)).getTime()
+}
 
 const ExplanationPanel = ({
   title,
@@ -336,6 +348,7 @@ const EditableTitle = ({
 
 export default function App() {
   const { user, signOut } = useAuth()
+  const { toast } = useToast()
   const [data, setData] = useState([])
   const [companyInfo, setCompanyInfo] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -347,44 +360,146 @@ export default function App() {
   const [showAV, setShowAV] = useState(false)
   const [showAH, setShowAH] = useState(false)
 
-  // Recupera dados robustos do IndexedDB na inicialização
+  // Carrega os dados da nuvem (Supabase) ou do cache local na inicialização
   useEffect(() => {
-    const loadStoredEcdData = async () => {
+    const loadData = async () => {
+      if (!user) return
       try {
         setLoading(true)
-        const storedData = await localforage.getItem('ecd_parsed_data')
-        const storedCompany = await localforage.getItem('ecd_company_info')
-        const storedFilesCount = await localforage.getItem('ecd_files_count')
 
-        if (storedData && storedCompany) {
-          setData(storedData as any)
-          setCompanyInfo(storedCompany as any)
-          setFilesCount(storedFilesCount ? Number(storedFilesCount) : 1)
+        // 1. Check if we have the company in Supabase
+        const { data: companies, error: companiesError } = await supabase
+          .from('companies')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+
+        if (companiesError) throw companiesError
+
+        if (companies && companies.length > 0) {
+          const company = companies[0]
+
+          // 2. Check local cache first for speed
+          const cachedCnpj = await localforage.getItem('ecd_company_cnpj')
+          if (cachedCnpj === company.cnpj) {
+            const cachedData = await localforage.getItem('ecd_parsed_data')
+            const cachedInfo = await localforage.getItem('ecd_company_info')
+            if (cachedData && cachedInfo) {
+              setData(cachedData as any)
+              setCompanyInfo(cachedInfo as any)
+              setLoading(false)
+              return
+            }
+          }
+
+          // 3. If not in cache or different CNPJ, load from Supabase
+          const { data: accounts, error: accError } = await supabase
+            .from('accounts')
+            .select('*')
+            .eq('company_id', company.id)
+
+          if (accError) throw accError
+
+          if (accounts && accounts.length > 0) {
+            let allBalances: any[] = []
+            let page = 0
+            const pageSize = 1000
+            let hasMore = true
+
+            while (hasMore) {
+              const { data: balances, error: balError } = await supabase
+                .from('balances')
+                .select('*, accounts!inner(company_id)')
+                .eq('accounts.company_id', company.id)
+                .range(page * pageSize, (page + 1) * pageSize - 1)
+
+              if (balError) throw balError
+              if (balances && balances.length > 0) {
+                allBalances = [...allBalances, ...balances]
+                page++
+                if (balances.length < pageSize) hasMore = false
+              } else {
+                hasMore = false
+              }
+            }
+
+            const formatNumber = (num: number) => {
+              if (num === null || num === undefined) return '0,00'
+              return Math.abs(num).toFixed(2).replace('.', ',')
+            }
+
+            const reconstructedData = allBalances.map((b) => {
+              const acc = accounts.find((a) => a.id === b.account_id)
+              return {
+                id: b.id,
+                periodo: b.period,
+                conta: acc?.code || '-',
+                nome: acc?.name || '-',
+                tipo: acc?.type || '-',
+                nivel: acc?.level ? acc.level.toString() : '-',
+                natureza: acc?.nature || '-',
+                sldIni: formatNumber(b.initial_balance),
+                indDcIni: b.initial_indicator || '',
+                debito: formatNumber(b.debit),
+                credito: formatNumber(b.credit),
+                sldFin: formatNumber(b.final_balance),
+                indDcFin: b.final_indicator || '',
+              }
+            })
+
+            reconstructedData.sort((a: any, b: any) => {
+              const dateA = dateStrToMs(a.periodo.split(' a ')[0])
+              const dateB = dateStrToMs(b.periodo.split(' a ')[0])
+              if (dateA !== dateB) return dateA - dateB
+              return a.conta.localeCompare(b.conta)
+            })
+
+            const newCompanyInfo = { cnpj: company.cnpj, nome: company.name }
+            setCompanyInfo(newCompanyInfo as any)
+            setData(reconstructedData as any)
+
+            await localforage.setItem('ecd_parsed_data', reconstructedData)
+            await localforage.setItem('ecd_company_info', newCompanyInfo)
+            await localforage.setItem('ecd_company_cnpj', company.cnpj)
+
+            // Load user configs
+            const { data: configData } = await supabase
+              .from('user_configs')
+              .select('config_data')
+              .eq('company_id', company.id)
+              .eq('user_id', user.id)
+              .single()
+
+            if (configData && configData.config_data) {
+              const conf = configData.config_data as any
+              if (conf.charts) setCharts(conf.charts)
+              if (conf.pieCharts) setPieCharts(conf.pieCharts)
+              if (conf.piePeriods) setPiePeriods(conf.piePeriods)
+              if (conf.customMapping) setCustomMapping(conf.customMapping)
+              if (conf.customDaMapping) setCustomDaMapping(conf.customDaMapping)
+              if (conf.customExpenseGroups) setCustomExpenseGroups(conf.customExpenseGroups)
+              if (conf.expenseAccountToGroup) setExpenseAccountToGroup(conf.expenseAccountToGroup)
+              if (conf.expenseRange) setExpenseRange(conf.expenseRange)
+            }
+          }
+        } else {
+          // Fallback to local storage if no user in cloud just in case
+          const storedData = await localforage.getItem('ecd_parsed_data')
+          const storedCompany = await localforage.getItem('ecd_company_info')
+          if (storedData && storedCompany) {
+            setData(storedData as any)
+            setCompanyInfo(storedCompany as any)
+          }
         }
       } catch (err) {
-        console.error('Erro ao carregar dados do IndexedDB', err)
+        console.error('Erro ao carregar dados da nuvem', err)
       } finally {
         setLoading(false)
       }
     }
-    loadStoredEcdData()
-  }, [])
-
-  // Salva dados pesados no IndexedDB quando atualizados
-  useEffect(() => {
-    const saveEcdData = async () => {
-      try {
-        if (data && data.length > 0 && companyInfo) {
-          await localforage.setItem('ecd_parsed_data', data)
-          await localforage.setItem('ecd_company_info', companyInfo)
-          await localforage.setItem('ecd_files_count', filesCount)
-        }
-      } catch (err) {
-        console.error('Erro ao salvar dados no IndexedDB', err)
-      }
-    }
-    saveEcdData()
-  }, [data, companyInfo, filesCount])
+    loadData()
+  }, [user])
 
   // Helper para ler estado salvo no cache local do navegador
   const getSavedState = (key: string, defaultValue: any) => {
@@ -460,16 +575,20 @@ export default function App() {
             .from('companies')
             .select('id')
             .eq('cnpj', companyInfo.cnpj)
+            .eq('user_id', user.id)
             .single()
 
           if (!company) {
             const { data: newCompany } = await supabase
               .from('companies')
-              .insert({
-                user_id: user.id,
-                cnpj: companyInfo.cnpj,
-                name: companyInfo.nome,
-              })
+              .upsert(
+                {
+                  user_id: user.id,
+                  cnpj: companyInfo.cnpj,
+                  name: companyInfo.nome,
+                },
+                { onConflict: 'user_id, cnpj' },
+              )
               .select('id')
               .single()
             company = newCompany
@@ -536,17 +655,6 @@ export default function App() {
   useEffect(() => {
     setPieChartAccountSearch('')
   }, [openPieDropdownId])
-
-  const parseSpedDate = (dateStr: string) => {
-    if (!dateStr || dateStr.length !== 8) return dateStr
-    return `${dateStr.substring(0, 2)}/${dateStr.substring(2, 4)}/${dateStr.substring(4, 8)}`
-  }
-
-  const dateStrToMs = (dateStr: string) => {
-    if (!dateStr || dateStr.length < 10) return 0
-    const [d, m, y] = dateStr.split('/')
-    return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10)).getTime()
-  }
 
   const formatCurrency = (val, ind) => {
     if (!val) return '0,00'
@@ -826,7 +934,101 @@ export default function App() {
 
     setCompanyInfo(mergedInfo)
     setData(allExtracted)
+
+    // Save to localforage cache
+    await localforage.setItem('ecd_parsed_data', allExtracted)
+    await localforage.setItem('ecd_company_info', mergedInfo)
+    await localforage.setItem('ecd_company_cnpj', mergedInfo.cnpj)
+
+    // Save to Supabase (in background to not block UI entirely, but wait to show toast)
+    saveToSupabase(mergedInfo, allExtracted)
+
     setLoading(false)
+  }
+
+  const saveToSupabase = async (info: any, extractedData: any[]) => {
+    if (!user) return
+    try {
+      toast({
+        title: 'Sincronizando',
+        description: 'Salvando dados na nuvem, isso pode levar alguns segundos...',
+      })
+
+      const { data: companyData, error: companyError } = await supabase
+        .from('companies')
+        .upsert(
+          { user_id: user.id, cnpj: info.cnpj, name: info.nome },
+          { onConflict: 'user_id, cnpj' },
+        )
+        .select()
+        .single()
+
+      if (companyError) throw companyError
+
+      const companyId = companyData.id
+
+      const uniqueAccountsMap = new Map()
+      extractedData.forEach((row) => {
+        if (!uniqueAccountsMap.has(row.conta)) {
+          uniqueAccountsMap.set(row.conta, {
+            company_id: companyId,
+            code: row.conta,
+            name: row.nome,
+            type: row.tipo,
+            level: parseInt(row.nivel) || null,
+            nature: row.natureza,
+          })
+        }
+      })
+
+      const accountsToUpsert = Array.from(uniqueAccountsMap.values())
+      const chunkSize = 1000
+      const accountIdMap = new Map()
+
+      for (let i = 0; i < accountsToUpsert.length; i += chunkSize) {
+        const chunk = accountsToUpsert.slice(i, i + chunkSize)
+        const { data: upsertedAccounts, error: accError } = await supabase
+          .from('accounts')
+          .upsert(chunk, { onConflict: 'company_id, code' })
+          .select('id, code')
+
+        if (accError) throw accError
+        upsertedAccounts?.forEach((a) => accountIdMap.set(a.code, a.id))
+      }
+
+      const balancesToUpsert = extractedData.map((row) => ({
+        account_id: accountIdMap.get(row.conta),
+        period: row.periodo,
+        initial_balance:
+          parseFloat(row.sldIni.toString().replace(/\./g, '').replace(',', '.')) || 0,
+        initial_indicator: row.indDcIni,
+        debit: parseFloat(row.debito.toString().replace(/\./g, '').replace(',', '.')) || 0,
+        credit: parseFloat(row.credito.toString().replace(/\./g, '').replace(',', '.')) || 0,
+        final_balance: parseFloat(row.sldFin.toString().replace(/\./g, '').replace(',', '.')) || 0,
+        final_indicator: row.indDcFin,
+      }))
+
+      for (let i = 0; i < balancesToUpsert.length; i += chunkSize) {
+        const chunk = balancesToUpsert.slice(i, i + chunkSize)
+        const { error: balError } = await supabase
+          .from('balances')
+          .upsert(chunk, { onConflict: 'account_id, period' })
+
+        if (balError) throw balError
+      }
+
+      toast({
+        title: 'Sucesso',
+        description: 'Seus dados foram importados e salvos na nuvem.',
+      })
+    } catch (err) {
+      console.error(err)
+      toast({
+        variant: 'destructive',
+        title: 'Erro na sincronização',
+        description: 'Não foi possível salvar os dados na nuvem.',
+      })
+    }
   }
 
   useEffect(() => {
