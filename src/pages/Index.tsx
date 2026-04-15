@@ -132,26 +132,51 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     return (
       <div className="bg-white/95 backdrop-blur-sm text-slate-800 text-sm px-4 py-3 rounded-xl shadow-xl border border-slate-200">
         <p className="font-bold border-b border-slate-100 pb-2 mb-3 text-slate-900">{label}</p>
-        {payload.map((entry: any, index: number) => (
-          <div key={index} className="flex items-center justify-between gap-8 py-1">
-            <div className="flex items-center gap-2.5">
-              <span
-                className="w-3 h-3 rounded-full shadow-sm"
-                style={{ backgroundColor: entry.color }}
-              />
-              <span className="text-[13px] font-medium truncate max-w-[200px] text-slate-600">
-                {entry.name}
+        {payload.map((entry: any, index: number) => {
+          let formattedValue = ''
+          const name = entry.name
+
+          if (
+            [
+              'Margem (%)',
+              'Margem Bruta',
+              'Margem Operacional',
+              'Margem Líquida',
+              'ROE',
+              'ROA',
+            ].includes(name)
+          ) {
+            formattedValue = `${Number(entry.value).toFixed(2)}%`
+          } else if (['PMR (dias)', 'PMP (dias)'].includes(name)) {
+            formattedValue = `${Number(entry.value).toFixed(0)} dias`
+          } else if (name === 'Giro Ativo') {
+            formattedValue = `${Number(entry.value).toFixed(2)}x`
+          } else if (['Corrente', 'Seca', 'Imediata', 'Geral'].includes(name)) {
+            formattedValue = Number(entry.value).toFixed(2)
+          } else {
+            formattedValue = `R$ ${Number(entry.value).toLocaleString('pt-BR', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`
+          }
+
+          return (
+            <div key={index} className="flex items-center justify-between gap-8 py-1">
+              <div className="flex items-center gap-2.5">
+                <span
+                  className="w-3 h-3 rounded-full shadow-sm"
+                  style={{ backgroundColor: entry.color }}
+                />
+                <span className="text-[13px] font-medium truncate max-w-[200px] text-slate-600">
+                  {entry.name}
+                </span>
+              </div>
+              <span className="font-mono font-bold text-[13px] text-slate-800">
+                {formattedValue}
               </span>
             </div>
-            <span className="font-mono font-bold text-[13px] text-slate-800">
-              R${' '}
-              {Number(entry.value).toLocaleString('pt-BR', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </span>
-          </div>
-        ))}
+          )
+        })}
       </div>
     )
   }
