@@ -90,6 +90,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet'
+import { Input } from '@/components/ui/input'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
@@ -660,12 +661,27 @@ export default function App() {
   const [razaoTransactions, setRazaoTransactions] = useState<any[]>([])
   const [isLoadingRazao, setIsLoadingRazao] = useState(false)
   const [razaoSearch, setRazaoSearch] = useState('')
+  const [razaoDateFrom, setRazaoDateFrom] = useState('')
+  const [razaoDateTo, setRazaoDateTo] = useState('')
+  const [razaoValueMin, setRazaoValueMin] = useState('')
+  const [razaoValueMax, setRazaoValueMax] = useState('')
+  const [razaoIndDc, setRazaoIndDc] = useState('ALL')
+  const [showRazaoFilters, setShowRazaoFilters] = useState(false)
+
+  const clearRazaoFilters = () => {
+    setRazaoSearch('')
+    setRazaoDateFrom('')
+    setRazaoDateTo('')
+    setRazaoValueMin('')
+    setRazaoValueMax('')
+    setRazaoIndDc('ALL')
+  }
 
   const openRazao = async (acc: any) => {
     if (acc.tipo === 'S') return
     setSelectedAccountForRazao(acc)
     setIsLoadingRazao(true)
-    setRazaoSearch('')
+    clearRazaoFilters()
     setRazaoTransactions([])
 
     try {
@@ -721,15 +737,52 @@ export default function App() {
   }
 
   const filteredRazaoTransactions = useMemo(() => {
-    if (!razaoSearch) return razaoTransactions
-    const lower = razaoSearch.toLowerCase()
-    return razaoTransactions.filter(
-      (tx) =>
-        tx.historico.toLowerCase().includes(lower) ||
-        tx.valor.toString().includes(lower) ||
-        tx.data.includes(lower),
-    )
-  }, [razaoTransactions, razaoSearch])
+    let result = razaoTransactions
+
+    if (razaoSearch) {
+      const lower = razaoSearch.toLowerCase()
+      result = result.filter(
+        (tx) =>
+          tx.historico.toLowerCase().includes(lower) ||
+          tx.valor.toString().includes(lower) ||
+          tx.data.includes(lower),
+      )
+    }
+
+    if (razaoDateFrom || razaoDateTo) {
+      const fromMs = razaoDateFrom ? new Date(`${razaoDateFrom}T00:00:00`).getTime() : 0
+      const toMs = razaoDateTo ? new Date(`${razaoDateTo}T23:59:59`).getTime() : Infinity
+      result = result.filter((tx) => {
+        if (!tx.data) return false
+        const [d, m, y] = tx.data.split('/')
+        const txMs = new Date(`${y}-${m}-${d}T12:00:00`).getTime()
+        return txMs >= fromMs && txMs <= toMs
+      })
+    }
+
+    if (razaoValueMin || razaoValueMax) {
+      const min = razaoValueMin ? parseFloat(razaoValueMin) : 0
+      const max = razaoValueMax ? parseFloat(razaoValueMax) : Infinity
+      result = result.filter((tx) => {
+        const val = parseFloat(tx.valor.replace(/\./g, '').replace(',', '.')) || 0
+        return val >= min && val <= max
+      })
+    }
+
+    if (razaoIndDc !== 'ALL') {
+      result = result.filter((tx) => tx.indDc === razaoIndDc)
+    }
+
+    return result
+  }, [
+    razaoTransactions,
+    razaoSearch,
+    razaoDateFrom,
+    razaoDateTo,
+    razaoValueMin,
+    razaoValueMax,
+    razaoIndDc,
+  ])
 
   // Sincronização Automática (Auto-Save) com o navegador e nuvem
   useEffect(() => {
@@ -7271,17 +7324,102 @@ export default function App() {
             </SheetDescription>
           </SheetHeader>
 
-          <div className="mb-6">
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Buscar histórico, data ou valor..."
-                value={razaoSearch}
-                onChange={(e) => setRazaoSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              />
+          <div className="mb-6 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por histórico..."
+                  value={razaoSearch}
+                  onChange={(e) => setRazaoSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                />
+              </div>
+              <button
+                onClick={() => setShowRazaoFilters(!showRazaoFilters)}
+                className={`p-2.5 border rounded-lg transition-colors flex items-center justify-center shrink-0 ${showRazaoFilters || razaoDateFrom || razaoDateTo || razaoValueMin || razaoValueMax || razaoIndDc !== 'ALL' ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                title="Filtros Avançados"
+              >
+                <Filter className="w-4 h-4" />
+              </button>
             </div>
+
+            {showRazaoFilters && (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 animate-in slide-in-from-top-2 duration-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                      Período (Data)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="date"
+                        value={razaoDateFrom}
+                        onChange={(e) => setRazaoDateFrom(e.target.value)}
+                        className="h-9 text-sm bg-white"
+                      />
+                      <span className="text-slate-400 text-sm">até</span>
+                      <Input
+                        type="date"
+                        value={razaoDateTo}
+                        onChange={(e) => setRazaoDateTo(e.target.value)}
+                        className="h-9 text-sm bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                      Faixa de Valor (R$)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        placeholder="Mín"
+                        value={razaoValueMin}
+                        onChange={(e) => setRazaoValueMin(e.target.value)}
+                        className="h-9 text-sm bg-white"
+                        min="0"
+                      />
+                      <span className="text-slate-400 text-sm">-</span>
+                      <Input
+                        type="number"
+                        placeholder="Máx"
+                        value={razaoValueMax}
+                        onChange={(e) => setRazaoValueMax(e.target.value)}
+                        className="h-9 text-sm bg-white"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                      Classificação (D/C)
+                    </label>
+                    <select
+                      value={razaoIndDc}
+                      onChange={(e) => setRazaoIndDc(e.target.value)}
+                      className="w-full h-9 text-sm border border-slate-200 rounded-md px-3 bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                    >
+                      <option value="ALL">Todas as Naturezas</option>
+                      <option value="D">Apenas Débitos (D)</option>
+                      <option value="C">Apenas Créditos (C)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2 border-t border-slate-200/60">
+                  <button
+                    onClick={clearRazaoFilters}
+                    className="text-xs font-bold text-slate-500 hover:text-rose-600 flex items-center gap-1.5 transition-colors"
+                  >
+                    <X className="w-3 h-3" /> Limpar Filtros
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {isLoadingRazao ? (

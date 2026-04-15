@@ -142,6 +142,54 @@ export type Database = {
         }
         Relationships: []
       }
+      transactions: {
+        Row: {
+          account_id: string
+          amount: number | null
+          company_id: string
+          created_at: string | null
+          date: string | null
+          history: string | null
+          id: string
+          indicator: string | null
+        }
+        Insert: {
+          account_id: string
+          amount?: number | null
+          company_id: string
+          created_at?: string | null
+          date?: string | null
+          history?: string | null
+          id?: string
+          indicator?: string | null
+        }
+        Update: {
+          account_id?: string
+          amount?: number | null
+          company_id?: string
+          created_at?: string | null
+          date?: string | null
+          history?: string | null
+          id?: string
+          indicator?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'transactions_account_id_fkey'
+            columns: ['account_id']
+            isOneToOne: false
+            referencedRelation: 'accounts'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'transactions_company_id_fkey'
+            columns: ['company_id']
+            isOneToOne: false
+            referencedRelation: 'companies'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       user_configs: {
         Row: {
           company_id: string | null
@@ -367,6 +415,15 @@ export const Constants = {
 //   email: text (not null)
 //   full_name: text (nullable)
 //   created_at: timestamp with time zone (nullable, default: now())
+// Table: transactions
+//   id: uuid (not null, default: gen_random_uuid())
+//   company_id: uuid (not null)
+//   account_id: uuid (not null)
+//   date: date (nullable)
+//   amount: numeric (nullable)
+//   indicator: text (nullable)
+//   history: text (nullable)
+//   created_at: timestamp with time zone (nullable, default: now())
 // Table: user_configs
 //   id: uuid (not null, default: gen_random_uuid())
 //   user_id: uuid (not null)
@@ -390,6 +447,10 @@ export const Constants = {
 // Table: profiles
 //   FOREIGN KEY profiles_id_fkey: FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
 //   PRIMARY KEY profiles_pkey: PRIMARY KEY (id)
+// Table: transactions
+//   FOREIGN KEY transactions_account_id_fkey: FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+//   FOREIGN KEY transactions_company_id_fkey: FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+//   PRIMARY KEY transactions_pkey: PRIMARY KEY (id)
 // Table: user_configs
 //   FOREIGN KEY user_configs_company_id_fkey: FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
 //   PRIMARY KEY user_configs_pkey: PRIMARY KEY (id)
@@ -410,6 +471,9 @@ export const Constants = {
 //     USING: (auth.uid() = id)
 //   Policy "Users can view own profile" (SELECT, PERMISSIVE) roles={public}
 //     USING: (auth.uid() = id)
+// Table: transactions
+//   Policy "Users can manage transactions of own companies" (ALL, PERMISSIVE) roles={public}
+//     USING: (EXISTS ( SELECT 1    FROM companies c   WHERE ((c.id = transactions.company_id) AND (c.user_id = auth.uid()))))
 // Table: user_configs
 //   Policy "Users can manage own configs" (ALL, PERMISSIVE) roles={public}
 //     USING: (auth.uid() = user_id)
@@ -487,3 +551,5 @@ export const Constants = {
 //   CREATE UNIQUE INDEX balances_account_id_period_key ON public.balances USING btree (account_id, period)
 // Table: companies
 //   CREATE UNIQUE INDEX companies_user_id_cnpj_key ON public.companies USING btree (user_id, cnpj)
+// Table: transactions
+//   CREATE INDEX idx_transactions_company_account ON public.transactions USING btree (company_id, account_id)
