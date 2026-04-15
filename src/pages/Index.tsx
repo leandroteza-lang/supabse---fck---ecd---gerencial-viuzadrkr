@@ -6651,16 +6651,19 @@ export default function App() {
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
                         <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest">
-                          Período (Data)
+                          Data
                         </th>
                         <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest">
                           Conta Analítica
                         </th>
                         <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest">
-                          Descrição
+                          Descrição / Histórico
                         </th>
                         <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-right">
                           Valor
+                        </th>
+                        <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-center">
+                          Tipo
                         </th>
                         <th className="p-3 px-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest text-center">
                           Status
@@ -6669,61 +6672,48 @@ export default function App() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {(() => {
-                        const lancamentos = []
-                        monthlyData.periods.forEach((period) => {
-                          if (selectedExpenseDetail.isGrouped) {
-                            selectedExpenseDetail.subAccounts.forEach((accCode) => {
-                              const accObj = monthlyData.accounts.find((a) => a.conta === accCode)
-                              if (accObj) {
-                                const sld = accObj.saldos[period]
-                                if (sld) {
-                                  let val = 0
-                                  if (!isAccumulated) {
-                                    val = Math.abs(
-                                      getRawNumber(sld.debito) - getRawNumber(sld.credito),
-                                    )
-                                  } else {
-                                    val = Math.abs(getRawNumber(sld.sldFin))
-                                  }
-                                  if (val > 0) {
-                                    lancamentos.push({
-                                      data: period.split(' a ')[0],
-                                      conta: accCode,
-                                      descricao: accObj.nome,
-                                      valor: val,
-                                      status: 'Consolidado',
-                                    })
-                                  }
-                                }
-                              }
-                            })
-                          } else {
+                        const lancamentos: any[] = []
+                        monthlyData.periods.forEach((period: string) => {
+                          const accountsToProcess = selectedExpenseDetail.isGrouped
+                            ? selectedExpenseDetail.subAccounts
+                            : [selectedExpenseDetail.conta]
+
+                          accountsToProcess.forEach((accCode: string) => {
                             const accObj = monthlyData.accounts.find(
-                              (a) => a.conta === selectedExpenseDetail.conta,
+                              (a: any) => a.conta === accCode,
                             )
                             if (accObj) {
                               const sld = accObj.saldos[period]
                               if (sld) {
-                                let val = 0
-                                if (!isAccumulated) {
-                                  val = Math.abs(
-                                    getRawNumber(sld.debito) - getRawNumber(sld.credito),
-                                  )
-                                } else {
-                                  val = Math.abs(getRawNumber(sld.sldFin))
-                                }
-                                if (val > 0) {
+                                const deb = getRawNumber(sld.debito)
+                                const cred = getRawNumber(sld.credito)
+                                const monthName = period.split(' a ')[0].substring(3)
+
+                                if (deb > 0) {
                                   lancamentos.push({
                                     data: period.split(' a ')[0],
-                                    conta: accObj.conta,
+                                    conta: accCode,
                                     descricao: accObj.nome,
-                                    valor: val,
-                                    status: 'Consolidado',
+                                    historico: `Apropriação Consolidada - Ref. ${monthName}`,
+                                    valor: deb,
+                                    tipo: 'D',
+                                    status: 'Efetivado',
+                                  })
+                                }
+                                if (cred > 0) {
+                                  lancamentos.push({
+                                    data: period.split(' a ')[0],
+                                    conta: accCode,
+                                    descricao: accObj.nome,
+                                    historico: `Estorno/Ajuste - Ref. ${monthName}`,
+                                    valor: cred,
+                                    tipo: 'C',
+                                    status: 'Ajuste',
                                   })
                                 }
                               }
                             }
-                          }
+                          })
                         })
 
                         lancamentos.sort((a, b) => b.valor - a.valor)
@@ -6731,7 +6721,7 @@ export default function App() {
                         if (lancamentos.length === 0) {
                           return (
                             <tr>
-                              <td colSpan={5} className="p-8 text-center text-slate-500">
+                              <td colSpan={6} className="p-8 text-center text-slate-500">
                                 Nenhum lançamento encontrado com valor maior que zero.
                               </td>
                             </tr>
@@ -6747,9 +6737,14 @@ export default function App() {
                               {lanc.conta}
                             </td>
                             <td className="p-3 px-4 text-slate-800 font-medium">
-                              {lanc.descricao}
+                              <span className="block">{lanc.descricao}</span>
+                              <span className="text-[11px] text-slate-500 font-mono mt-0.5 inline-block">
+                                {lanc.historico}
+                              </span>
                             </td>
-                            <td className="p-3 px-4 text-right font-black text-rose-600">
+                            <td
+                              className={`p-3 px-4 text-right font-black ${lanc.tipo === 'D' ? 'text-rose-600' : 'text-emerald-600'}`}
+                            >
                               R${' '}
                               {lanc.valor.toLocaleString('pt-BR', {
                                 minimumFractionDigits: 2,
@@ -6757,7 +6752,14 @@ export default function App() {
                               })}
                             </td>
                             <td className="p-3 px-4 text-center">
-                              <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                              <span
+                                className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm ${lanc.tipo === 'D' ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}`}
+                              >
+                                {lanc.tipo === 'D' ? 'Débito' : 'Crédito'}
+                              </span>
+                            </td>
+                            <td className="p-3 px-4 text-center">
+                              <span className="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm">
                                 {lanc.status}
                               </span>
                             </td>
