@@ -507,6 +507,8 @@ export default function App() {
               if (conf.pieCharts) setPieCharts(conf.pieCharts)
               if (conf.piePeriods) setPiePeriods(conf.piePeriods)
               if (conf.chartPeriods) setChartPeriods(conf.chartPeriods)
+              if (conf.chartAccumulated) setChartAccumulated(conf.chartAccumulated)
+              if (conf.pieAccumulated) setPieAccumulated(conf.pieAccumulated)
               if (conf.customMapping) setCustomMapping(conf.customMapping)
               if (conf.customDaMapping) setCustomDaMapping(conf.customDaMapping)
               if (conf.customExpenseGroups) setCustomExpenseGroups(conf.customExpenseGroups)
@@ -589,6 +591,12 @@ export default function App() {
   const [chartPeriods, setChartPeriods] = useState<Record<string, { from: string; to: string }>>(
     () => getSavedState('chartPeriods', {}),
   )
+  const [chartAccumulated, setChartAccumulated] = useState<Record<string, boolean>>(() =>
+    getSavedState('chartAccumulated', {}),
+  )
+  const [pieAccumulated, setPieAccumulated] = useState<Record<string, boolean>>(() =>
+    getSavedState('pieAccumulated', {}),
+  )
   const [hiddenTop5Lines, setHiddenTop5Lines] = useState<Record<string, boolean>>({})
 
   // Sincronização Automática (Auto-Save) com o navegador e nuvem
@@ -598,6 +606,8 @@ export default function App() {
       pieCharts,
       piePeriods,
       chartPeriods,
+      chartAccumulated,
+      pieAccumulated,
       customMapping,
       customDaMapping,
       customExpenseGroups,
@@ -665,6 +675,8 @@ export default function App() {
     pieCharts,
     piePeriods,
     chartPeriods,
+    chartAccumulated,
+    pieAccumulated,
     customMapping,
     customDaMapping,
     customExpenseGroups,
@@ -744,6 +756,8 @@ export default function App() {
       pieCharts,
       piePeriods,
       chartPeriods,
+      chartAccumulated,
+      pieAccumulated,
       customMapping,
       customDaMapping,
       customExpenseGroups,
@@ -769,6 +783,8 @@ export default function App() {
         if (configData.pieCharts) setPieCharts(configData.pieCharts)
         if (configData.piePeriods) setPiePeriods(configData.piePeriods)
         if (configData.chartPeriods) setChartPeriods(configData.chartPeriods)
+        if (configData.chartAccumulated) setChartAccumulated(configData.chartAccumulated)
+        if (configData.pieAccumulated) setPieAccumulated(configData.pieAccumulated)
         if (configData.customMapping) setCustomMapping(configData.customMapping)
         if (configData.customDaMapping) setCustomDaMapping(configData.customDaMapping)
         if (configData.customExpenseGroups) setCustomExpenseGroups(configData.customExpenseGroups)
@@ -2113,6 +2129,11 @@ export default function App() {
       })
 
     const chartsData = charts.map((chartConf) => {
+      const isChartAccumulated =
+        chartAccumulated[chartConf.id] !== undefined
+          ? chartAccumulated[chartConf.id]
+          : isAccumulated
+
       const selectedAccountsInfo = monthlyData.allAccounts.filter((a: any) =>
         chartConf.accounts.includes(a.conta),
       )
@@ -2146,7 +2167,7 @@ export default function App() {
               sld.conta.startsWith('3') ||
               sld.conta.startsWith('4') ||
               sld.conta.startsWith('5')
-            if (!isAccumulated && isResult) {
+            if (!isChartAccumulated && isResult) {
               val = Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
             } else {
               val = getRawNumber(sld.sldFin)
@@ -2193,7 +2214,7 @@ export default function App() {
                 sld.conta.startsWith('3') ||
                 sld.conta.startsWith('4') ||
                 sld.conta.startsWith('5')
-              if (!isAccumulated && isResult) {
+              if (!isChartAccumulated && isResult) {
                 const deb = getRawNumber(sld.debito)
                 const cred = getRawNumber(sld.credito)
                 rawVal = Math.abs(deb - cred)
@@ -2225,6 +2246,9 @@ export default function App() {
     })
 
     const pieChartsData = pieCharts.map((pieConf) => {
+      const isPieAccumulated =
+        pieAccumulated[pieConf.id] !== undefined ? pieAccumulated[pieConf.id] : isAccumulated
+
       const selectedAccountsInfo = monthlyData.allAccounts.filter((a: any) =>
         pieConf.accounts.includes(a.conta),
       )
@@ -2258,7 +2282,7 @@ export default function App() {
             acc.conta.startsWith('4') ||
             acc.conta.startsWith('5')
 
-          if (!isAccumulated && isResult) {
+          if (!isPieAccumulated && isResult) {
             // Para contas de resultado em visão mensal isolada (que agora pode ser um intervalo de isolados),
             // somamos a movimentação (débito - crédito) do intervalo selecionado.
             periodsInRange.forEach((p: any) => {
@@ -2299,7 +2323,16 @@ export default function App() {
     })
 
     return { macroAccounts, lastPeriod, chartsData, pieChartsData }
-  }, [monthlyData, charts, pieCharts, isAccumulated, piePeriods, chartPeriods])
+  }, [
+    monthlyData,
+    charts,
+    pieCharts,
+    isAccumulated,
+    piePeriods,
+    chartPeriods,
+    chartAccumulated,
+    pieAccumulated,
+  ])
 
   const toggleAccountSelection = (chartId: any, conta: any) => {
     setCharts((prev: any) =>
@@ -2893,6 +2926,25 @@ export default function App() {
                     </div>
 
                     <div className="flex flex-col xl:flex-row gap-3 items-start xl:items-center w-full lg:w-auto">
+                      <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0 w-full sm:w-auto">
+                        <button
+                          onClick={() =>
+                            setPieAccumulated((prev) => ({ ...prev, [pieConf.id]: false }))
+                          }
+                          className={`flex-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${pieAccumulated[pieConf.id] === false ? 'bg-white shadow-sm text-indigo-700' : pieAccumulated[pieConf.id] === undefined && !isAccumulated ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                          Isolado
+                        </button>
+                        <button
+                          onClick={() =>
+                            setPieAccumulated((prev) => ({ ...prev, [pieConf.id]: true }))
+                          }
+                          className={`flex-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${pieAccumulated[pieConf.id] === true ? 'bg-white shadow-sm text-indigo-700' : pieAccumulated[pieConf.id] === undefined && isAccumulated ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                          Acumulado
+                        </button>
+                      </div>
+
                       {/* Seletor de Intervalo de Período para o Gráfico de Pizza */}
                       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full xl:w-auto">
                         <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 w-full sm:w-auto">
@@ -3297,6 +3349,25 @@ export default function App() {
                     </div>
 
                     <div className="flex flex-col xl:flex-row gap-3 items-start xl:items-center w-full lg:w-auto">
+                      <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0 w-full sm:w-auto">
+                        <button
+                          onClick={() =>
+                            setChartAccumulated((prev) => ({ ...prev, [chartConf.id]: false }))
+                          }
+                          className={`flex-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${chartAccumulated[chartConf.id] === false ? 'bg-white shadow-sm text-indigo-700' : chartAccumulated[chartConf.id] === undefined && !isAccumulated ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                          Isolado
+                        </button>
+                        <button
+                          onClick={() =>
+                            setChartAccumulated((prev) => ({ ...prev, [chartConf.id]: true }))
+                          }
+                          className={`flex-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${chartAccumulated[chartConf.id] === true ? 'bg-white shadow-sm text-indigo-700' : chartAccumulated[chartConf.id] === undefined && isAccumulated ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                          Acumulado
+                        </button>
+                      </div>
+
                       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full xl:w-auto">
                         <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 w-full sm:w-auto">
                           <CalendarDays className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
