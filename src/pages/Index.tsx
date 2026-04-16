@@ -1480,11 +1480,7 @@ export default function App() {
           if (acc) {
             const sld = acc.saldos[period]
             if (sld) {
-              if (!isAccumulated) {
-                val += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
-              } else {
-                val += Math.abs(getRawNumber(sld.sldFin))
-              }
+              val += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
             }
           }
         })
@@ -1493,11 +1489,7 @@ export default function App() {
         if (acc) {
           const sld = acc.saldos[period]
           if (sld) {
-            if (!isAccumulated) {
-              val += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
-            } else {
-              val += Math.abs(getRawNumber(sld.sldFin))
-            }
+            val += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
           }
         }
       }
@@ -1509,7 +1501,7 @@ export default function App() {
     })
 
     return trend
-  }, [selectedExpenseTrend, monthlyData, isAccumulated])
+  }, [selectedExpenseTrend, monthlyData])
 
   const baseValuesPerPeriod = useMemo(() => {
     if (!monthlyData?.periods?.length) return {}
@@ -2455,11 +2447,7 @@ export default function App() {
             if (acc) {
               const sld = acc.saldos[period]
               if (sld) {
-                if (!isAccumulated) {
-                  periodVal += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
-                } else {
-                  periodVal += Math.abs(getRawNumber(sld.sldFin))
-                }
+                periodVal += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
               }
             }
           })
@@ -2468,11 +2456,7 @@ export default function App() {
           if (acc) {
             const sld = acc.saldos[period]
             if (sld) {
-              if (!isAccumulated) {
-                periodVal = Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
-              } else {
-                periodVal = Math.abs(getRawNumber(sld.sldFin))
-              }
+              periodVal += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
             }
           }
         }
@@ -7482,16 +7466,10 @@ export default function App() {
           <div className="h-[400px] w-full mt-4">
             {selectedExpenseTrendData && (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
+                <BarChart
                   data={selectedExpenseTrendData}
                   margin={{ top: 10, right: 30, left: 10, bottom: 5 }}
                 >
-                  <defs>
-                    <linearGradient id="colorValor" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                   <XAxis
                     dataKey="period"
@@ -7513,6 +7491,7 @@ export default function App() {
                     dx={-10}
                   />
                   <Tooltip
+                    cursor={{ fill: '#f8fafc' }}
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
                         return (
@@ -7533,16 +7512,12 @@ export default function App() {
                       return null
                     }}
                   />
-                  <RechartsArea
-                    type="monotone"
-                    dataKey="valor"
-                    stroke="#4f46e5"
-                    strokeWidth={3}
-                    fillOpacity={1}
-                    fill="url(#colorValor)"
-                    activeDot={{ r: 6, strokeWidth: 0, fill: '#4f46e5' }}
-                  />
-                </AreaChart>
+                  <Bar dataKey="valor" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={40}>
+                    {selectedExpenseTrendData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill="#4f46e5" />
+                    ))}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             )}
           </div>
