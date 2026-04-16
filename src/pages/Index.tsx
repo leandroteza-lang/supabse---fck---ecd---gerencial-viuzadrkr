@@ -712,11 +712,39 @@ export default function App() {
             .single()
 
           if (accounts) {
-            const { data: txs } = await supabase
-              .from('transactions')
-              .select('*')
-              .eq('account_id', accounts.id)
-              .order('date', { ascending: true })
+            let query = supabase.from('transactions').select('*').eq('account_id', accounts.id)
+
+            if (selectedMonthlyPeriods.length > 0) {
+              let minMs = Infinity
+              let maxMs = -Infinity
+              let minDate = null
+              let maxDate = null
+
+              selectedMonthlyPeriods.forEach((p) => {
+                const parts = p.split(' a ')
+                if (parts.length === 2) {
+                  const [d1, m1, y1] = parts[0].split('/')
+                  const [d2, m2, y2] = parts[1].split('/')
+
+                  const ms1 = new Date(parseInt(y1), parseInt(m1) - 1, parseInt(d1)).getTime()
+                  const ms2 = new Date(parseInt(y2), parseInt(m2) - 1, parseInt(d2)).getTime()
+
+                  if (ms1 < minMs) {
+                    minMs = ms1
+                    minDate = `${y1}-${m1}-${d1}`
+                  }
+                  if (ms2 > maxMs) {
+                    maxMs = ms2
+                    maxDate = `${y2}-${m2}-${d2}`
+                  }
+                }
+              })
+
+              if (minDate) query = query.gte('date', minDate)
+              if (maxDate) query = query.lte('date', maxDate)
+            }
+
+            const { data: txs } = await query.order('date', { ascending: true })
 
             if (txs) {
               const uniqueTxs: any[] = []
