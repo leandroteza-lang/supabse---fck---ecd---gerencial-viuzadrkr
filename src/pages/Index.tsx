@@ -6757,13 +6757,13 @@ export default function App() {
                     {accountsToDisplay.map((acc: any, index: number) => {
                       const isSintetica = acc.tipo === 'S'
                       const isEven = index % 2 === 0
-                      const rowBg = isEven ? 'bg-white' : 'bg-blue-50/60'
+                      const rowBg = isEven ? 'bg-white' : 'bg-blue-200'
 
                       return (
                         <tr
                           key={acc.conta}
                           onClick={() => !isSintetica && openRazao(acc)}
-                          className={`transition-colors ${rowBg} ${!isSintetica ? 'cursor-pointer hover:bg-indigo-50' : ''}`}
+                          className={`transition-colors ${rowBg} hover:bg-blue-300 ${!isSintetica ? 'cursor-pointer' : ''}`}
                         >
                           <td className="py-1.5 px-4 font-mono text-[11px] text-slate-600 border-r border-slate-50 group">
                             {isSintetica ? null : (
