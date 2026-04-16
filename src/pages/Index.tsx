@@ -719,13 +719,22 @@ export default function App() {
               .order('date', { ascending: true })
 
             if (txs) {
-              const formattedTxs = txs.map((t) => ({
-                data: t.date ? t.date.split('-').reverse().join('/') : '',
-                valor: t.amount.toString().replace('.', ','),
-                indDc: t.indicator,
-                historico: t.history,
-              }))
-              setRazaoTransactions(formattedTxs)
+              const uniqueTxs: any[] = []
+              const seen = new Set()
+
+              txs.forEach((t) => {
+                const key = `${t.date}_${t.amount}_${t.indicator}_${t.history}`
+                if (!seen.has(key)) {
+                  seen.add(key)
+                  uniqueTxs.push({
+                    data: t.date ? t.date.split('-').reverse().join('/') : '',
+                    valor: t.amount.toString().replace('.', ','),
+                    indDc: t.indicator,
+                    historico: t.history,
+                  })
+                }
+              })
+              setRazaoTransactions(uniqueTxs)
             }
           }
         }
@@ -1330,6 +1339,7 @@ export default function App() {
       }
 
       if (extractedTx && extractedTx.length > 0) {
+        const seenTxs = new Set()
         const validTxs = extractedTx
           .filter((t) => accountIdMap.has(t.conta) && t.dataDb)
           .map((t) => ({
@@ -1340,18 +1350,34 @@ export default function App() {
             indicator: t.indDc,
             history: t.historico,
           }))
+          .filter((t) => {
+            const key = `${t.account_id}_${t.date}_${t.amount}_${t.indicator}_${t.history}`
+            if (seenTxs.has(key)) return false
+            seenTxs.add(key)
+            return true
+          })
 
         if (validTxs.length > 0) {
           const dates = [...new Set(validTxs.map((t) => t.date))].sort()
           const minDate = dates[0]
           const maxDate = dates[dates.length - 1]
 
-          await supabase
-            .from('transactions')
-            .delete()
-            .eq('company_id', companyId)
-            .gte('date', minDate)
-            .lte('date', maxDate)
+          let hasMoreToDelete = true
+          let safetyCounter = 0
+          while (hasMoreToDelete && safetyCounter < 50) {
+            safetyCounter++
+            const { data: delData, error: delError } = await supabase
+              .from('transactions')
+              .delete()
+              .eq('company_id', companyId)
+              .gte('date', minDate)
+              .lte('date', maxDate)
+              .select('id')
+
+            if (delError || !delData || delData.length === 0) {
+              hasMoreToDelete = false
+            }
+          }
 
           for (let i = 0; i < validTxs.length; i += 2000) {
             const chunk = validTxs.slice(i, i + 2000)
