@@ -94,6 +94,8 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Dialog,
   DialogContent,
@@ -574,6 +576,7 @@ export default function App() {
               if (conf.customExpenseGroups) setCustomExpenseGroups(conf.customExpenseGroups)
               if (conf.expenseAccountToGroup) setExpenseAccountToGroup(conf.expenseAccountToGroup)
               if (conf.expenseRange) setExpenseRange(conf.expenseRange)
+              if (conf.viewPresets) setViewPresets(conf.viewPresets)
             }
           }
         }
@@ -618,6 +621,13 @@ export default function App() {
   const [expenseRange, setExpenseRange] = useState(() => getSavedState('expenseRange', null))
   const [expensePeriod, setExpensePeriod] = useState<string | null>(null)
   const [detailsTab, setDetailsTab] = useState('monthly')
+
+  const [viewPresets, setViewPresets] = useState<any[]>(() => getSavedState('viewPresets', []))
+  const [selectedMonthlyAccounts, setSelectedMonthlyAccounts] = useState<string[]>([])
+  const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set())
+  const [isAccountFilterOpen, setIsAccountFilterOpen] = useState(false)
+  const [newPresetName, setNewPresetName] = useState('')
+  const [accountFilterSearch, setAccountFilterSearch] = useState('')
 
   const [isExpenseGroupModalOpen, setIsExpenseGroupModalOpen] = useState(false)
   const [customExpenseGroups, setCustomExpenseGroups] = useState(() =>
@@ -830,6 +840,7 @@ export default function App() {
       customExpenseGroups,
       expenseAccountToGroup,
       expenseRange,
+      viewPresets,
     }
     localStorage.setItem('boardecd_config', JSON.stringify(configData))
 
@@ -899,6 +910,7 @@ export default function App() {
     customExpenseGroups,
     expenseAccountToGroup,
     expenseRange,
+    viewPresets,
     user,
     companyInfo,
   ])
@@ -1413,11 +1425,115 @@ export default function App() {
         return validPrev.length > 0 ? validPrev : monthlyData.periods
       })
     }
+    if (monthlyData && monthlyData.allAccounts.length > 0) {
+      setSelectedMonthlyAccounts((prev) => {
+        if (prev.length === 0) return monthlyData.allAccounts.map((a: any) => a.conta)
+        const validPrev = prev.filter((p) =>
+          monthlyData.allAccounts.some((a: any) => a.conta === p),
+        )
+        return validPrev.length > 0 ? validPrev : monthlyData.allAccounts.map((a: any) => a.conta)
+      })
+
+      setExpandedAccounts((prev) => {
+        if (prev.size === 0) {
+          const initial = new Set<string>()
+          monthlyData.allAccounts.forEach((a: any) => {
+            if (parseInt(a.nivel) <= 2) initial.add(a.conta)
+          })
+          return initial
+        }
+        return prev
+      })
+    }
   }, [monthlyData])
 
   const periodsToDisplay = useMemo(() => {
     return monthlyData.periods.filter((p: string) => selectedMonthlyPeriods.includes(p))
   }, [monthlyData.periods, selectedMonthlyPeriods])
+
+  const accountsToDisplay = useMemo(() => {
+    return monthlyData.accounts.filter((acc: any) => selectedMonthlyAccounts.includes(acc.conta))
+  }, [monthlyData.accounts, selectedMonthlyAccounts])
+
+  const accountParentMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    if (!monthlyData?.allAccounts) return map
+    monthlyData.allAccounts.forEach((acc: any) => {
+      const possibleParents = monthlyData.allAccounts.filter(
+        (p: any) =>
+          acc.conta.startsWith(p.conta) &&
+          p.conta !== acc.conta &&
+          parseInt(p.nivel) < parseInt(acc.nivel),
+      )
+      if (possibleParents.length > 0) {
+        const parent = possibleParents.sort((a: any, b: any) => b.conta.length - a.conta.length)[0]
+        map[acc.conta] = parent.conta
+      }
+    })
+    return map
+  }, [monthlyData])
+
+  const isAccountVisibleInTree = (conta: string) => {
+    let curr = accountParentMap[conta]
+    while (curr) {
+      if (!expandedAccounts.has(curr)) return false
+      curr = accountParentMap[curr]
+    }
+    return true
+  }
+
+  const toggleAccountSelection = (conta: string, currentState: boolean) => {
+    const isChecked = !currentState
+    setSelectedMonthlyAccounts((prev) => {
+      const newSet = new Set(prev)
+      if (isChecked) {
+        monthlyData.allAccounts.forEach((a: any) => {
+          if (a.conta === conta || a.conta.startsWith(conta)) newSet.add(a.conta)
+        })
+      } else {
+        monthlyData.allAccounts.forEach((a: any) => {
+          if (a.conta === conta || a.conta.startsWith(conta)) newSet.delete(a.conta)
+        })
+        monthlyData.allAccounts.forEach((a: any) => {
+          if (conta !== a.conta && conta.startsWith(a.conta)) newSet.delete(a.conta)
+        })
+      }
+      return Array.from(newSet)
+    })
+  }
+
+  const toggleAccountExpand = (conta: string) => {
+    setExpandedAccounts((prev) => {
+      const next = new Set(prev)
+      if (next.has(conta)) next.delete(conta)
+      else next.add(conta)
+      return next
+    })
+  }
+
+  const handleSavePreset = () => {
+    if (!newPresetName.trim()) return
+    const newPreset = {
+      id: `preset_${Date.now()}`,
+      name: newPresetName,
+      accounts: selectedMonthlyAccounts,
+      periods: selectedMonthlyPeriods,
+    }
+    setViewPresets((prev) => [...prev, newPreset])
+    setNewPresetName('')
+    toast({ title: 'Sucesso', description: 'Preset salvo com sucesso!' })
+  }
+
+  const handleApplyPreset = (preset: any) => {
+    setSelectedMonthlyAccounts(preset.accounts)
+    setSelectedMonthlyPeriods(preset.periods)
+    toast({ title: 'Sucesso', description: `Preset "${preset.name}" aplicado!` })
+    setIsAccountFilterOpen(false)
+  }
+
+  const handleDeletePreset = (id: string) => {
+    setViewPresets((prev) => prev.filter((p) => p.id !== id))
+  }
 
   const selectedExpenseTrendData = useMemo(() => {
     if (!selectedExpenseTrend || !monthlyData || !monthlyData.periods.length) return null
@@ -6563,6 +6679,14 @@ export default function App() {
                       )}
                     </div>
 
+                    <button
+                      onClick={() => setIsAccountFilterOpen(true)}
+                      className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2.5 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                    >
+                      <Layers className="w-4 h-4 text-indigo-600" />
+                      Filtro de Contas & Presets
+                    </button>
+
                     <div className="flex items-center gap-4 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
                       <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
                         <input
@@ -6630,7 +6754,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {monthlyData.accounts.map((acc) => {
+                    {accountsToDisplay.map((acc: any) => {
                       const isSintetica = acc.tipo === 'S'
                       return (
                         <tr
@@ -6813,13 +6937,13 @@ export default function App() {
                         </tr>
                       )
                     })}
-                    {monthlyData.accounts.length === 0 && (
+                    {accountsToDisplay.length === 0 && (
                       <tr>
                         <td
                           colSpan={periodsToDisplay.length + 2}
                           className="p-12 text-center text-slate-500"
                         >
-                          Nenhuma conta encontrada para a pesquisa.
+                          Nenhuma conta encontrada ou selecionada no filtro.
                         </td>
                       </tr>
                     )}
@@ -7543,6 +7667,180 @@ export default function App() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* --- SHEET DE FILTRO DE CONTAS E PRESETS --- */}
+      <Sheet open={isAccountFilterOpen} onOpenChange={setIsAccountFilterOpen}>
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-md md:max-w-lg p-0 flex flex-col bg-slate-50"
+        >
+          <div className="p-6 border-b border-slate-200 bg-white">
+            <SheetTitle className="text-xl font-black text-slate-800">
+              Visualização Avançada
+            </SheetTitle>
+            <SheetDescription>
+              Filtre as contas contábeis desejadas e salve como presets para análises rápidas.
+            </SheetDescription>
+          </div>
+
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <Tabs defaultValue="contas" className="flex-1 flex flex-col">
+              <div className="px-6 pt-4 bg-white border-b border-slate-200">
+                <TabsList className="w-full grid grid-cols-2">
+                  <TabsTrigger value="contas">Filtro de Contas</TabsTrigger>
+                  <TabsTrigger value="presets">Presets Salvos</TabsTrigger>
+                </TabsList>
+              </div>
+
+              <TabsContent value="contas" className="flex-1 flex flex-col p-0 m-0 overflow-hidden">
+                <div className="p-4 bg-white border-b border-slate-200 flex flex-col gap-3">
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar conta..."
+                      value={accountFilterSearch}
+                      onChange={(e) => setAccountFilterSearch(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <button
+                      onClick={() =>
+                        setSelectedMonthlyAccounts(monthlyData.allAccounts.map((a: any) => a.conta))
+                      }
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
+                    >
+                      Selecionar Todas
+                    </button>
+                    <button
+                      onClick={() => setSelectedMonthlyAccounts([])}
+                      className="text-xs font-bold text-slate-500 hover:text-slate-800"
+                    >
+                      Limpar Seleção
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-2 custom-scrollbar bg-white">
+                  {monthlyData.allAccounts
+                    .filter((a: any) => isAccountVisibleInTree(a.conta))
+                    .filter(
+                      (a: any) =>
+                        !accountFilterSearch ||
+                        a.conta.toLowerCase().includes(accountFilterSearch.toLowerCase()) ||
+                        a.nome.toLowerCase().includes(accountFilterSearch.toLowerCase()),
+                    )
+                    .map((acc: any) => {
+                      const isChecked = selectedMonthlyAccounts.includes(acc.conta)
+                      const isSintetica = acc.tipo === 'S'
+                      const isExpanded = expandedAccounts.has(acc.conta)
+                      const indent = (parseInt(acc.nivel) - 1) * 16
+
+                      return (
+                        <div
+                          key={acc.conta}
+                          className="flex items-center gap-2 py-1.5 px-2 hover:bg-slate-50 rounded-lg group"
+                          style={{ paddingLeft: `${indent + 8}px` }}
+                        >
+                          {isSintetica ? (
+                            <button
+                              onClick={() => toggleAccountExpand(acc.conta)}
+                              className="w-5 h-5 flex items-center justify-center text-slate-400 hover:bg-slate-200 rounded"
+                            >
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
+                              />
+                            </button>
+                          ) : (
+                            <span className="w-5" />
+                          )}
+                          <Checkbox
+                            checked={isChecked}
+                            onCheckedChange={() => toggleAccountSelection(acc.conta, isChecked)}
+                            className="data-[state=checked]:bg-indigo-600 border-slate-300"
+                          />
+                          <span
+                            className={`text-sm truncate cursor-pointer select-none ${isSintetica ? 'font-bold text-slate-800' : 'text-slate-600'}`}
+                            onClick={() => toggleAccountSelection(acc.conta, isChecked)}
+                          >
+                            <span className="font-mono text-xs mr-2">{acc.conta}</span>
+                            {acc.nome}
+                          </span>
+                        </div>
+                      )
+                    })}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="presets" className="flex-1 overflow-y-auto p-6 m-0 bg-slate-50">
+                <div className="bg-white p-4 rounded-xl border border-slate-200 mb-6 shadow-sm">
+                  <h4 className="text-sm font-bold text-slate-800 mb-2">Salvar Visão Atual</h4>
+                  <p className="text-xs text-slate-500 mb-4">
+                    Salve os períodos e as contas que estão marcados agora para carregar facilmente
+                    no futuro.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Ex: Custos Fixos"
+                      value={newPresetName}
+                      onChange={(e) => setNewPresetName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSavePreset()}
+                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      onClick={handleSavePreset}
+                      disabled={!newPresetName.trim()}
+                      className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors"
+                    >
+                      Salvar
+                    </button>
+                  </div>
+                </div>
+
+                <h4 className="text-sm font-bold text-slate-800 mb-3">Presets Salvos</h4>
+                {viewPresets.length > 0 ? (
+                  <div className="space-y-3">
+                    {viewPresets.map((preset) => (
+                      <div
+                        key={preset.id}
+                        className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between group"
+                      >
+                        <div>
+                          <h5 className="font-bold text-slate-800 text-sm">{preset.name}</h5>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {preset.accounts.length} contas • {preset.periods.length} períodos
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleApplyPreset(preset)}
+                            className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold text-xs rounded-lg transition-colors"
+                          >
+                            Aplicar
+                          </button>
+                          <button
+                            onClick={() => handleDeletePreset(preset.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-10 border border-dashed border-slate-200 rounded-xl bg-white">
+                    <Layers className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm text-slate-500">Nenhum preset salvo ainda.</p>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <style
         dangerouslySetInnerHTML={{
