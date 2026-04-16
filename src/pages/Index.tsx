@@ -481,45 +481,7 @@ export default function App() {
         if (companies && companies.length > 0) {
           const company = companies[0]
 
-          // 2. Check local cache first for speed
-          const cachedCnpj = await localforage.getItem('ecd_company_cnpj')
-          if (cachedCnpj === company.cnpj) {
-            const cachedData = await localforage.getItem('ecd_parsed_data')
-            const cachedInfo = await localforage.getItem('ecd_company_info')
-            if (cachedData && cachedInfo) {
-              setData(cachedData as any)
-              setCompanyInfo(cachedInfo as any)
-
-              // Load user configs even if using cached data
-              const { data: configData } = await supabase
-                .from('user_configs')
-                .select('config_data')
-                .eq('company_id', company.id)
-                .eq('user_id', user.id)
-                .single()
-
-              if (configData && configData.config_data) {
-                const conf = configData.config_data as any
-                if (conf.charts) setCharts(conf.charts)
-                if (conf.pieCharts) setPieCharts(conf.pieCharts)
-                if (conf.piePeriods) setPiePeriods(conf.piePeriods)
-                if (conf.chartPeriods) setChartPeriods(conf.chartPeriods)
-                if (conf.chartAccumulated) setChartAccumulated(conf.chartAccumulated)
-                if (conf.pieAccumulated) setPieAccumulated(conf.pieAccumulated)
-                if (conf.customMapping) setCustomMapping(conf.customMapping)
-                if (conf.customDaMapping) setCustomDaMapping(conf.customDaMapping)
-                if (conf.customExpenseGroups) setCustomExpenseGroups(conf.customExpenseGroups)
-                if (conf.expenseAccountToGroup) setExpenseAccountToGroup(conf.expenseAccountToGroup)
-                if (conf.expenseRange) setExpenseRange(conf.expenseRange)
-              }
-
-              setLoading(false)
-              setIsConfigLoaded(true)
-              return
-            }
-          }
-
-          // 3. If not in cache or different CNPJ, load from Supabase
+          // Load from Supabase
           const { data: accounts, error: accError } = await supabase
             .from('accounts')
             .select('*')
@@ -581,13 +543,12 @@ export default function App() {
               return a.conta.localeCompare(b.conta)
             })
 
-            const newCompanyInfo = { cnpj: company.cnpj, nome: company.name }
+            const newCompanyInfo = (company as any).raw_sped_info || {
+              cnpj: company.cnpj,
+              nome: company.name,
+            }
             setCompanyInfo(newCompanyInfo as any)
             setData(reconstructedData as any)
-
-            await localforage.setItem('ecd_parsed_data', reconstructedData)
-            await localforage.setItem('ecd_company_info', newCompanyInfo)
-            await localforage.setItem('ecd_company_cnpj', company.cnpj)
 
             // Load user configs
             const { data: configData } = await supabase
@@ -611,14 +572,6 @@ export default function App() {
               if (conf.expenseAccountToGroup) setExpenseAccountToGroup(conf.expenseAccountToGroup)
               if (conf.expenseRange) setExpenseRange(conf.expenseRange)
             }
-          }
-        } else {
-          // Fallback to local storage if no user in cloud just in case
-          const storedData = await localforage.getItem('ecd_parsed_data')
-          const storedCompany = await localforage.getItem('ecd_company_info')
-          if (storedData && storedCompany) {
-            setData(storedData as any)
-            setCompanyInfo(storedCompany as any)
           }
         }
         setIsConfigLoaded(true)
@@ -730,22 +683,6 @@ export default function App() {
     setRazaoTransactions([])
 
     try {
-      const cachedTx = (await localforage.getItem('ecd_transactions')) as any[]
-      if (cachedTx && cachedTx.length > 0) {
-        const accTx = cachedTx.filter((t: any) => t.conta === acc.conta)
-        if (accTx.length > 0) {
-          const formattedTxs = accTx.map((t) => ({
-            data: t.data,
-            valor: t.valor,
-            indDc: t.indDc,
-            historico: t.historico,
-          }))
-          setRazaoTransactions(formattedTxs)
-          setIsLoadingRazao(false)
-          return
-        }
-      }
-
       if (companyInfo && user) {
         const { data: companies } = await supabase
           .from('companies')
@@ -1297,14 +1234,8 @@ export default function App() {
     setCompanyInfo(mergedInfo)
     setData(allExtracted)
 
-    // Save to localforage cache
-    await localforage.setItem('ecd_parsed_data', allExtracted)
-    await localforage.setItem('ecd_company_info', mergedInfo)
-    await localforage.setItem('ecd_company_cnpj', mergedInfo.cnpj)
-    await localforage.setItem('ecd_transactions', allExtractedTx)
-
-    // Save to Supabase (in background to not block UI entirely, but wait to show toast)
-    saveToSupabase(mergedInfo, allExtracted, allExtractedTx)
+    // Save to Supabase (we wait for it so it fully syncs)
+    await saveToSupabase(mergedInfo, allExtracted, allExtractedTx)
 
     setLoading(false)
   }
@@ -1320,7 +1251,7 @@ export default function App() {
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
         .upsert(
-          { user_id: user.id, cnpj: info.cnpj, name: info.nome },
+          { user_id: user.id, cnpj: info.cnpj, name: info.nome, raw_sped_info: info } as any,
           { onConflict: 'user_id, cnpj' },
         )
         .select()
@@ -3228,12 +3159,12 @@ export default function App() {
         <Alert className="bg-indigo-50/50 border-indigo-200 text-indigo-900 shadow-sm relative overflow-hidden">
           <Server className="h-5 w-5 text-indigo-600 mt-0.5" />
           <AlertTitle className="font-bold text-indigo-800 text-base">
-            Sincronização Ativa (Supabase)
+            Sincronização Ativa na Nuvem (Supabase)
           </AlertTitle>
           <AlertDescription className="text-indigo-700/80 font-medium text-sm mt-1">
-            Olá, {user?.email}! Seus mapeamentos e configurações de layout estão sendo salvos na
-            nuvem automaticamente. Os dados brutos do SPED permanecem no seu navegador (IndexedDB)
-            para garantir máxima performance.
+            Olá, {user?.email}! Seus dados brutos do SPED, configurações de layout e mapeamentos
+            agora estão sendo sincronizados e salvos diretamente na nuvem (Supabase). Isso garante a
+            máxima segurança, backup contínuo e acesso unificado de qualquer dispositivo.
           </AlertDescription>
           <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-100 rounded-full opacity-50 blur-2xl"></div>
         </Alert>
