@@ -2825,7 +2825,7 @@ export default function App() {
     pieAccumulated,
   ])
 
-  const toggleAccountSelection = (chartId: any, conta: any) => {
+  const toggleChartAccountSelection = (chartId: any, conta: any) => {
     setCharts((prev: any) =>
       prev.map((chart) => {
         if (chart.id !== chartId) return chart
@@ -4000,7 +4000,7 @@ export default function App() {
                                       key={acc.conta}
                                       onClick={() =>
                                         !isDisabled &&
-                                        toggleAccountSelection(chartConf.id, acc.conta)
+                                        toggleChartAccountSelection(chartConf.id, acc.conta)
                                       }
                                       className={`flex items-center px-3 py-2.5 my-0.5 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50/80' : 'hover:bg-slate-50'} ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     >
