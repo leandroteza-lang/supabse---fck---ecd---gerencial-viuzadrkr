@@ -2983,7 +2983,7 @@ export default function App() {
     } else if (activeTab === 'monthly') {
       csv = 'Conta;Nome;Tipo;Nível;'
       periodsToDisplay.forEach((p: any) => (csv += `${p} (Saldo Final);${p} (D/C);`))
-      csv += 'Acumulado (Valor);Acumulado (D/C);\n'
+      csv += `Acumulado ${periodsToDisplay.length} per. (Valor);Acumulado ${periodsToDisplay.length} per. (D/C);\n`
 
       monthlyData.accounts.forEach((acc: any) => {
         if (!selectedMonthlyAccounts.includes(acc.conta)) return
@@ -6836,8 +6836,12 @@ export default function App() {
                         </th>
                       ))}
                       <th className="py-2 px-4 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-indigo-50 z-20 shadow-sm">
-                        <div className="text-[10px] text-indigo-500 uppercase font-bold tracking-widest mb-0.5">
-                          Acumulado
+                        <div className="text-[10px] text-indigo-500 uppercase font-bold tracking-widest mb-0.5 flex items-center justify-end gap-1">
+                          Acumulado {periodsToDisplay.length > 0 && `(${periodsToDisplay.length})`}
+                          <IndicatorTooltip
+                            text="Total acumulado nos períodos selecionados."
+                            example="Soma a movimentação das contas de resultado (no modo isolado) ou exibe o saldo final do último período selecionado."
+                          />
                         </div>
                         <span className="font-bold text-indigo-700 text-xs">Saldo Total</span>
                       </th>
