@@ -6734,42 +6734,45 @@ export default function App() {
                 <table className="w-full text-left border-collapse text-sm">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="p-4 px-6 font-bold text-slate-500 uppercase tracking-widest text-[11px] border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm border-r-0">
+                      <th className="py-2 px-4 font-bold text-slate-500 uppercase tracking-widest text-[11px] border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm border-r-0">
                         Conta
                       </th>
-                      <th className="p-4 px-6 font-bold text-slate-500 uppercase tracking-widest text-[11px] border-b border-slate-200 min-w-[300px] sticky top-0 bg-slate-50 z-20 shadow-sm border-r-0">
+                      <th className="py-2 px-4 font-bold text-slate-500 uppercase tracking-widest text-[11px] border-b border-slate-200 min-w-[300px] sticky top-0 bg-slate-50 z-20 shadow-sm border-r-0">
                         Descrição
                       </th>
                       {periodsToDisplay.map((period: string) => (
                         <th
                           key={period}
-                          className="p-4 px-6 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm"
+                          className="py-2 px-4 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm"
                         >
-                          <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-1">
+                          <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">
                             {period.split(' a ')[0].substring(3)}
                           </div>
-                          <span className="font-bold text-slate-700">Saldo</span>
+                          <span className="font-bold text-slate-700 text-xs">Saldo</span>
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {accountsToDisplay.map((acc: any) => {
+                    {accountsToDisplay.map((acc: any, index: number) => {
                       const isSintetica = acc.tipo === 'S'
+                      const isEven = index % 2 === 0
+                      const rowBg = isEven ? 'bg-white' : 'bg-blue-50/60'
+
                       return (
                         <tr
                           key={acc.conta}
                           onClick={() => !isSintetica && openRazao(acc)}
-                          className={`transition-colors ${isSintetica ? 'bg-slate-50/50' : 'bg-white cursor-pointer hover:bg-indigo-50'}`}
+                          className={`transition-colors ${rowBg} ${!isSintetica ? 'cursor-pointer hover:bg-indigo-50' : ''}`}
                         >
-                          <td className="p-3 px-6 font-mono text-[12px] text-slate-600 border-r border-slate-50 group">
+                          <td className="py-1.5 px-4 font-mono text-[11px] text-slate-600 border-r border-slate-50 group">
                             {isSintetica ? null : (
                               <Search className="w-3.5 h-3.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity inline mr-1" />
                             )}
                             {isSintetica ? <strong>{acc.conta}</strong> : acc.conta}
                           </td>
                           <td
-                            className={`p-3 px-6 ${isSintetica ? 'font-bold text-slate-800' : 'text-slate-600'}`}
+                            className={`py-1.5 px-4 text-[13px] ${isSintetica ? 'font-bold text-slate-800' : 'text-slate-600'}`}
                           >
                             {acc.nome}
                             {isSintetica && (
@@ -6911,7 +6914,7 @@ export default function App() {
                             return (
                               <td
                                 key={period}
-                                className={`p-3 px-6 text-right whitespace-nowrap border-l border-slate-100/50 ${isSintetica ? 'font-bold text-slate-800' : 'text-slate-600 font-medium'}`}
+                                className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-slate-100/50 ${isSintetica ? 'font-bold text-slate-800' : 'text-slate-600 font-medium'}`}
                               >
                                 {displayVal !== '0,00' ? (
                                   <div className="flex flex-col items-end justify-center">
