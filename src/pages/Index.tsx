@@ -2378,14 +2378,14 @@ export default function App() {
     Object.values(groupedExpenses).forEach((g: any) => expenses.push(g))
 
     expenses.sort((a: any, b: any) => b.valor - a.valor)
-    const top10 = expenses.slice(0, 10)
-    const maxVal = top10.length > 0 ? top10[0].valor : 0
+    const top20 = expenses.slice(0, 20)
+    const maxVal = top20.length > 0 ? top20[0].valor : 0
     const totalExpenses = expenses.reduce((acc: any, curr: any) => acc + curr.valor, 0)
-    const top10Total = top10.reduce((acc: any, curr: any) => acc + curr.valor, 0)
-    const paretoPct = totalExpenses > 0 ? (top10Total / totalExpenses) * 100 : 0
+    const top20Total = top20.reduce((acc: any, curr: any) => acc + curr.valor, 0)
+    const paretoPct = totalExpenses > 0 ? (top20Total / totalExpenses) * 100 : 0
 
     // Trend Analysis for Top 5 over last 12 periods
-    const top5 = top10.slice(0, 5)
+    const top5 = top20.slice(0, 5)
     const last12Periods = monthlyData.periods.slice(-12)
     const trendData = last12Periods.map((period: any) => {
       const datePart = period.split(' a ')[0]
@@ -2448,10 +2448,10 @@ export default function App() {
 
     return {
       period: displayRangeLabel,
-      items: top10,
+      items: top20,
       maxVal,
       totalExpenses,
-      top10Total,
+      top20Total,
       paretoPct,
       trendData,
       top5,
@@ -2896,7 +2896,7 @@ export default function App() {
       addRow('EBIT Indireto', 'ebitIndirect')
       addRow('Depreciação/Amortização', 'adjDA')
       addRow('EBITDA (Indireto)', 'ebitdaIndirect')
-    } else if (activeTab === 'top10') {
+    } else if (activeTab === 'top20') {
       csv = 'Ranking;Conta;Descrição;Grupo;Valor\n'
       topExpensesData.items.forEach((item, index) => {
         const contaDesc = item.isGrouped
@@ -3162,10 +3162,10 @@ export default function App() {
                 <CalendarDays className="w-4 h-4" /> Balancete Comparativo
               </button>
               <button
-                onClick={() => setActiveTab('top10')}
-                className={`flex items-center gap-2 px-6 py-3.5 font-semibold text-sm transition-all border-b-2 whitespace-nowrap rounded-t-lg ${activeTab === 'top10' ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
+                onClick={() => setActiveTab('top20')}
+                className={`flex items-center gap-2 px-6 py-3.5 font-semibold text-sm transition-all border-b-2 whitespace-nowrap rounded-t-lg ${activeTab === 'top20' ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
               >
-                <ListOrdered className="w-4 h-4" /> Top 10 Despesas
+                <ListOrdered className="w-4 h-4" /> Top 20 Despesas
               </button>
               <button
                 onClick={() => setActiveTab('auditoria')}
@@ -6026,16 +6026,16 @@ export default function App() {
           </div>
         )}
 
-        {/* --- ABA: TOP 10 DESPESAS --- */}
-        {data.length > 0 && activeTab === 'top10' && topExpensesData && (
+        {/* --- ABA: TOP 20 DESPESAS --- */}
+        {data.length > 0 && activeTab === 'top20' && topExpensesData && (
           <div className="animate-in fade-in duration-500">
             <ExplanationPanel
-              title="Para que serve o Ranking de Top 10 Despesas?"
-              description="Funciona como a fatura do seu cartão de crédito. Se o dinheiro no final do mês faltou, essa tela te mostra exatamente os 10 maiores 'ralos' por onde o dinheiro da empresa está escapando."
+              title="Para que serve o Ranking de Top 20 Despesas?"
+              description="Funciona como a fatura do seu cartão de crédito. Se o dinheiro no final do mês faltou, essa tela te mostra exatamente os 20 maiores 'ralos' por onde o dinheiro da empresa está escapando, permitindo um controle muito mais detalhado."
               indicators={[
                 {
                   name: 'Barras Visuais (O Tamanho do Gasto)',
-                  desc: 'A cor de fundo rosa mostra o peso visual da conta. Se a barra de "Folha de Pagamento" estiver quase cheia e a de "Material de Limpeza" pequenininha, fica claro onde você deve focar seus esforços para cortar custos.',
+                  desc: 'As cores mostram o peso visual da conta. Se a barra de "Folha de Pagamento" estiver quase cheia e a de "Material de Limpeza" pequenininha, fica claro onde focar esforços.',
                 },
                 {
                   name: 'Análise Trimestral ou Anual',
@@ -6043,7 +6043,7 @@ export default function App() {
                 },
                 {
                   name: 'Agrupamento Personalizado (Juntar Contas)',
-                  desc: "Exemplo prático: O contador lançou as manutenções dos caminhões separadas em peças, mecânico, funilaria... Isso esconde o problema. Crie um grupo 'Gastos com Frota' e jogue tudo dentro para ver o valor somado no Top 10.",
+                  desc: "O contador lançou as manutenções dos caminhões separadas em peças, mecânico, funilaria... Crie um grupo 'Gastos com Frota' e jogue tudo dentro para ver o valor somado no Top 20.",
                 },
               ]}
             />
@@ -6052,7 +6052,7 @@ export default function App() {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-8">
                 <div>
                   <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                    Ranking: Top 10 Despesas
+                    Ranking: Top 20 Despesas
                   </h2>
                   <p className="text-sm text-slate-500 font-medium mt-1">
                     As contas analíticas que mais consumiram recursos da operação.
@@ -6185,19 +6185,19 @@ export default function App() {
                     </div>
                     <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-5 flex flex-col justify-center relative overflow-hidden">
                       <p className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-1 z-10">
-                        Total Top 10
+                        Total Top 20
                       </p>
                       <p
                         className="text-3xl font-black text-amber-950 z-10 truncate"
-                        title={`R$ ${topExpensesData.top10Total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                        title={`R$ ${topExpensesData.top20Total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                       >
-                        R$ {formatCompact(topExpensesData.top10Total)}
+                        R$ {formatCompact(topExpensesData.top20Total)}
                       </p>
                       <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-amber-100 rounded-full opacity-50 blur-xl"></div>
                     </div>
                     <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 flex flex-col justify-center relative overflow-hidden">
                       <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-1 z-10">
-                        Índice de Pareto (Top 10)
+                        Índice de Pareto (Top 20)
                       </p>
                       <p className="text-3xl font-black text-indigo-950 z-10">
                         {topExpensesData.paretoPct.toFixed(1)}%{' '}
@@ -6238,10 +6238,33 @@ export default function App() {
 
                           return (
                             <ChartContainer config={top5Config} className="h-full w-full">
-                              <BarChart
+                              <AreaChart
                                 data={topExpensesData.trendData}
                                 margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                               >
+                                <defs>
+                                  {topExpensesData.top5.map((_: any, idx: number) => (
+                                    <linearGradient
+                                      key={`colorItem${idx}`}
+                                      id={`colorItem${idx}`}
+                                      x1="0"
+                                      y1="0"
+                                      x2="0"
+                                      y2="1"
+                                    >
+                                      <stop
+                                        offset="5%"
+                                        stopColor={CHART_COLORS[idx % CHART_COLORS.length].hex}
+                                        stopOpacity={0.3}
+                                      />
+                                      <stop
+                                        offset="95%"
+                                        stopColor={CHART_COLORS[idx % CHART_COLORS.length].hex}
+                                        stopOpacity={0}
+                                      />
+                                    </linearGradient>
+                                  ))}
+                                </defs>
                                 <CartesianGrid
                                   vertical={false}
                                   strokeDasharray="3 3"
@@ -6263,24 +6286,27 @@ export default function App() {
                                   tick={{ fontSize: 11, fill: '#64748b' }}
                                 />
                                 <ChartTooltip
-                                  cursor={{ fill: '#f8fafc' }}
+                                  cursor={{
+                                    stroke: '#cbd5e1',
+                                    strokeWidth: 1,
+                                    strokeDasharray: '3 3',
+                                  }}
                                   content={<ChartTooltipContent indicator="dot" />}
                                 />
                                 <ChartLegend content={<ChartLegendContent />} />
                                 {topExpensesData.top5.map((item: any, idx: number) => (
-                                  <Bar
+                                  <RechartsArea
                                     key={item.conta}
+                                    type="monotone"
                                     dataKey={`item${idx}`}
                                     stackId="a"
-                                    fill={`var(--color-item${idx})`}
-                                    radius={
-                                      idx === topExpensesData.top5.length - 1
-                                        ? [4, 4, 0, 0]
-                                        : [0, 0, 0, 0]
-                                    }
+                                    stroke={`var(--color-item${idx})`}
+                                    fill={`url(#colorItem${idx})`}
+                                    strokeWidth={2}
+                                    activeDot={{ r: 6, strokeWidth: 0 }}
                                   />
                                 ))}
-                              </BarChart>
+                              </AreaChart>
                             </ChartContainer>
                           )
                         })()}
@@ -6360,14 +6386,14 @@ export default function App() {
                       <div>
                         <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
                           <BarChart3 className="w-5 h-5 text-rose-500" />
-                          Ranking Detalhado (Top 10)
+                          Ranking Detalhado (Top 20)
                         </h3>
                         <p className="text-xs font-medium text-slate-500 mt-1">
                           Maiores despesas do período selecionado
                         </p>
                       </div>
                     </div>
-                    <div className="h-[450px] w-full">
+                    <div className="h-[750px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
                           layout="vertical"
@@ -6421,7 +6447,7 @@ export default function App() {
                               return null
                             }}
                           />
-                          <Bar dataKey="valor" radius={[0, 4, 4, 0]} barSize={28}>
+                          <Bar dataKey="valor" radius={[0, 6, 6, 0]} barSize={22}>
                             {topExpensesData.items.map((entry: any, index: number) => (
                               <Cell key={`cell-${index}`} fill={entry.fill} />
                             ))}
@@ -7231,7 +7257,7 @@ export default function App() {
         </div>
       )}
 
-      {/* --- MODAL DE AGRUPAMENTO DE DESPESAS (TOP 10) --- */}
+      {/* --- MODAL DE AGRUPAMENTO DE DESPESAS (TOP 20) --- */}
       {isExpenseGroupModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 md:p-8">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
@@ -7241,7 +7267,7 @@ export default function App() {
                   <Layers className="w-6 h-6 text-slate-600" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-slate-900">Agrupar Despesas (Top 10)</h3>
+                  <h3 className="text-xl font-bold text-slate-900">Agrupar Despesas (Top 20)</h3>
                   <p className="text-sm text-slate-500">
                     Crie pastas virtuais para unificar várias contas analíticas numa única linha no
                     ranking.
@@ -7320,7 +7346,7 @@ export default function App() {
                       Descrição
                     </th>
                     <th className="p-4 text-slate-500 font-bold uppercase text-[11px] tracking-widest border-b border-slate-200 w-64">
-                      Agrupamento (Top 10)
+                      Agrupamento (Top 20)
                     </th>
                   </tr>
                 </thead>

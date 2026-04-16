@@ -458,24 +458,26 @@ export const Constants = {
 
 // --- ROW LEVEL SECURITY POLICIES ---
 // Table: accounts
-//   Policy "Users can manage accounts of own companies" (ALL, PERMISSIVE) roles={public}
+//   Policy "Users can manage accounts of own companies" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (EXISTS ( SELECT 1    FROM companies   WHERE ((companies.id = accounts.company_id) AND (companies.user_id = auth.uid()))))
 // Table: balances
-//   Policy "Users can manage balances of own companies" (ALL, PERMISSIVE) roles={public}
+//   Policy "Users can manage balances of own companies" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (EXISTS ( SELECT 1    FROM (accounts a      JOIN companies c ON ((c.id = a.company_id)))   WHERE ((a.id = balances.account_id) AND (c.user_id = auth.uid()))))
 // Table: companies
-//   Policy "Users can manage own companies" (ALL, PERMISSIVE) roles={public}
+//   Policy "Users can manage own companies" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = user_id)
 // Table: profiles
-//   Policy "Users can update own profile" (UPDATE, PERMISSIVE) roles={public}
+//   Policy "Users can insert own profile" (INSERT, PERMISSIVE) roles={authenticated}
+//     WITH CHECK: (auth.uid() = id)
+//   Policy "Users can update own profile" (UPDATE, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = id)
-//   Policy "Users can view own profile" (SELECT, PERMISSIVE) roles={public}
+//   Policy "Users can view own profile" (SELECT, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = id)
 // Table: transactions
-//   Policy "Users can manage transactions of own companies" (ALL, PERMISSIVE) roles={public}
+//   Policy "Users can manage transactions of own companies" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (EXISTS ( SELECT 1    FROM companies c   WHERE ((c.id = transactions.company_id) AND (c.user_id = auth.uid()))))
 // Table: user_configs
-//   Policy "Users can manage own configs" (ALL, PERMISSIVE) roles={public}
+//   Policy "Users can manage own configs" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = user_id)
 
 // --- DATABASE FUNCTIONS ---
