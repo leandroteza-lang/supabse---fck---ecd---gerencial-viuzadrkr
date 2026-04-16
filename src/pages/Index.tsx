@@ -712,49 +712,6 @@ export default function App() {
 
   const [selectedExpenseTrend, setSelectedExpenseTrend] = useState<any>(null)
 
-  const selectedExpenseTrendData = useMemo(() => {
-    if (!selectedExpenseTrend || !monthlyData || !monthlyData.periods.length) return null
-
-    const trend = monthlyData.periods.map((period: any) => {
-      let val = 0
-
-      if (selectedExpenseTrend.isGrouped) {
-        selectedExpenseTrend.subAccounts?.forEach((accCode: string) => {
-          const acc = monthlyData.allAccounts.find((a: any) => a.conta === accCode)
-          if (acc) {
-            const sld = acc.saldos[period]
-            if (sld) {
-              if (!isAccumulated) {
-                val += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
-              } else {
-                val += Math.abs(getRawNumber(sld.sldFin))
-              }
-            }
-          }
-        })
-      } else {
-        const acc = monthlyData.allAccounts.find((a: any) => a.conta === selectedExpenseTrend.conta)
-        if (acc) {
-          const sld = acc.saldos[period]
-          if (sld) {
-            if (!isAccumulated) {
-              val += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
-            } else {
-              val += Math.abs(getRawNumber(sld.sldFin))
-            }
-          }
-        }
-      }
-
-      return {
-        period: period.split(' a ')[0].substring(3),
-        valor: val,
-      }
-    })
-
-    return trend
-  }, [selectedExpenseTrend, monthlyData, isAccumulated])
-
   const clearRazaoFilters = () => {
     setRazaoSearch('')
     setRazaoDateFrom('')
@@ -1510,6 +1467,49 @@ export default function App() {
 
     return { periods, accounts, allAccounts }
   }, [data, searchTerm, activeTab])
+
+  const selectedExpenseTrendData = useMemo(() => {
+    if (!selectedExpenseTrend || !monthlyData || !monthlyData.periods.length) return null
+
+    const trend = monthlyData.periods.map((period: any) => {
+      let val = 0
+
+      if (selectedExpenseTrend.isGrouped) {
+        selectedExpenseTrend.subAccounts?.forEach((accCode: string) => {
+          const acc = monthlyData.allAccounts.find((a: any) => a.conta === accCode)
+          if (acc) {
+            const sld = acc.saldos[period]
+            if (sld) {
+              if (!isAccumulated) {
+                val += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
+              } else {
+                val += Math.abs(getRawNumber(sld.sldFin))
+              }
+            }
+          }
+        })
+      } else {
+        const acc = monthlyData.allAccounts.find((a: any) => a.conta === selectedExpenseTrend.conta)
+        if (acc) {
+          const sld = acc.saldos[period]
+          if (sld) {
+            if (!isAccumulated) {
+              val += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
+            } else {
+              val += Math.abs(getRawNumber(sld.sldFin))
+            }
+          }
+        }
+      }
+
+      return {
+        period: period.split(' a ')[0].substring(3),
+        valor: val,
+      }
+    })
+
+    return trend
+  }, [selectedExpenseTrend, monthlyData, isAccumulated])
 
   const baseValuesPerPeriod = useMemo(() => {
     if (!monthlyData?.periods?.length) return {}
