@@ -3360,14 +3360,16 @@ export default function App() {
               </button>
 
               <div className="w-full lg:w-auto flex-1"></div>
-              {activeTab !== 'dashboard' && (
-                <div className="flex items-center gap-3 shrink-0 py-2 lg:py-0 border-t lg:border-t-0 border-slate-100/50 w-full lg:w-auto justify-end">
-                  <span className="text-sm font-bold text-slate-500 hidden sm:inline-block">
-                    Perspectiva:
-                  </span>
-                  <ToggleAccumulated />
-                </div>
-              )}
+              {activeTab !== 'dashboard' &&
+                activeTab !== 'liquidez' &&
+                activeTab !== 'endividamento' && (
+                  <div className="flex items-center gap-3 shrink-0 py-2 lg:py-0 border-t lg:border-t-0 border-slate-100/50 w-full lg:w-auto justify-end">
+                    <span className="text-sm font-bold text-slate-500 hidden sm:inline-block">
+                      Perspectiva:
+                    </span>
+                    <ToggleAccumulated />
+                  </div>
+                )}
             </div>
           )}
         </div>
