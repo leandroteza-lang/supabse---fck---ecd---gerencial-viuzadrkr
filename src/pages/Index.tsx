@@ -728,7 +728,10 @@ export default function App() {
                   seen.add(key)
                   uniqueTxs.push({
                     data: t.date ? t.date.split('-').reverse().join('/') : '',
-                    valor: t.amount.toString().replace('.', ','),
+                    valor: Number(t.amount || 0).toLocaleString('pt-BR', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    }),
                     indDc: t.indicator,
                     historico: t.history,
                   })
@@ -2980,19 +2983,72 @@ export default function App() {
     } else if (activeTab === 'monthly') {
       csv = 'Conta;Nome;Tipo;Nível;'
       periodsToDisplay.forEach((p: any) => (csv += `${p} (Saldo Final);${p} (D/C);`))
-      csv += '\n'
+      csv += 'Acumulado (Valor);Acumulado (D/C);\n'
 
       monthlyData.accounts.forEach((acc: any) => {
+        if (!selectedMonthlyAccounts.includes(acc.conta)) return
+
         csv += `${acc.conta};${acc.nome};${acc.tipo};${acc.nivel};`
         periodsToDisplay.forEach((p: any) => {
           const sld = acc.saldos[p]
           if (sld) {
-            csv += `${sld.sldFin};${sld.indDcFin};`
+            const isResult =
+              acc.natureza === '04' ||
+              acc.natureza === '4' ||
+              acc.conta.startsWith('3') ||
+              acc.conta.startsWith('4') ||
+              acc.conta.startsWith('5')
+            if (!isAccumulated && isResult) {
+              const deb = getRawNumber(sld.debito)
+              const cred = getRawNumber(sld.credito)
+              const net = Math.abs(deb - cred)
+              const ind = deb > cred ? 'D' : cred > deb ? 'C' : ''
+              csv += `${net.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })};${ind};`
+            } else {
+              csv += `${sld.sldFin};${sld.indDcFin};`
+            }
           } else {
             csv += '0,00;;'
           }
         })
-        csv += '\n'
+
+        // Accumulated
+        let accDisplayVal = '0,00'
+        let accDisplayInd = ''
+        const isResult =
+          acc.natureza === '04' ||
+          acc.natureza === '4' ||
+          acc.conta.startsWith('3') ||
+          acc.conta.startsWith('4') ||
+          acc.conta.startsWith('5')
+
+        if (isResult && !isAccumulated) {
+          let sumDeb = 0
+          let sumCred = 0
+          periodsToDisplay.forEach((period: string) => {
+            const sld = acc.saldos[period]
+            if (sld) {
+              sumDeb += getRawNumber(sld.debito)
+              sumCred += getRawNumber(sld.credito)
+            }
+          })
+          const net = Math.abs(sumDeb - sumCred)
+          accDisplayVal = net.toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })
+          if (net > 0) accDisplayInd = sumDeb > sumCred ? 'D' : sumCred > sumDeb ? 'C' : ''
+        } else {
+          if (periodsToDisplay.length > 0) {
+            const lastPeriod = periodsToDisplay[periodsToDisplay.length - 1]
+            const sld = acc.saldos[lastPeriod]
+            if (sld) {
+              accDisplayVal = sld.sldFin
+              accDisplayInd = sld.indDcFin
+            }
+          }
+        }
+        csv += `${accDisplayVal};${accDisplayInd};\n`
       })
     } else if (activeTab === 'ebitda') {
       csv = 'Métrica de Geração de Caixa;'
@@ -6777,6 +6833,12 @@ export default function App() {
                           <span className="font-bold text-slate-700 text-xs">Saldo</span>
                         </th>
                       ))}
+                      <th className="py-2 px-4 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-indigo-50 z-20 shadow-sm">
+                        <div className="text-[10px] text-indigo-500 uppercase font-bold tracking-widest mb-0.5">
+                          Acumulado
+                        </div>
+                        <span className="font-bold text-indigo-700 text-xs">Saldo Total</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -6963,13 +7025,76 @@ export default function App() {
                               </td>
                             )
                           })}
+                          {(() => {
+                            let accDisplayVal = '0,00'
+                            let accDisplayInd = ''
+
+                            const isResult =
+                              acc.natureza === '04' ||
+                              acc.natureza === '4' ||
+                              acc.conta.startsWith('3') ||
+                              acc.conta.startsWith('4') ||
+                              acc.conta.startsWith('5')
+
+                            if (isResult && !isAccumulated) {
+                              let sumDeb = 0
+                              let sumCred = 0
+                              periodsToDisplay.forEach((period: string) => {
+                                const sld = acc.saldos[period]
+                                if (sld) {
+                                  sumDeb += getRawNumber(sld.debito)
+                                  sumCred += getRawNumber(sld.credito)
+                                }
+                              })
+                              const net = Math.abs(sumDeb - sumCred)
+                              accDisplayVal = net.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })
+                              if (net > 0) {
+                                accDisplayInd = sumDeb > sumCred ? 'D' : sumCred > sumDeb ? 'C' : ''
+                              }
+                            } else {
+                              if (periodsToDisplay.length > 0) {
+                                const lastPeriod = periodsToDisplay[periodsToDisplay.length - 1]
+                                const sld = acc.saldos[lastPeriod]
+                                if (sld) {
+                                  const rawVal = Math.abs(getRawNumber(sld.sldFin))
+                                  accDisplayVal = rawVal.toLocaleString('pt-BR', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })
+                                  accDisplayInd = sld.indDcFin
+                                }
+                              }
+                            }
+
+                            return (
+                              <td
+                                className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-indigo-100 bg-indigo-50/30 ${isSintetica ? 'font-bold text-indigo-900' : 'text-indigo-700 font-medium'}`}
+                              >
+                                {accDisplayVal !== '0,00' ? (
+                                  <div className="flex items-center justify-end gap-2 w-full">
+                                    <span>{accDisplayVal}</span>
+                                    <span
+                                      className={`text-[10px] w-3 ${accDisplayInd === 'D' ? 'text-blue-500' : 'text-red-500'}`}
+                                    >
+                                      {accDisplayInd}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-indigo-300">-</span>
+                                )}
+                              </td>
+                            )
+                          })()}
                         </tr>
                       )
                     })}
                     {accountsToDisplay.length === 0 && (
                       <tr>
                         <td
-                          colSpan={periodsToDisplay.length + 2}
+                          colSpan={periodsToDisplay.length + 3}
                           className="p-12 text-center text-slate-500"
                         >
                           Nenhuma conta encontrada ou selecionada no filtro.
@@ -7588,7 +7713,7 @@ export default function App() {
                         <span
                           className={`text-[13px] font-bold flex items-center justify-end gap-2 ${tx.indDc === 'D' ? 'text-blue-600' : 'text-rose-600'}`}
                         >
-                          {tx.valor}{' '}
+                          R$ {tx.valor}{' '}
                           <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">
                             {tx.indDc}
                           </span>
