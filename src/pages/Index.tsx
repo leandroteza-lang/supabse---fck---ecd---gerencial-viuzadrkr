@@ -461,6 +461,9 @@ export default function App() {
   const [showAV, setShowAV] = useState(false)
   const [showAH, setShowAH] = useState(false)
 
+  const [selectedMonthlyPeriods, setSelectedMonthlyPeriods] = useState<string[]>([])
+  const [isPeriodDropdownOpen, setIsPeriodDropdownOpen] = useState(false)
+
   // Carrega os dados da nuvem (Supabase) ou do cache local na inicialização
   useEffect(() => {
     const loadData = async () => {
@@ -901,17 +904,30 @@ export default function App() {
   ])
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
+    const handleClickOutside = (event: any) => {
       if (!event.target.closest('.chart-dropdown-container')) {
         setOpenDropdownId(null)
       }
       if (!event.target.closest('.pie-dropdown-container')) {
         setOpenPieDropdownId(null)
       }
+      if (!event.target.closest('.period-dropdown-container')) {
+        setIsPeriodDropdownOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    if (monthlyData && monthlyData.periods.length > 0) {
+      setSelectedMonthlyPeriods((prev) => {
+        if (prev.length === 0) return monthlyData.periods
+        const validPrev = prev.filter((p) => monthlyData.periods.includes(p))
+        return validPrev.length > 0 ? validPrev : monthlyData.periods
+      })
+    }
+  }, [monthlyData])
 
   useEffect(() => {
     setChartAccountSearch('')
@@ -1398,6 +1414,10 @@ export default function App() {
 
     return { periods, accounts, allAccounts }
   }, [data, searchTerm, activeTab])
+
+  const periodsToDisplay = useMemo(() => {
+    return monthlyData.periods.filter((p: string) => selectedMonthlyPeriods.includes(p))
+  }, [monthlyData.periods, selectedMonthlyPeriods])
 
   const selectedExpenseTrendData = useMemo(() => {
     if (!selectedExpenseTrend || !monthlyData || !monthlyData.periods.length) return null
@@ -2817,12 +2837,12 @@ export default function App() {
       })
     } else if (activeTab === 'monthly') {
       csv = 'Conta;Nome;Tipo;Nível;'
-      monthlyData.periods.forEach((p: any) => (csv += `${p} (Saldo Final);${p} (D/C);`))
+      periodsToDisplay.forEach((p: any) => (csv += `${p} (Saldo Final);${p} (D/C);`))
       csv += '\n'
 
       monthlyData.accounts.forEach((acc: any) => {
         csv += `${acc.conta};${acc.nome};${acc.tipo};${acc.nivel};`
-        monthlyData.periods.forEach((p: any) => {
+        periodsToDisplay.forEach((p: any) => {
           const sld = acc.saldos[p]
           if (sld) {
             csv += `${sld.sldFin};${sld.indDcFin};`
@@ -6476,25 +6496,93 @@ export default function App() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-                  <div className="flex items-center gap-4 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
-                    <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
-                      <input
-                        type="checkbox"
-                        checked={showAV}
-                        onChange={() => setShowAV(!showAV)}
-                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                      />
-                      <span>AV%</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
-                      <input
-                        type="checkbox"
-                        checked={showAH}
-                        onChange={() => setShowAH(!showAH)}
-                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                      />
-                      <span>AH%</span>
-                    </label>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="relative period-dropdown-container w-full sm:w-auto z-30">
+                      <button
+                        onClick={() => setIsPeriodDropdownOpen(!isPeriodDropdownOpen)}
+                        className="flex items-center justify-between w-full sm:w-48 bg-white border border-slate-200 px-4 py-2.5 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                      >
+                        <span className="flex items-center gap-2">
+                          <CalendarDays className="w-4 h-4 text-indigo-600" />
+                          Períodos ({selectedMonthlyPeriods.length})
+                        </span>
+                        <ChevronDown
+                          className={`w-4 h-4 text-slate-400 transition-transform ${isPeriodDropdownOpen ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+
+                      {isPeriodDropdownOpen && (
+                        <div className="absolute right-0 sm:left-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden flex flex-col">
+                          <div className="p-3 border-b border-slate-100 flex justify-between gap-2 bg-slate-50">
+                            <button
+                              onClick={() => setSelectedMonthlyPeriods(monthlyData.periods)}
+                              className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                            >
+                              Selecionar Todos
+                            </button>
+                            <button
+                              onClick={() => setSelectedMonthlyPeriods([])}
+                              className="text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors"
+                            >
+                              Limpar
+                            </button>
+                          </div>
+                          <div className="max-h-64 overflow-y-auto custom-scrollbar p-2 flex flex-col gap-1">
+                            {monthlyData.periods.map((p: string) => (
+                              <label
+                                key={p}
+                                className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedMonthlyPeriods.includes(p)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedMonthlyPeriods((prev: string[]) =>
+                                        [...prev, p].sort(
+                                          (a, b) =>
+                                            monthlyData.periods.indexOf(a) -
+                                            monthlyData.periods.indexOf(b),
+                                        ),
+                                      )
+                                    } else {
+                                      setSelectedMonthlyPeriods((prev: string[]) =>
+                                        prev.filter((x) => x !== p),
+                                      )
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                                />
+                                <span className="text-sm font-medium text-slate-700">
+                                  {p.split(' a ')[0].substring(3)}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-4 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                      <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={showAV}
+                          onChange={() => setShowAV(!showAV)}
+                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <span>AV%</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={showAH}
+                          onChange={() => setShowAH(!showAH)}
+                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <span>AH%</span>
+                      </label>
+                    </div>
                   </div>
                   <div className="relative w-full sm:w-64">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -6528,7 +6616,7 @@ export default function App() {
                       <th className="p-4 px-6 font-bold text-slate-500 uppercase tracking-widest text-[11px] border-b border-slate-200 min-w-[300px] sticky top-0 bg-slate-50 z-20 shadow-sm border-r-0">
                         Descrição
                       </th>
-                      {monthlyData.periods.map((period) => (
+                      {periodsToDisplay.map((period: string) => (
                         <th
                           key={period}
                           className="p-4 px-6 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm"
@@ -6566,7 +6654,7 @@ export default function App() {
                               </span>
                             )}
                           </td>
-                          {monthlyData.periods.map((period, pIndex) => {
+                          {periodsToDisplay.map((period: string) => {
                             const sld = acc.saldos[period]
                             let displayVal = '0,00'
                             let displayInd = ''
@@ -6622,8 +6710,9 @@ export default function App() {
 
                             // Análise Horizontal
                             let ahLabel = null
-                            if (showAH && pIndex > 0) {
-                              const prevPeriod = monthlyData.periods[pIndex - 1]
+                            const originalIndex = monthlyData.periods.indexOf(period)
+                            if (showAH && originalIndex > 0) {
+                              const prevPeriod = monthlyData.periods[originalIndex - 1]
                               const prevSld = acc.saldos[prevPeriod]
                               let prevVal = 0
                               if (prevSld) {
@@ -6727,7 +6816,7 @@ export default function App() {
                     {monthlyData.accounts.length === 0 && (
                       <tr>
                         <td
-                          colSpan={monthlyData.periods.length + 2}
+                          colSpan={periodsToDisplay.length + 2}
                           className="p-12 text-center text-slate-500"
                         >
                           Nenhuma conta encontrada para a pesquisa.

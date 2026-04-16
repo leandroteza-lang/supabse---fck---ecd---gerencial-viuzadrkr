@@ -103,6 +103,7 @@ export type Database = {
           created_at: string | null
           id: string
           name: string
+          raw_sped_info: Json | null
           user_id: string
         }
         Insert: {
@@ -110,6 +111,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           name: string
+          raw_sped_info?: Json | null
           user_id: string
         }
         Update: {
@@ -117,6 +119,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           name?: string
+          raw_sped_info?: Json | null
           user_id?: string
         }
         Relationships: []
@@ -410,6 +413,7 @@ export const Constants = {
 //   cnpj: text (not null)
 //   name: text (not null)
 //   created_at: timestamp with time zone (nullable, default: now())
+//   raw_sped_info: jsonb (nullable, default: '{}'::jsonb)
 // Table: profiles
 //   id: uuid (not null)
 //   email: text (not null)
