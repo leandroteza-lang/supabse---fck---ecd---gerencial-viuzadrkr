@@ -920,16 +920,6 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (monthlyData && monthlyData.periods.length > 0) {
-      setSelectedMonthlyPeriods((prev) => {
-        if (prev.length === 0) return monthlyData.periods
-        const validPrev = prev.filter((p) => monthlyData.periods.includes(p))
-        return validPrev.length > 0 ? validPrev : monthlyData.periods
-      })
-    }
-  }, [monthlyData])
-
-  useEffect(() => {
     setChartAccountSearch('')
   }, [openDropdownId])
 
@@ -1414,6 +1404,16 @@ export default function App() {
 
     return { periods, accounts, allAccounts }
   }, [data, searchTerm, activeTab])
+
+  useEffect(() => {
+    if (monthlyData && monthlyData.periods.length > 0) {
+      setSelectedMonthlyPeriods((prev) => {
+        if (prev.length === 0) return monthlyData.periods
+        const validPrev = prev.filter((p) => monthlyData.periods.includes(p))
+        return validPrev.length > 0 ? validPrev : monthlyData.periods
+      })
+    }
+  }, [monthlyData])
 
   const periodsToDisplay = useMemo(() => {
     return monthlyData.periods.filter((p: string) => selectedMonthlyPeriods.includes(p))
