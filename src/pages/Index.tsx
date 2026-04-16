@@ -448,6 +448,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeTab, setActiveTab] = useState('dashboard')
   const [filesCount, setFilesCount] = useState(0)
+  const [isConfigLoaded, setIsConfigLoaded] = useState(false)
 
   const [isAccumulated, setIsAccumulated] = useState(true)
   const [showAV, setShowAV] = useState(false)
@@ -481,7 +482,32 @@ export default function App() {
             if (cachedData && cachedInfo) {
               setData(cachedData as any)
               setCompanyInfo(cachedInfo as any)
+
+              // Load user configs even if using cached data
+              const { data: configData } = await supabase
+                .from('user_configs')
+                .select('config_data')
+                .eq('company_id', company.id)
+                .eq('user_id', user.id)
+                .single()
+
+              if (configData && configData.config_data) {
+                const conf = configData.config_data as any
+                if (conf.charts) setCharts(conf.charts)
+                if (conf.pieCharts) setPieCharts(conf.pieCharts)
+                if (conf.piePeriods) setPiePeriods(conf.piePeriods)
+                if (conf.chartPeriods) setChartPeriods(conf.chartPeriods)
+                if (conf.chartAccumulated) setChartAccumulated(conf.chartAccumulated)
+                if (conf.pieAccumulated) setPieAccumulated(conf.pieAccumulated)
+                if (conf.customMapping) setCustomMapping(conf.customMapping)
+                if (conf.customDaMapping) setCustomDaMapping(conf.customDaMapping)
+                if (conf.customExpenseGroups) setCustomExpenseGroups(conf.customExpenseGroups)
+                if (conf.expenseAccountToGroup) setExpenseAccountToGroup(conf.expenseAccountToGroup)
+                if (conf.expenseRange) setExpenseRange(conf.expenseRange)
+              }
+
               setLoading(false)
+              setIsConfigLoaded(true)
               return
             }
           }
@@ -588,8 +614,10 @@ export default function App() {
             setCompanyInfo(storedCompany as any)
           }
         }
+        setIsConfigLoaded(true)
       } catch (err) {
         console.error('Erro ao carregar dados da nuvem', err)
+        setIsConfigLoaded(true)
       } finally {
         setLoading(false)
       }
@@ -697,7 +725,13 @@ export default function App() {
       if (cachedTx && cachedTx.length > 0) {
         const accTx = cachedTx.filter((t: any) => t.conta === acc.conta)
         if (accTx.length > 0) {
-          setRazaoTransactions(accTx)
+          const formattedTxs = accTx.map((t) => ({
+            data: t.data,
+            valor: t.valor,
+            indDc: t.indDc,
+            historico: t.historico,
+          }))
+          setRazaoTransactions(formattedTxs)
           setIsLoadingRazao(false)
           return
         }
@@ -833,6 +867,8 @@ export default function App() {
 
   // Sincronização Automática (Auto-Save) com o navegador e nuvem
   useEffect(() => {
+    if (!isConfigLoaded) return
+
     const configData = {
       charts,
       pieCharts,
