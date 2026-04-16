@@ -94,6 +94,13 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
@@ -702,6 +709,51 @@ export default function App() {
     key: 'data' | 'valor' | null
     direction: 'asc' | 'desc'
   }>({ key: null, direction: 'asc' })
+
+  const [selectedExpenseTrend, setSelectedExpenseTrend] = useState<any>(null)
+
+  const selectedExpenseTrendData = useMemo(() => {
+    if (!selectedExpenseTrend || !monthlyData || !monthlyData.periods.length) return null
+
+    const trend = monthlyData.periods.map((period: any) => {
+      let val = 0
+
+      if (selectedExpenseTrend.isGrouped) {
+        selectedExpenseTrend.subAccounts?.forEach((accCode: string) => {
+          const acc = monthlyData.allAccounts.find((a: any) => a.conta === accCode)
+          if (acc) {
+            const sld = acc.saldos[period]
+            if (sld) {
+              if (!isAccumulated) {
+                val += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
+              } else {
+                val += Math.abs(getRawNumber(sld.sldFin))
+              }
+            }
+          }
+        })
+      } else {
+        const acc = monthlyData.allAccounts.find((a: any) => a.conta === selectedExpenseTrend.conta)
+        if (acc) {
+          const sld = acc.saldos[period]
+          if (sld) {
+            if (!isAccumulated) {
+              val += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
+            } else {
+              val += Math.abs(getRawNumber(sld.sldFin))
+            }
+          }
+        }
+      }
+
+      return {
+        period: period.split(' a ')[0].substring(3),
+        valor: val,
+      }
+    })
+
+    return trend
+  }, [selectedExpenseTrend, monthlyData, isAccumulated])
 
   const clearRazaoFilters = () => {
     setRazaoSearch('')
@@ -6217,6 +6269,9 @@ export default function App() {
                                     <p className="font-black text-rose-600">
                                       R$ {formatCompact(data.valor)}
                                     </p>
+                                    <p className="text-[10px] text-slate-400 mt-2 font-medium">
+                                      Clique na barra para ver a evolução mensal
+                                    </p>
                                   </div>
                                 )
                               }
@@ -6225,7 +6280,12 @@ export default function App() {
                           />
                           <Bar dataKey="valor" radius={[0, 6, 6, 0]} barSize={22}>
                             {topExpensesData.items.map((entry: any, index: number) => (
-                              <Cell key={`cell-${index}`} fill={entry.fill} />
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={CHART_COLORS[index % CHART_COLORS.length].hex}
+                                className="cursor-pointer hover:brightness-110 transition-all"
+                                onClick={() => setSelectedExpenseTrend(entry)}
+                              />
                             ))}
                           </Bar>
                         </BarChart>
@@ -7403,6 +7463,91 @@ export default function App() {
           )}
         </SheetContent>
       </Sheet>
+
+      <Dialog
+        open={!!selectedExpenseTrend}
+        onOpenChange={(open) => !open && setSelectedExpenseTrend(null)}
+      >
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black text-slate-800">
+              Evolução Mensal: {selectedExpenseTrend?.nome}
+            </DialogTitle>
+            <DialogDescription>
+              Acompanhamento do histórico de saldos desta despesa ao longo de todos os períodos
+              importados.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="h-[400px] w-full mt-4">
+            {selectedExpenseTrendData && (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={selectedExpenseTrendData}
+                  margin={{ top: 10, right: 30, left: 10, bottom: 5 }}
+                >
+                  <defs>
+                    <linearGradient id="colorValor" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis
+                    dataKey="period"
+                    tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }}
+                    axisLine={false}
+                    tickLine={false}
+                    dy={10}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#94a3b8' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v: number) =>
+                      v.toLocaleString('pt-BR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })
+                    }
+                    dx={-10}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-white/95 backdrop-blur-sm border border-slate-200 p-3 rounded-lg shadow-xl z-50">
+                            <p className="font-bold text-slate-800 text-sm mb-1">
+                              {payload[0].payload.period}
+                            </p>
+                            <p className="font-black text-indigo-600">
+                              R${' '}
+                              {Number(payload[0].value).toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </p>
+                          </div>
+                        )
+                      }
+                      return null
+                    }}
+                  />
+                  <RechartsArea
+                    type="monotone"
+                    dataKey="valor"
+                    stroke="#4f46e5"
+                    strokeWidth={3}
+                    fillOpacity={1}
+                    fill="url(#colorValor)"
+                    activeDot={{ r: 6, strokeWidth: 0, fill: '#4f46e5' }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <style
         dangerouslySetInnerHTML={{
