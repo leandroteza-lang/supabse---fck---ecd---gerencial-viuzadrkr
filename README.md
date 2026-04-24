@@ -129,3 +129,9 @@ npm run build
 ```
 
 Os arquivos otimizados serão gerados na pasta `dist/` e estarão prontos para deploy.
+
+## 📖 Documentação Funcional
+
+| Módulo | Descrição |
+|---|---|
+| [Dashboard de Evolução](docs/dashboard-de-evolucao.md) | Documentação completa do painel principal: fluxo de dados, filtros, gráficos, KPIs e integrações com o Supabase. |
