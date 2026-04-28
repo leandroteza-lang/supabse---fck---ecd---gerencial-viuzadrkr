@@ -7251,6 +7251,25 @@ export default function App() {
                       const isExpanded = expandedAccounts.has(acc.conta)
                       const indent = (parseInt(acc.nivel) - 1) * 16
 
+                      const level = parseInt(acc.nivel) || 1
+                      let rowClass = 'transition-colors cursor-pointer '
+                      let isDarkBg = false
+
+                      if (level === 1) {
+                        rowClass += 'bg-indigo-950 text-white hover:bg-indigo-900 font-bold'
+                        isDarkBg = true
+                      } else if (level === 2) {
+                        rowClass += 'bg-blue-800 text-white hover:bg-blue-700 font-semibold'
+                        isDarkBg = true
+                      } else if (level === 3) {
+                        rowClass += 'bg-blue-500 text-white hover:bg-blue-400 font-medium'
+                        isDarkBg = true
+                      } else if (level === 4) {
+                        rowClass += 'bg-blue-200 text-blue-950 hover:bg-blue-300 font-medium'
+                      } else {
+                        rowClass += 'bg-blue-50 text-blue-900 hover:bg-blue-100 font-medium'
+                      }
+
                       return (
                         <tr
                           key={acc.conta}
@@ -7261,10 +7280,10 @@ export default function App() {
                               openRazao(acc)
                             }
                           }}
-                          className="transition-colors even:bg-slate-50 odd:bg-white hover:bg-slate-200/50 cursor-pointer"
+                          className={rowClass}
                         >
                           <td
-                            className="py-1.5 px-4 font-mono text-[11px] text-slate-600 border-r border-slate-50 group"
+                            className={`py-1.5 px-4 font-mono text-[11px] border-r border-white/10 group ${isDarkBg ? 'text-white/80' : 'text-blue-900/60'}`}
                             style={{ paddingLeft: `${indent + 16}px` }}
                           >
                             <div className="flex items-center gap-1">
@@ -7274,7 +7293,7 @@ export default function App() {
                                     e.stopPropagation()
                                     toggleAccountExpand(acc.conta)
                                   }}
-                                  className="w-4 h-4 flex items-center justify-center text-slate-500 hover:bg-slate-200 rounded"
+                                  className={`w-4 h-4 flex items-center justify-center rounded ${isDarkBg ? 'text-white/80 hover:bg-white/20' : 'text-blue-800/60 hover:bg-blue-900/10'}`}
                                 >
                                   <ChevronDown
                                     className={`w-3.5 h-3.5 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
@@ -7282,18 +7301,22 @@ export default function App() {
                                 </button>
                               ) : (
                                 <div className="w-4 h-4 flex items-center justify-center">
-                                  <Search className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  <Search
+                                    className={`w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ${isDarkBg ? 'text-white/80' : 'text-blue-600'}`}
+                                  />
                                 </div>
                               )}
                               {isSintetica ? <strong>{acc.conta}</strong> : acc.conta}
                             </div>
                           </td>
                           <td
-                            className={`py-1.5 px-4 text-[13px] ${isSintetica ? 'font-bold text-slate-800' : 'text-slate-600'}`}
+                            className={`py-1.5 px-4 text-[13px] ${isDarkBg ? 'text-white' : 'text-blue-950'}`}
                           >
                             {acc.nome}
                             {isSintetica && (
-                              <span className="ml-2 text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded uppercase font-bold">
+                              <span
+                                className={`ml-2 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${isDarkBg ? 'bg-white/20 text-white' : 'bg-blue-900/10 text-blue-900'}`}
+                              >
                                 Sintética
                               </span>
                             )}
@@ -7343,7 +7366,7 @@ export default function App() {
                                 const avPct = (rawVal / base) * 100
                                 avLabel = (
                                   <span
-                                    className="text-[11px] text-slate-500 font-mono"
+                                    className={`text-[11px] font-mono ${isDarkBg ? 'text-white/70' : 'text-blue-800/70'}`}
                                     title="Análise Vertical"
                                   >
                                     {avPct.toFixed(2)}%
@@ -7380,7 +7403,6 @@ export default function App() {
                                 const isPositive = ahPct > 0
                                 const isNegative = ahPct < 0
 
-                                // Determinar cor (Simplificado: Crescimento em despesa é ruim, em receita/ativo é bom. Aqui usaremos neutro/verde/vermelho baseado na conta)
                                 const isDespesa =
                                   acc.conta.startsWith('4') ||
                                   acc.conta.startsWith('5') ||
@@ -7388,15 +7410,27 @@ export default function App() {
                                     !acc.nome.toUpperCase().includes('RECEITA'))
                                 const colorClass = isDespesa
                                   ? isPositive
-                                    ? 'text-rose-500'
+                                    ? isDarkBg
+                                      ? 'text-rose-400'
+                                      : 'text-rose-600'
                                     : isNegative
-                                      ? 'text-emerald-500'
-                                      : 'text-slate-400'
+                                      ? isDarkBg
+                                        ? 'text-emerald-400'
+                                        : 'text-emerald-600'
+                                      : isDarkBg
+                                        ? 'text-white/50'
+                                        : 'text-blue-800/50'
                                   : isPositive
-                                    ? 'text-emerald-500'
+                                    ? isDarkBg
+                                      ? 'text-emerald-400'
+                                      : 'text-emerald-600'
                                     : isNegative
-                                      ? 'text-rose-500'
-                                      : 'text-slate-400'
+                                      ? isDarkBg
+                                        ? 'text-rose-400'
+                                        : 'text-rose-600'
+                                      : isDarkBg
+                                        ? 'text-white/50'
+                                        : 'text-blue-800/50'
 
                                 ahLabel = (
                                   <span
@@ -7410,7 +7444,7 @@ export default function App() {
                               } else if (rawVal > 0 && prevVal === 0) {
                                 ahLabel = (
                                   <span
-                                    className="text-[11px] text-emerald-500 font-mono"
+                                    className={`text-[11px] font-mono ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
                                     title="Análise Horizontal (vs Mês Anterior)"
                                   >
                                     N/A (Novo)
@@ -7422,33 +7456,49 @@ export default function App() {
                             return (
                               <React.Fragment key={period}>
                                 <td
-                                  className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-slate-100/50 ${isSintetica ? 'font-bold text-slate-800' : 'text-slate-600 font-medium'}`}
+                                  className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'text-white' : 'text-blue-950'}`}
                                 >
                                   {displayVal !== '0,00' ? (
                                     <div className="flex items-center justify-end gap-2 w-full">
                                       <span>{displayVal}</span>
                                       <span
-                                        className={`text-[10px] w-3 ${displayInd === 'D' ? 'text-blue-500' : 'text-red-500'}`}
+                                        className={`text-[10px] w-3 ${displayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : isDarkBg ? 'text-red-200' : 'text-red-600'}`}
                                       >
                                         {displayInd}
                                       </span>
                                     </div>
                                   ) : (
-                                    <span className="text-slate-300">-</span>
+                                    <span
+                                      className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}
+                                    >
+                                      -
+                                    </span>
                                   )}
                                 </td>
                                 {showAV && (
                                   <td
-                                    className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-slate-200/60 bg-slate-900/[0.02] ${isSintetica ? 'font-bold text-slate-700' : 'text-slate-500'}`}
+                                    className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-black/10 text-white/80' : 'bg-black/[0.02] text-blue-900/70'}`}
                                   >
-                                    {avLabel || <span className="text-slate-300">-</span>}
+                                    {avLabel || (
+                                      <span
+                                        className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}
+                                      >
+                                        -
+                                      </span>
+                                    )}
                                   </td>
                                 )}
                                 {showAH && (
                                   <td
-                                    className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-slate-200/60 bg-slate-900/[0.02] ${isSintetica ? 'font-bold text-slate-700' : 'text-slate-500'}`}
+                                    className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-black/10 text-white/80' : 'bg-black/[0.02] text-blue-900/70'}`}
                                   >
-                                    {ahLabel || <span className="text-slate-300">-</span>}
+                                    {ahLabel || (
+                                      <span
+                                        className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}
+                                      >
+                                        -
+                                      </span>
+                                    )}
                                   </td>
                                 )}
                               </React.Fragment>
@@ -7500,19 +7550,21 @@ export default function App() {
 
                             return (
                               <td
-                                className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-indigo-200/60 bg-indigo-500/[0.04] ${isSintetica ? 'font-bold text-indigo-900' : 'text-indigo-700 font-medium'}`}
+                                className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-white/10 text-white' : 'bg-black/[0.04] text-blue-950'}`}
                               >
                                 {accDisplayVal !== '0,00' ? (
                                   <div className="flex items-center justify-end gap-2 w-full">
                                     <span>{accDisplayVal}</span>
                                     <span
-                                      className={`text-[10px] w-3 ${accDisplayInd === 'D' ? 'text-blue-500' : 'text-red-500'}`}
+                                      className={`text-[10px] w-3 ${accDisplayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : isDarkBg ? 'text-red-200' : 'text-red-600'}`}
                                     >
                                       {accDisplayInd}
                                     </span>
                                   </div>
                                 ) : (
-                                  <span className="text-indigo-300">-</span>
+                                  <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>
+                                    -
+                                  </span>
                                 )}
                               </td>
                             )
