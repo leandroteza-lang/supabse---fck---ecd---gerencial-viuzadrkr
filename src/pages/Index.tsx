@@ -1300,15 +1300,17 @@ export default function App() {
     if (mergedInfo && companyInfo) {
       let isSamePeriod = false
 
-      if (companyInfo.j005 && mergedInfo.j005) {
-        const getJ005Periods = (j005Array: any[]) =>
-          j005Array
-            ?.map((p) => `${p[2]}-${p[3]}`)
-            .sort()
-            .join(',') || ''
-        if (getJ005Periods(companyInfo.j005) === getJ005Periods(mergedInfo.j005)) {
-          isSamePeriod = true
-        }
+      const getJ005Periods = (j005Array: any[]) =>
+        j005Array
+          ?.map((p) => `${p[2]}-${p[3]}`)
+          .sort()
+          .join(',') || ''
+
+      const oldJ005 = getJ005Periods(companyInfo.j005)
+      const newJ005 = getJ005Periods(mergedInfo.j005)
+
+      if (oldJ005 || newJ005) {
+        isSamePeriod = oldJ005 === newJ005
       } else {
         if (companyInfo.dtIni === mergedInfo.dtIni && companyInfo.dtFin === mergedInfo.dtFin) {
           isSamePeriod = true
@@ -1356,7 +1358,7 @@ export default function App() {
           toast({
             title: 'Importação Ignorada',
             description:
-              'O arquivo contém exatamente os mesmos dados (Período e Saldos) que já estão no sistema.',
+              'O arquivo contém exatamente os mesmos dados (Período J005 e registros J100/J150) que já estão no sistema.',
           })
           setLoading(false)
           if (e.target) e.target.value = ''
