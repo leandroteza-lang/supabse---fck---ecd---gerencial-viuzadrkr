@@ -1133,9 +1133,12 @@ export default function App() {
                 cnpj: parts[5],
                 dtIni: parseSpedDate(parts[2]),
                 dtFin: parseSpedDate(parts[3]),
+                j005: [],
                 j100: [],
                 j150: [],
               }
+            } else if (reg === 'J005') {
+              if (info) info.j005.push(parts)
             } else if (reg === 'J100') {
               if (info) info.j100.push(parts)
             } else if (reg === 'J150') {
@@ -1288,10 +1291,79 @@ export default function App() {
       if (!mergedInfo && res.info) {
         mergedInfo = res.info
       } else if (mergedInfo && res.info) {
+        if (res.info.j005) mergedInfo.j005 = [...(mergedInfo.j005 || []), ...res.info.j005]
         if (res.info.j100) mergedInfo.j100 = [...(mergedInfo.j100 || []), ...res.info.j100]
         if (res.info.j150) mergedInfo.j150 = [...(mergedInfo.j150 || []), ...res.info.j150]
       }
     })
+
+    if (mergedInfo && companyInfo) {
+      let isSamePeriod = false
+
+      if (companyInfo.j005 && mergedInfo.j005) {
+        const getJ005Periods = (j005Array: any[]) =>
+          j005Array
+            ?.map((p) => `${p[2]}-${p[3]}`)
+            .sort()
+            .join(',') || ''
+        if (getJ005Periods(companyInfo.j005) === getJ005Periods(mergedInfo.j005)) {
+          isSamePeriod = true
+        }
+      } else {
+        if (companyInfo.dtIni === mergedInfo.dtIni && companyInfo.dtFin === mergedInfo.dtFin) {
+          isSamePeriod = true
+        }
+      }
+
+      if (isSamePeriod) {
+        let hasDifference = false
+
+        const getJ100T = (j100Array: any[]) => {
+          const arr = j100Array?.filter((p) => p[3] === 'T').map((p) => p.join('|')) || []
+          return arr.sort()
+        }
+        const getJ150T = (j150Array: any[]) => {
+          const arr = j150Array?.filter((p) => p[4] === 'T').map((p) => p.join('|')) || []
+          return arr.sort()
+        }
+
+        const currentJ100T = getJ100T(companyInfo.j100)
+        const newJ100T = getJ100T(mergedInfo.j100)
+
+        const currentJ150T = getJ150T(companyInfo.j150)
+        const newJ150T = getJ150T(mergedInfo.j150)
+
+        if (currentJ100T.length !== newJ100T.length || currentJ150T.length !== newJ150T.length) {
+          hasDifference = true
+        } else {
+          for (let i = 0; i < newJ100T.length; i++) {
+            if (newJ100T[i] !== currentJ100T[i]) {
+              hasDifference = true
+              break
+            }
+          }
+          if (!hasDifference) {
+            for (let i = 0; i < newJ150T.length; i++) {
+              if (newJ150T[i] !== currentJ150T[i]) {
+                hasDifference = true
+                break
+              }
+            }
+          }
+        }
+
+        if (!hasDifference) {
+          toast({
+            title: 'Importação Ignorada',
+            description:
+              'O arquivo contém exatamente os mesmos dados (Período e Saldos) que já estão no sistema.',
+          })
+          setLoading(false)
+          if (e.target) e.target.value = ''
+          return
+        }
+      }
+    }
 
     allExtracted.sort((a: any, b: any) => {
       const dateA = dateStrToMs(a.periodo.split(' a ')[0])
