@@ -103,6 +103,14 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
@@ -6985,10 +6993,55 @@ export default function App() {
                       <button
                         onClick={expandAllAccounts}
                         className="px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap hover:bg-white hover:shadow-sm text-slate-600 hover:text-indigo-700"
-                        title="Expandir todas as contas"
+                        title="Expandir Todas"
                       >
-                        Expandir Todos
+                        Expandir Todas
                       </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap hover:bg-white hover:shadow-sm text-slate-600 hover:text-indigo-700 flex items-center gap-1">
+                            Expandir Grupos <ChevronDown className="w-3 h-3" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-64 z-50">
+                          <DropdownMenuLabel>Grupos de Contas (Nível 1)</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {monthlyData?.allAccounts
+                            ?.filter((a: any) => a.nivel === '1' || a.nivel === 1)
+                            .map((rootAcc: any) => {
+                              const isExpanded = expandedAccounts.has(rootAcc.conta)
+                              return (
+                                <DropdownMenuCheckboxItem
+                                  key={rootAcc.conta}
+                                  checked={isExpanded}
+                                  onCheckedChange={(checked) => {
+                                    setExpandedAccounts((prev) => {
+                                      const next = new Set(prev)
+                                      monthlyData.allAccounts.forEach((a: any) => {
+                                        if (
+                                          a.conta === rootAcc.conta ||
+                                          a.conta.startsWith(rootAcc.conta)
+                                        ) {
+                                          if (checked) {
+                                            if (a.tipo === 'S') next.add(a.conta)
+                                          } else {
+                                            next.delete(a.conta)
+                                          }
+                                        }
+                                      })
+                                      return next
+                                    })
+                                  }}
+                                >
+                                  <span className="font-mono text-xs mr-2 text-slate-500">
+                                    {rootAcc.conta}
+                                  </span>
+                                  <span className="truncate">{rootAcc.nome}</span>
+                                </DropdownMenuCheckboxItem>
+                              )
+                            })}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
 
                     <div className="relative period-dropdown-container w-full sm:w-auto z-30">
@@ -7170,7 +7223,7 @@ export default function App() {
                     {tableAccountsToDisplay.map((acc: any, index: number) => {
                       const isSintetica = acc.tipo === 'S'
                       const isEven = index % 2 === 0
-                      const rowBg = isEven ? 'bg-white' : 'bg-blue-50/30'
+                      const rowBg = isEven ? 'bg-white' : 'bg-slate-50'
                       const isExpanded = expandedAccounts.has(acc.conta)
                       const indent = (parseInt(acc.nivel) - 1) * 16
 
@@ -7184,7 +7237,7 @@ export default function App() {
                               openRazao(acc)
                             }
                           }}
-                          className={`transition-colors ${rowBg} hover:bg-blue-100/50 cursor-pointer`}
+                          className={`transition-colors ${rowBg} hover:bg-slate-100/60 cursor-pointer`}
                         >
                           <td
                             className="py-1.5 px-4 font-mono text-[11px] text-slate-600 border-r border-slate-50 group"
@@ -8056,7 +8109,10 @@ export default function App() {
                 </TableHeader>
                 <TableBody className="divide-y divide-slate-100">
                   {sortedRazaoTransactions.map((tx, i) => (
-                    <TableRow key={i} className="hover:bg-slate-50/80 transition-colors">
+                    <TableRow
+                      key={i}
+                      className={`hover:bg-slate-100/60 transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}
+                    >
                       <TableCell className="font-mono text-[11px] text-slate-500 py-3">
                         {tx.data}
                       </TableCell>
