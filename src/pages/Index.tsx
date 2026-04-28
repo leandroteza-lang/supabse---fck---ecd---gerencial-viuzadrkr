@@ -7083,15 +7083,40 @@ export default function App() {
                         Descrição
                       </th>
                       {periodsToDisplay.map((period: string) => (
-                        <th
-                          key={period}
-                          className="py-2 px-4 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm"
-                        >
-                          <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">
-                            {period.split(' a ')[0].substring(3)}
-                          </div>
-                          <span className="font-bold text-slate-700 text-xs">Saldo</span>
-                        </th>
+                        <React.Fragment key={period}>
+                          <th className="py-2 px-4 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm">
+                            <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">
+                              {period.split(' a ')[0].substring(3)}
+                            </div>
+                            <span className="font-bold text-slate-700 text-xs">Saldo</span>
+                          </th>
+                          {showAV && (
+                            <th className="py-2 px-2 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm w-16">
+                              <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5 opacity-0">
+                                AV
+                              </div>
+                              <span
+                                className="font-bold text-slate-500 text-[10px]"
+                                title="Análise Vertical"
+                              >
+                                AV%
+                              </span>
+                            </th>
+                          )}
+                          {showAH && (
+                            <th className="py-2 px-2 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm w-16">
+                              <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5 opacity-0">
+                                AH
+                              </div>
+                              <span
+                                className="font-bold text-slate-500 text-[10px]"
+                                title="Análise Horizontal"
+                              >
+                                AH%
+                              </span>
+                            </th>
+                          )}
+                        </React.Fragment>
                       ))}
                       <th className="py-2 px-4 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-indigo-50 z-20 shadow-sm">
                         <div className="text-[10px] text-indigo-500 uppercase font-bold tracking-widest mb-0.5 flex items-center justify-end gap-1">
@@ -7177,12 +7202,12 @@ export default function App() {
                               if (base && base > 0) {
                                 const avPct = (rawVal / base) * 100
                                 avLabel = (
-                                  <div
-                                    className="text-[10px] text-slate-400 font-mono mt-0.5"
+                                  <span
+                                    className="text-[11px] text-slate-500 font-mono"
                                     title="Análise Vertical"
                                   >
-                                    AV: {avPct.toFixed(2)}%
-                                  </div>
+                                    {avPct.toFixed(2)}%
+                                  </span>
                                 )
                               }
                             }
@@ -7234,42 +7259,32 @@ export default function App() {
                                       : 'text-slate-400'
 
                                 ahLabel = (
-                                  <div
-                                    className={`text-[10px] font-mono mt-0.5 ${colorClass}`}
+                                  <span
+                                    className={`text-[11px] font-mono ${colorClass}`}
                                     title="Análise Horizontal (vs Mês Anterior)"
                                   >
-                                    AH: {ahPct > 0 ? '+' : ''}
+                                    {ahPct > 0 ? '+' : ''}
                                     {ahPct.toFixed(2)}%
-                                  </div>
+                                  </span>
                                 )
                               } else if (rawVal > 0 && prevVal === 0) {
                                 ahLabel = (
-                                  <div
-                                    className="text-[10px] text-emerald-500 font-mono mt-0.5"
+                                  <span
+                                    className="text-[11px] text-emerald-500 font-mono"
                                     title="Análise Horizontal (vs Mês Anterior)"
                                   >
-                                    AH: N/A (Novo)
-                                  </div>
-                                )
-                              } else {
-                                ahLabel = (
-                                  <div
-                                    className="text-[10px] text-slate-400 font-mono mt-0.5"
-                                    title="Análise Horizontal"
-                                  >
-                                    -
-                                  </div>
+                                    N/A (Novo)
+                                  </span>
                                 )
                               }
                             }
 
                             return (
-                              <td
-                                key={period}
-                                className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-slate-100/50 ${isSintetica ? 'font-bold text-slate-800' : 'text-slate-600 font-medium'}`}
-                              >
-                                {displayVal !== '0,00' ? (
-                                  <div className="flex flex-col items-end justify-center">
+                              <React.Fragment key={period}>
+                                <td
+                                  className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-slate-100/50 ${isSintetica ? 'font-bold text-slate-800' : 'text-slate-600 font-medium'}`}
+                                >
+                                  {displayVal !== '0,00' ? (
                                     <div className="flex items-center justify-end gap-2 w-full">
                                       <span>{displayVal}</span>
                                       <span
@@ -7278,15 +7293,25 @@ export default function App() {
                                         {displayInd}
                                       </span>
                                     </div>
-                                    <div className="flex gap-3 justify-end items-center mt-1 w-full opacity-80 group-hover:opacity-100 transition-opacity">
-                                      {avLabel}
-                                      {ahLabel}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span className="text-slate-300">-</span>
+                                  ) : (
+                                    <span className="text-slate-300">-</span>
+                                  )}
+                                </td>
+                                {showAV && (
+                                  <td
+                                    className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-slate-100/50 bg-slate-50/30 ${isSintetica ? 'font-bold text-slate-700' : 'text-slate-500'}`}
+                                  >
+                                    {avLabel || <span className="text-slate-300">-</span>}
+                                  </td>
                                 )}
-                              </td>
+                                {showAH && (
+                                  <td
+                                    className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-slate-100/50 bg-slate-50/30 ${isSintetica ? 'font-bold text-slate-700' : 'text-slate-500'}`}
+                                  >
+                                    {ahLabel || <span className="text-slate-300">-</span>}
+                                  </td>
+                                )}
+                              </React.Fragment>
                             )
                           })}
                           {(() => {
@@ -7358,7 +7383,9 @@ export default function App() {
                     {accountsToDisplay.length === 0 && (
                       <tr>
                         <td
-                          colSpan={periodsToDisplay.length + 3}
+                          colSpan={
+                            periodsToDisplay.length * (1 + (showAV ? 1 : 0) + (showAH ? 1 : 0)) + 3
+                          }
                           className="p-12 text-center text-slate-500"
                         >
                           Nenhuma conta encontrada ou selecionada no filtro.
