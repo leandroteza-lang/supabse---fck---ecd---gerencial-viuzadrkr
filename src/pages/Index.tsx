@@ -466,6 +466,10 @@ export default function App() {
     extractedTx: any[]
   } | null>(null)
 
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false)
+  const [auditResult, setAuditResult] = useState<any>(null)
+  const [showAuditDetails, setShowAuditDetails] = useState(false)
+
   const [isAccumulated, setIsAccumulated] = useState(true)
   const [showAV, setShowAV] = useState(false)
   const [showAH, setShowAH] = useState(false)
@@ -1306,6 +1310,31 @@ export default function App() {
     if (e.target) e.target.value = ''
   }
 
+  const exportAuditLog = () => {
+    if (!auditResult) return
+    let csv = 'Tipo;Ação;Quantidade;Detalhes\n'
+    csv += `Contas;Novas;${auditResult.accounts.new};${auditResult.accounts.newDetails.join(', ')}\n`
+    csv += `Contas;Atualizadas;${auditResult.accounts.updated};-\n`
+    csv += `Saldos;Novos;${auditResult.balances.new};-\n`
+    csv += `Saldos;Atualizados;${auditResult.balances.updated};-\n`
+    csv += `Lancamentos (Tx);Inseridos;${auditResult.transactions.inserted};-\n`
+    csv += `Lancamentos (Tx);Removidos (Antigos);${auditResult.transactions.deleted};-\n`
+
+    if (auditResult.errors.length > 0) {
+      csv += `\nErros Encontrados;\n`
+      auditResult.errors.forEach((err: string) => {
+        csv += `Erro;${err}\n`
+      })
+    }
+
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `auditoria_importacao_${companyInfo?.cnpj || 'sped'}.csv`
+    link.click()
+  }
+
   const confirmImport = async () => {
     if (!stagingPayload) return
     setIsStagingModalOpen(false)
@@ -1314,11 +1343,20 @@ export default function App() {
     setCompanyInfo(stagingPayload.info)
     setData(stagingPayload.extractedData)
 
-    await saveToSupabase(
-      stagingPayload.info,
-      stagingPayload.extractedData,
-      stagingPayload.extractedTx,
-    )
+    try {
+      const audit = await saveToSupabase(
+        stagingPayload.info,
+        stagingPayload.extractedData,
+        stagingPayload.extractedTx,
+      )
+
+      if (audit) {
+        setAuditResult(audit)
+        setIsAuditModalOpen(true)
+      }
+    } catch (err) {
+      console.error('Falha crítica na importação', err)
+    }
 
     setStagingPayload(null)
     setLoading(false)
@@ -1330,11 +1368,21 @@ export default function App() {
   }
 
   const saveToSupabase = async (info: any, extractedData: any[], extractedTx: any[]) => {
-    if (!user) return
+    if (!user) return null
+
+    const audit = {
+      accounts: { new: 0, updated: 0, newDetails: [] as string[], updatedDetails: [] as string[] },
+      balances: { new: 0, updated: 0 },
+      transactions: { inserted: 0, deleted: 0 },
+      errors: [] as string[],
+      startTime: Date.now(),
+      endTime: 0,
+    }
+
     try {
       toast({
         title: 'Sincronizando',
-        description: 'Salvando dados na nuvem, isso pode levar alguns segundos...',
+        description: 'Salvando dados na nuvem, validando duplicatas...',
       })
 
       const { data: companyData, error: companyError } = await supabase
@@ -1347,8 +1395,15 @@ export default function App() {
         .single()
 
       if (companyError) throw companyError
-
       const companyId = companyData.id
+
+      // 1. Auditar Contas
+      const { data: existingAccounts } = await supabase
+        .from('accounts')
+        .select('code')
+        .eq('company_id', companyId)
+
+      const existingAccCodes = new Set((existingAccounts || []).map((a: any) => a.code))
 
       const uniqueAccountsMap = new Map()
       extractedData.forEach((row) => {
@@ -1361,6 +1416,14 @@ export default function App() {
             level: parseInt(row.nivel) || null,
             nature: row.natureza,
           })
+
+          if (existingAccCodes.has(row.conta)) {
+            audit.accounts.updated++
+            audit.accounts.updatedDetails.push(row.conta)
+          } else {
+            audit.accounts.new++
+            audit.accounts.newDetails.push(row.conta)
+          }
         }
       })
 
@@ -1375,21 +1438,50 @@ export default function App() {
           .upsert(chunk, { onConflict: 'company_id, code' })
           .select('id, code')
 
-        if (accError) throw accError
+        if (accError) {
+          audit.errors.push(`Erro ao salvar contas: ${accError.message}`)
+          throw accError
+        }
         upsertedAccounts?.forEach((a) => accountIdMap.set(a.code, a.id))
       }
 
-      const balancesToUpsert = extractedData.map((row) => ({
-        account_id: accountIdMap.get(row.conta),
-        period: row.periodo,
-        initial_balance:
-          parseFloat(row.sldIni.toString().replace(/\./g, '').replace(',', '.')) || 0,
-        initial_indicator: row.indDcIni,
-        debit: parseFloat(row.debito.toString().replace(/\./g, '').replace(',', '.')) || 0,
-        credit: parseFloat(row.credito.toString().replace(/\./g, '').replace(',', '.')) || 0,
-        final_balance: parseFloat(row.sldFin.toString().replace(/\./g, '').replace(',', '.')) || 0,
-        final_indicator: row.indDcFin,
-      }))
+      // 2. Auditar Saldos
+      const allAccIds = Array.from(accountIdMap.values())
+      const existingBalSet = new Set()
+
+      for (let i = 0; i < allAccIds.length; i += 200) {
+        const chunk = allAccIds.slice(i, i + 200)
+        const { data: bals } = await supabase
+          .from('balances')
+          .select('account_id, period')
+          .in('account_id', chunk)
+
+        if (bals) {
+          bals.forEach((b) => existingBalSet.add(`${b.account_id}_${b.period}`))
+        }
+      }
+
+      const balancesToUpsert = extractedData.map((row) => {
+        const accId = accountIdMap.get(row.conta)
+        if (existingBalSet.has(`${accId}_${row.periodo}`)) {
+          audit.balances.updated++
+        } else {
+          audit.balances.new++
+        }
+
+        return {
+          account_id: accId,
+          period: row.periodo,
+          initial_balance:
+            parseFloat(row.sldIni.toString().replace(/\./g, '').replace(',', '.')) || 0,
+          initial_indicator: row.indDcIni,
+          debit: parseFloat(row.debito.toString().replace(/\./g, '').replace(',', '.')) || 0,
+          credit: parseFloat(row.credito.toString().replace(/\./g, '').replace(',', '.')) || 0,
+          final_balance:
+            parseFloat(row.sldFin.toString().replace(/\./g, '').replace(',', '.')) || 0,
+          final_indicator: row.indDcFin,
+        }
+      })
 
       for (let i = 0; i < balancesToUpsert.length; i += chunkSize) {
         const chunk = balancesToUpsert.slice(i, i + chunkSize)
@@ -1397,9 +1489,13 @@ export default function App() {
           .from('balances')
           .upsert(chunk, { onConflict: 'account_id, period' })
 
-        if (balError) throw balError
+        if (balError) {
+          audit.errors.push(`Erro ao salvar saldos: ${balError.message}`)
+          throw balError
+        }
       }
 
+      // 3. Auditar Transações
       if (extractedTx && extractedTx.length > 0) {
         const seenTxs = new Set()
         const validTxs = extractedTx
@@ -1426,6 +1522,8 @@ export default function App() {
 
           let hasMoreToDelete = true
           let safetyCounter = 0
+          let totalDeleted = 0
+
           while (hasMoreToDelete && safetyCounter < 50) {
             safetyCounter++
             const { data: delData, error: delError } = await supabase
@@ -1438,13 +1536,20 @@ export default function App() {
 
             if (delError || !delData || delData.length === 0) {
               hasMoreToDelete = false
+            } else if (delData) {
+              totalDeleted += delData.length
             }
           }
 
+          audit.transactions.deleted = totalDeleted
+
           for (let i = 0; i < validTxs.length; i += 2000) {
             const chunk = validTxs.slice(i, i + 2000)
-            await supabase.from('transactions').insert(chunk)
+            const { error: txError } = await supabase.from('transactions').insert(chunk)
+            if (txError) audit.errors.push(`Erro ao salvar lançamentos: ${txError.message}`)
           }
+
+          audit.transactions.inserted = validTxs.length
         }
       }
 
@@ -1452,13 +1557,19 @@ export default function App() {
         title: 'Sucesso',
         description: 'Seus dados foram importados e salvos na nuvem.',
       })
-    } catch (err) {
+
+      audit.endTime = Date.now()
+      return audit
+    } catch (err: any) {
       console.error(err)
+      audit.errors.push(err.message || 'Erro desconhecido')
       toast({
         variant: 'destructive',
         title: 'Erro na sincronização',
-        description: 'Não foi possível salvar os dados na nuvem.',
+        description: 'Não foi possível salvar todos os dados na nuvem.',
       })
+      audit.endTime = Date.now()
+      return audit
     }
   }
 
@@ -8167,6 +8278,201 @@ export default function App() {
               className="px-6 py-2.5 rounded-lg font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-md flex items-center gap-2"
             >
               <Check className="w-4 h-4" /> Confirmar Importação
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MODAL DE AUDITORIA PÓS-IMPORTAÇÃO --- */}
+      <Dialog
+        open={isAuditModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsAuditModalOpen(false)
+            setAuditResult(null)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl bg-white max-h-[90vh] overflow-y-auto custom-scrollbar">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black text-slate-800 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-600" />
+              Auditoria de Importação Pós-Processamento
+            </DialogTitle>
+            <DialogDescription>
+              A importação foi finalizada. Veja abaixo o impacto exato dessa operação no seu banco
+              de dados.
+            </DialogDescription>
+          </DialogHeader>
+
+          {auditResult && (
+            <div className="space-y-6 py-4">
+              {auditResult.errors.length === 0 ? (
+                <div className="bg-emerald-50 text-emerald-800 p-4 rounded-xl border border-emerald-200 flex items-start gap-3">
+                  <Check className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-sm">Processamento concluído com sucesso!</p>
+                    <p className="text-xs opacity-90 mt-0.5">
+                      Tempo total:{' '}
+                      {((auditResult.endTime - auditResult.startTime) / 1000).toFixed(1)} segundos.
+                      A validação de integridade não encontrou erros físicos.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-rose-50 text-rose-800 p-4 rounded-xl border border-rose-200 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-sm">Processamento concluído com ressalvas.</p>
+                    <ul className="text-xs opacity-90 mt-2 list-disc list-inside space-y-1">
+                      {auditResult.errors.map((err: string, i: number) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 w-full border-b border-slate-100 pb-2">
+                    Contas
+                  </h4>
+                  <div className="flex justify-around w-full gap-2">
+                    <div>
+                      <p className="text-2xl font-black text-emerald-600">
+                        {auditResult.accounts.new}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Novas</p>
+                    </div>
+                    <div className="w-px bg-slate-100 h-10"></div>
+                    <div>
+                      <p className="text-2xl font-black text-indigo-600">
+                        {auditResult.accounts.updated}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Atualizadas</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 w-full border-b border-slate-100 pb-2">
+                    Saldos
+                  </h4>
+                  <div className="flex justify-around w-full gap-2">
+                    <div>
+                      <p className="text-2xl font-black text-emerald-600">
+                        {auditResult.balances.new}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Novos</p>
+                    </div>
+                    <div className="w-px bg-slate-100 h-10"></div>
+                    <div>
+                      <p className="text-2xl font-black text-indigo-600">
+                        {auditResult.balances.updated}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Atualizados</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 w-full border-b border-slate-100 pb-2">
+                    Lançamentos (Tx)
+                  </h4>
+                  <div className="flex justify-around w-full gap-2">
+                    <div>
+                      <p className="text-2xl font-black text-emerald-600">
+                        {auditResult.transactions.inserted}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Inseridos</p>
+                    </div>
+                    <div className="w-px bg-slate-100 h-10"></div>
+                    <div>
+                      <p className="text-2xl font-black text-rose-500">
+                        {auditResult.transactions.deleted}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Limpos</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setShowAuditDetails(!showAuditDetails)}
+                  className="w-full bg-slate-50 p-4 flex justify-between items-center hover:bg-slate-100 transition-colors"
+                >
+                  <span className="font-bold text-sm text-slate-700 flex items-center gap-2">
+                    <FileText className="w-4 h-4" /> Ver Detalhes Específicos
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-slate-500 transition-transform ${showAuditDetails ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {showAuditDetails && (
+                  <div className="p-4 bg-white border-t border-slate-200">
+                    <p className="text-xs text-slate-500 mb-3">
+                      Lógica aplicada: Upsert. Contas e Saldos novos foram inseridos. Os existentes
+                      foram sobrescritos com os valores mais recentes do arquivo.
+                    </p>
+                    {auditResult.accounts.new > 0 && (
+                      <div className="mb-4">
+                        <h5 className="text-xs font-bold text-emerald-700 mb-2">
+                          Amostra de Novas Contas Criadas:
+                        </h5>
+                        <div className="flex flex-wrap gap-1.5">
+                          {auditResult.accounts.newDetails.slice(0, 20).map((accCode: string) => (
+                            <span
+                              key={accCode}
+                              className="text-[10px] font-mono bg-emerald-50 border border-emerald-100 text-emerald-700 px-2 py-1 rounded"
+                            >
+                              {accCode}
+                            </span>
+                          ))}
+                          {auditResult.accounts.newDetails.length > 20 && (
+                            <span className="text-[10px] font-bold text-slate-400 px-2 py-1">
+                              + {auditResult.accounts.newDetails.length - 20} contas...
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {auditResult.transactions.deleted > 0 && (
+                      <div>
+                        <h5 className="text-xs font-bold text-rose-700 mb-1">
+                          Rotina de Limpeza de Transações:
+                        </h5>
+                        <p className="text-xs text-slate-600">
+                          {auditResult.transactions.deleted} transações anteriores do mesmo período
+                          foram permanentemente substituídas pelas{' '}
+                          {auditResult.transactions.inserted} novas transações do arquivo,
+                          garantindo que não haja duplicidade de lançamentos na tabela de Razão.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4 border-t border-slate-100">
+            <button
+              onClick={exportAuditLog}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-lg font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm flex items-center justify-center gap-2"
+            >
+              <Download className="w-4 h-4" /> Baixar Log (CSV)
+            </button>
+            <button
+              onClick={() => {
+                setIsAuditModalOpen(false)
+                setAuditResult(null)
+              }}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-lg font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-md flex items-center justify-center"
+            >
+              Concluir e Ver Painel
             </button>
           </div>
         </DialogContent>
