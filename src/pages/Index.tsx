@@ -464,6 +464,7 @@ export default function App() {
     info: any
     extractedData: any[]
     extractedTx: any[]
+    spedDiff?: any
   } | null>(null)
 
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false)
@@ -1297,6 +1298,14 @@ export default function App() {
       }
     })
 
+    let spedDiff = {
+      periodChanged: false,
+      oldPeriod: '',
+      newPeriod: '',
+      j100Changes: [] as string[],
+      j150Changes: [] as string[],
+    }
+
     if (mergedInfo && companyInfo) {
       let isSamePeriod = false
 
@@ -1306,64 +1315,61 @@ export default function App() {
           .sort()
           .join(',') || ''
 
-      const oldJ005 = getJ005Periods(companyInfo.j005)
-      const newJ005 = getJ005Periods(mergedInfo.j005)
+      const oldJ005 =
+        getJ005Periods(companyInfo.j005) || `${companyInfo.dtIni}-${companyInfo.dtFin}`
+      const newJ005 = getJ005Periods(mergedInfo.j005) || `${mergedInfo.dtIni}-${mergedInfo.dtFin}`
 
-      if (oldJ005 || newJ005) {
-        isSamePeriod = oldJ005 === newJ005
+      if (oldJ005 === newJ005) {
+        isSamePeriod = true
       } else {
-        if (companyInfo.dtIni === mergedInfo.dtIni && companyInfo.dtFin === mergedInfo.dtFin) {
-          isSamePeriod = true
-        }
+        spedDiff.periodChanged = true
+        spedDiff.oldPeriod = oldJ005
+        spedDiff.newPeriod = newJ005
       }
 
-      if (isSamePeriod) {
-        let hasDifference = false
+      const getJ100T = (j100Array: any[]) => {
+        return j100Array?.filter((p) => p[3] === 'T').map((p) => p.join('|')) || []
+      }
+      const getJ150T = (j150Array: any[]) => {
+        return j150Array?.filter((p) => p[4] === 'T').map((p) => p.join('|')) || []
+      }
 
-        const getJ100T = (j100Array: any[]) => {
-          const arr = j100Array?.filter((p) => p[3] === 'T').map((p) => p.join('|')) || []
-          return arr.sort()
+      const currentJ100T = getJ100T(companyInfo.j100)
+      const newJ100T = getJ100T(mergedInfo.j100)
+      const currentJ150T = getJ150T(companyInfo.j150)
+      const newJ150T = getJ150T(mergedInfo.j150)
+
+      newJ100T.forEach((line) => {
+        if (!currentJ100T.includes(line)) {
+          spedDiff.j100Changes.push(`Novo/Alterado: ${line}`)
         }
-        const getJ150T = (j150Array: any[]) => {
-          const arr = j150Array?.filter((p) => p[4] === 'T').map((p) => p.join('|')) || []
-          return arr.sort()
+      })
+      currentJ100T.forEach((line) => {
+        if (!newJ100T.includes(line)) {
+          spedDiff.j100Changes.push(`Removido/Antigo: ${line}`)
         }
+      })
 
-        const currentJ100T = getJ100T(companyInfo.j100)
-        const newJ100T = getJ100T(mergedInfo.j100)
-
-        const currentJ150T = getJ150T(companyInfo.j150)
-        const newJ150T = getJ150T(mergedInfo.j150)
-
-        if (currentJ100T.length !== newJ100T.length || currentJ150T.length !== newJ150T.length) {
-          hasDifference = true
-        } else {
-          for (let i = 0; i < newJ100T.length; i++) {
-            if (newJ100T[i] !== currentJ100T[i]) {
-              hasDifference = true
-              break
-            }
-          }
-          if (!hasDifference) {
-            for (let i = 0; i < newJ150T.length; i++) {
-              if (newJ150T[i] !== currentJ150T[i]) {
-                hasDifference = true
-                break
-              }
-            }
-          }
+      newJ150T.forEach((line) => {
+        if (!currentJ150T.includes(line)) {
+          spedDiff.j150Changes.push(`Novo/Alterado: ${line}`)
         }
-
-        if (!hasDifference) {
-          toast({
-            title: 'Importação Ignorada',
-            description:
-              'O arquivo contém exatamente os mesmos dados (Período J005 e registros J100/J150) que já estão no sistema.',
-          })
-          setLoading(false)
-          if (e.target) e.target.value = ''
-          return
+      })
+      currentJ150T.forEach((line) => {
+        if (!newJ150T.includes(line)) {
+          spedDiff.j150Changes.push(`Removido/Antigo: ${line}`)
         }
+      })
+
+      if (isSamePeriod && spedDiff.j100Changes.length === 0 && spedDiff.j150Changes.length === 0) {
+        toast({
+          title: 'Importação Ignorada',
+          description:
+            'O arquivo contém exatamente os mesmos dados (Período J005 e registros J100/J150) que já estão no sistema.',
+        })
+        setLoading(false)
+        if (e.target) e.target.value = ''
+        return
       }
     }
 
@@ -1378,6 +1384,7 @@ export default function App() {
       info: mergedInfo,
       extractedData: allExtracted,
       extractedTx: allExtractedTx,
+      spedDiff,
     })
     setIsStagingModalOpen(true)
     setLoading(false)
@@ -1422,6 +1429,7 @@ export default function App() {
         stagingPayload.info,
         stagingPayload.extractedData,
         stagingPayload.extractedTx,
+        stagingPayload.spedDiff,
       )
 
       if (audit) {
@@ -1441,7 +1449,12 @@ export default function App() {
     setIsStagingModalOpen(false)
   }
 
-  const saveToSupabase = async (info: any, extractedData: any[], extractedTx: any[]) => {
+  const saveToSupabase = async (
+    info: any,
+    extractedData: any[],
+    extractedTx: any[],
+    spedDiff: any,
+  ) => {
     if (!user) return null
 
     const audit = {
@@ -1451,6 +1464,7 @@ export default function App() {
       errors: [] as string[],
       startTime: Date.now(),
       endTime: 0,
+      spedDiff: spedDiff || null,
     }
 
     try {
@@ -8478,7 +8492,7 @@ export default function App() {
                   className="w-full bg-slate-50 p-4 flex justify-between items-center hover:bg-slate-100 transition-colors"
                 >
                   <span className="font-bold text-sm text-slate-700 flex items-center gap-2">
-                    <FileText className="w-4 h-4" /> Ver Detalhes Específicos
+                    <FileText className="w-4 h-4" /> Ver Detalhes Específicos e Diferenças SPED
                   </span>
                   <ChevronDown
                     className={`w-4 h-4 text-slate-500 transition-transform ${showAuditDetails ? 'rotate-180' : ''}`}
@@ -8487,6 +8501,83 @@ export default function App() {
 
                 {showAuditDetails && (
                   <div className="p-4 bg-white border-t border-slate-200">
+                    {auditResult.spedDiff &&
+                      (auditResult.spedDiff.periodChanged ||
+                        auditResult.spedDiff.j100Changes.length > 0 ||
+                        auditResult.spedDiff.j150Changes.length > 0) && (
+                        <div className="mb-6 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                          <h5 className="text-sm font-bold text-indigo-900 mb-3 flex items-center gap-2">
+                            <Activity className="w-4 h-4" /> Diferenças Encontradas (Bloco J)
+                          </h5>
+
+                          {auditResult.spedDiff.periodChanged && (
+                            <div className="mb-3">
+                              <span className="text-xs font-bold text-indigo-700 block mb-1">
+                                Período (J005):
+                              </span>
+                              <div className="text-xs text-slate-700">
+                                De{' '}
+                                <span className="line-through text-rose-500 mr-2">
+                                  {auditResult.spedDiff.oldPeriod}
+                                </span>
+                                Para{' '}
+                                <span className="font-bold text-emerald-600">
+                                  {auditResult.spedDiff.newPeriod}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {auditResult.spedDiff.j100Changes.length > 0 && (
+                            <div className="mb-3">
+                              <span className="text-xs font-bold text-indigo-700 block mb-1">
+                                Balanço (J100 - Totais):
+                              </span>
+                              <ul className="text-[11px] font-mono bg-white border border-slate-200 rounded p-2 space-y-1 max-h-32 overflow-y-auto">
+                                {auditResult.spedDiff.j100Changes.map(
+                                  (change: string, i: number) => (
+                                    <li
+                                      key={i}
+                                      className={
+                                        change.startsWith('Novo')
+                                          ? 'text-emerald-700'
+                                          : 'text-rose-700'
+                                      }
+                                    >
+                                      {change}
+                                    </li>
+                                  ),
+                                )}
+                              </ul>
+                            </div>
+                          )}
+
+                          {auditResult.spedDiff.j150Changes.length > 0 && (
+                            <div className="mb-3">
+                              <span className="text-xs font-bold text-indigo-700 block mb-1">
+                                DRE (J150 - Totais):
+                              </span>
+                              <ul className="text-[11px] font-mono bg-white border border-slate-200 rounded p-2 space-y-1 max-h-32 overflow-y-auto">
+                                {auditResult.spedDiff.j150Changes.map(
+                                  (change: string, i: number) => (
+                                    <li
+                                      key={i}
+                                      className={
+                                        change.startsWith('Novo')
+                                          ? 'text-emerald-700'
+                                          : 'text-rose-700'
+                                      }
+                                    >
+                                      {change}
+                                    </li>
+                                  ),
+                                )}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                     <p className="text-xs text-slate-500 mb-3">
                       Lógica aplicada: Upsert. Contas e Saldos novos foram inseridos. Os existentes
                       foram sobrescritos com os valores mais recentes do arquivo.
