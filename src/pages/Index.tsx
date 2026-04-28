@@ -7000,46 +7000,71 @@ export default function App() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button className="px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap hover:bg-white hover:shadow-sm text-slate-600 hover:text-indigo-700 flex items-center gap-1">
-                            Expandir Grupos <ChevronDown className="w-3 h-3" />
+                            Expandir por Nível <ChevronDown className="w-3 h-3" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-64 z-50">
-                          <DropdownMenuLabel>Grupos de Contas (Nível 1)</DropdownMenuLabel>
+                        <DropdownMenuContent align="start" className="w-48 z-50">
+                          <DropdownMenuLabel>Profundidade de Visão</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          {monthlyData?.allAccounts
-                            ?.filter((a: any) => a.nivel === '1' || a.nivel === 1)
-                            .map((rootAcc: any) => {
-                              const isExpanded = expandedAccounts.has(rootAcc.conta)
-                              return (
-                                <DropdownMenuCheckboxItem
-                                  key={rootAcc.conta}
-                                  checked={isExpanded}
-                                  onCheckedChange={(checked) => {
-                                    setExpandedAccounts((prev) => {
-                                      const next = new Set(prev)
-                                      monthlyData.allAccounts.forEach((a: any) => {
-                                        if (
-                                          a.conta === rootAcc.conta ||
-                                          a.conta.startsWith(rootAcc.conta)
-                                        ) {
-                                          if (checked) {
-                                            if (a.tipo === 'S') next.add(a.conta)
-                                          } else {
-                                            next.delete(a.conta)
-                                          }
-                                        }
-                                      })
-                                      return next
-                                    })
-                                  }}
-                                >
-                                  <span className="font-mono text-xs mr-2 text-slate-500">
-                                    {rootAcc.conta}
-                                  </span>
-                                  <span className="truncate">{rootAcc.nome}</span>
-                                </DropdownMenuCheckboxItem>
-                              )
-                            })}
+                          <DropdownMenuItem onClick={collapseToLevel1}>
+                            Mostrar Nível 1 (Sintéticas)
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setExpandedAccounts((prev) => {
+                                const next = new Set<string>()
+                                monthlyData.allAccounts.forEach((a: any) => {
+                                  if (parseInt(a.nivel) < 2 && a.tipo === 'S') next.add(a.conta)
+                                })
+                                return next
+                              })
+                            }}
+                          >
+                            Expandir até Nível 2
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setExpandedAccounts((prev) => {
+                                const next = new Set<string>()
+                                monthlyData.allAccounts.forEach((a: any) => {
+                                  if (parseInt(a.nivel) < 3 && a.tipo === 'S') next.add(a.conta)
+                                })
+                                return next
+                              })
+                            }}
+                          >
+                            Expandir até Nível 3
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setExpandedAccounts((prev) => {
+                                const next = new Set<string>()
+                                monthlyData.allAccounts.forEach((a: any) => {
+                                  if (parseInt(a.nivel) < 4 && a.tipo === 'S') next.add(a.conta)
+                                })
+                                return next
+                              })
+                            }}
+                          >
+                            Expandir até Nível 4
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setExpandedAccounts((prev) => {
+                                const next = new Set<string>()
+                                monthlyData.allAccounts.forEach((a: any) => {
+                                  if (parseInt(a.nivel) < 5 && a.tipo === 'S') next.add(a.conta)
+                                })
+                                return next
+                              })
+                            }}
+                          >
+                            Expandir até Nível 5
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={expandAllAccounts}>
+                            Expandir Todos
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -7222,8 +7247,6 @@ export default function App() {
                   <tbody className="divide-y divide-slate-100">
                     {tableAccountsToDisplay.map((acc: any, index: number) => {
                       const isSintetica = acc.tipo === 'S'
-                      const isEven = index % 2 === 0
-                      const rowBg = isEven ? 'bg-white' : 'bg-slate-50'
                       const isExpanded = expandedAccounts.has(acc.conta)
                       const indent = (parseInt(acc.nivel) - 1) * 16
 
@@ -7237,7 +7260,7 @@ export default function App() {
                               openRazao(acc)
                             }
                           }}
-                          className={`transition-colors ${rowBg} hover:bg-slate-100/60 cursor-pointer`}
+                          className="transition-colors even:bg-slate-50 odd:bg-white hover:bg-slate-200/50 cursor-pointer"
                         >
                           <td
                             className="py-1.5 px-4 font-mono text-[11px] text-slate-600 border-r border-slate-50 group"
@@ -7415,14 +7438,14 @@ export default function App() {
                                 </td>
                                 {showAV && (
                                   <td
-                                    className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-slate-100/50 bg-slate-50/30 ${isSintetica ? 'font-bold text-slate-700' : 'text-slate-500'}`}
+                                    className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-slate-200/60 bg-slate-900/[0.02] ${isSintetica ? 'font-bold text-slate-700' : 'text-slate-500'}`}
                                   >
                                     {avLabel || <span className="text-slate-300">-</span>}
                                   </td>
                                 )}
                                 {showAH && (
                                   <td
-                                    className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-slate-100/50 bg-slate-50/30 ${isSintetica ? 'font-bold text-slate-700' : 'text-slate-500'}`}
+                                    className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-slate-200/60 bg-slate-900/[0.02] ${isSintetica ? 'font-bold text-slate-700' : 'text-slate-500'}`}
                                   >
                                     {ahLabel || <span className="text-slate-300">-</span>}
                                   </td>
@@ -7476,7 +7499,7 @@ export default function App() {
 
                             return (
                               <td
-                                className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-indigo-100 bg-indigo-50/30 ${isSintetica ? 'font-bold text-indigo-900' : 'text-indigo-700 font-medium'}`}
+                                className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-indigo-200/60 bg-indigo-500/[0.04] ${isSintetica ? 'font-bold text-indigo-900' : 'text-indigo-700 font-medium'}`}
                               >
                                 {accDisplayVal !== '0,00' ? (
                                   <div className="flex items-center justify-end gap-2 w-full">
@@ -8111,7 +8134,7 @@ export default function App() {
                   {sortedRazaoTransactions.map((tx, i) => (
                     <TableRow
                       key={i}
-                      className={`hover:bg-slate-100/60 transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}
+                      className="hover:bg-slate-100/60 transition-colors even:bg-slate-50 odd:bg-white"
                     >
                       <TableCell className="font-mono text-[11px] text-slate-500 py-3">
                         {tx.data}
