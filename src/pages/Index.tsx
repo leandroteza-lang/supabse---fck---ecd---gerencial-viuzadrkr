@@ -112,6 +112,21 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+} from '@/components/ui/context-menu'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
@@ -375,6 +390,15 @@ const ExplanationPanel = ({
       )}
     </div>
   )
+}
+
+interface AnalysisProfile {
+  id: string
+  name: string
+  globalAvMode: 'default' | 'parent'
+  globalAhMode: 'previous' | 'base_period'
+  basePeriodForAh?: string
+  customAvBases: Record<string, string>
 }
 
 const EditableTitle = ({
@@ -644,6 +668,27 @@ export default function App() {
   const [detailsTab, setDetailsTab] = useState('monthly')
 
   const [viewPresets, setViewPresets] = useState<any[]>(() => getSavedState('viewPresets', []))
+
+  const [analysisProfiles, setAnalysisProfiles] = useState<AnalysisProfile[]>(() =>
+    getSavedState('analysisProfiles', [
+      {
+        id: 'default',
+        name: 'Padrão (Receita/Ativo)',
+        globalAvMode: 'default',
+        globalAhMode: 'previous',
+        customAvBases: {},
+      },
+    ]),
+  )
+  const [activeProfileId, setActiveProfileId] = useState<string>(() =>
+    getSavedState('activeProfileId', 'default'),
+  )
+  const [isProfileManagerOpen, setIsProfileManagerOpen] = useState(false)
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null)
+  const [isCustomBaseModalOpen, setIsCustomBaseModalOpen] = useState(false)
+  const [customBaseTargetAcc, setCustomBaseTargetAcc] = useState<string | null>(null)
+  const [customBaseSearch, setCustomBaseSearch] = useState('')
+
   const [selectedMonthlyAccounts, setSelectedMonthlyAccounts] = useState<string[]>([])
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set())
   const [isAccountFilterOpen, setIsAccountFilterOpen] = useState(false)
@@ -902,6 +947,8 @@ export default function App() {
       expenseAccountToGroup,
       expenseRange,
       viewPresets,
+      analysisProfiles,
+      activeProfileId,
     }
     localStorage.setItem('boardecd_config', JSON.stringify(configData))
 
@@ -972,6 +1019,8 @@ export default function App() {
     expenseAccountToGroup,
     expenseRange,
     viewPresets,
+    analysisProfiles,
+    activeProfileId,
     user,
     companyInfo,
   ])
@@ -1055,6 +1104,8 @@ export default function App() {
       customDaMapping,
       customExpenseGroups,
       expenseAccountToGroup,
+      analysisProfiles,
+      activeProfileId,
     }
     const blob = new Blob([JSON.stringify(configData, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -1083,6 +1134,8 @@ export default function App() {
         if (configData.customExpenseGroups) setCustomExpenseGroups(configData.customExpenseGroups)
         if (configData.expenseAccountToGroup)
           setExpenseAccountToGroup(configData.expenseAccountToGroup)
+        if (configData.analysisProfiles) setAnalysisProfiles(configData.analysisProfiles)
+        if (configData.activeProfileId) setActiveProfileId(configData.activeProfileId)
         // Exibindo um mini aviso temporal poderia ser melhor, mas usaremos um modal simples.
         alert(
           'Configurações carregadas com sucesso! Todos os gráficos e mapeamentos foram restaurados.',
@@ -1824,6 +1877,23 @@ export default function App() {
       else next.add(conta)
       return next
     })
+  }
+
+  const setAvBase = (accountCode: string, base: string | null) => {
+    setAnalysisProfiles((prev) =>
+      prev.map((p) => {
+        if (p.id === activeProfileId) {
+          const newBases = { ...p.customAvBases }
+          if (base === null) {
+            delete newBases[accountCode]
+          } else {
+            newBases[accountCode] = base
+          }
+          return { ...p, customAvBases: newBases }
+        }
+        return p
+      }),
+    )
   }
 
   const handleSavePreset = () => {
@@ -3482,6 +3552,56 @@ export default function App() {
     link.href = url
     link.download = `resultado_${activeTab}_${companyInfo ? companyInfo.cnpj : 'ecd'}.csv`
     link.click()
+  }
+
+  const activeProfile =
+    analysisProfiles.find((p) => p.id === activeProfileId) || analysisProfiles[0]
+
+  const getBaseValueForAccount = (acc: any, period: string) => {
+    let baseAccCode = activeProfile.customAvBases?.[acc.conta]
+
+    if (!baseAccCode) {
+      if (activeProfile.globalAvMode === 'parent') {
+        baseAccCode = accountParentMap[acc.conta]
+      } else {
+        const isPatrimonial = acc.conta.startsWith('1') || acc.conta.startsWith('2')
+        return isPatrimonial
+          ? baseValuesPerPeriod[period]?.ativo
+          : baseValuesPerPeriod[period]?.receita
+      }
+    }
+
+    if (baseAccCode === 'parent') {
+      baseAccCode = accountParentMap[acc.conta]
+    } else if (baseAccCode === 'root') {
+      baseAccCode = monthlyData.allAccounts.find(
+        (a: any) => acc.conta.startsWith(a.conta) && a.nivel === '1',
+      )?.conta
+      if (!baseAccCode) baseAccCode = acc.conta.split('.')[0]
+    }
+
+    if (baseAccCode) {
+      const baseAcc = monthlyData.allAccounts.find((a: any) => a.conta === baseAccCode)
+      if (baseAcc) {
+        const sld = baseAcc.saldos[period]
+        if (sld) {
+          const isResult =
+            baseAcc.natureza === '04' ||
+            baseAcc.natureza === '4' ||
+            baseAcc.conta.startsWith('3') ||
+            baseAcc.conta.startsWith('4') ||
+            baseAcc.conta.startsWith('5')
+          if (!isAccumulated && isResult) {
+            return Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
+          } else {
+            return Math.abs(getRawNumber(sld.sldFin))
+          }
+        }
+      }
+    }
+
+    const isPatrimonial = acc.conta.startsWith('1') || acc.conta.startsWith('2')
+    return isPatrimonial ? baseValuesPerPeriod[period]?.ativo : baseValuesPerPeriod[period]?.receita
   }
 
   const ToggleAccumulated = () => (
@@ -7144,6 +7264,34 @@ export default function App() {
                       Filtro de Contas & Presets
                     </button>
 
+                    <div className="flex items-center gap-2 border-l border-slate-200 pl-4 ml-2">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-widest hidden xl:block">
+                        Perfil:
+                      </span>
+                      <Select value={activeProfileId} onValueChange={setActiveProfileId}>
+                        <SelectTrigger className="w-[180px] h-9 text-sm bg-white font-bold text-indigo-700 shadow-sm border-slate-200">
+                          <SelectValue placeholder="Selecione um Perfil" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {analysisProfiles.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <button
+                        onClick={() => {
+                          setEditingProfileId(activeProfileId)
+                          setIsProfileManagerOpen(true)
+                        }}
+                        className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors border border-transparent hover:border-slate-200 bg-white shadow-sm"
+                        title="Gerir Perfis de Análise"
+                      >
+                        <Settings className="w-4 h-4" />
+                      </button>
+                    </div>
+
                     <div className="flex items-center gap-4 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
                       <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
                         <input
@@ -7312,14 +7460,61 @@ export default function App() {
                           <td
                             className={`py-1.5 px-4 text-[13px] ${isDarkBg ? 'text-white' : 'text-blue-950'}`}
                           >
-                            {acc.nome}
-                            {isSintetica && (
-                              <span
-                                className={`ml-2 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${isDarkBg ? 'bg-white/20 text-white' : 'bg-blue-900/10 text-blue-900'}`}
-                              >
-                                Sintética
-                              </span>
-                            )}
+                            <ContextMenu>
+                              <ContextMenuTrigger asChild>
+                                <div className="w-full h-full cursor-context-menu flex items-center">
+                                  {acc.nome}
+                                  {isSintetica && (
+                                    <span
+                                      className={`ml-2 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${isDarkBg ? 'bg-white/20 text-white' : 'bg-blue-900/10 text-blue-900'}`}
+                                    >
+                                      Sintética
+                                    </span>
+                                  )}
+                                </div>
+                              </ContextMenuTrigger>
+                              <ContextMenuContent className="w-64">
+                                <ContextMenuLabel className="text-xs text-slate-500 uppercase">
+                                  Configurar AV Base
+                                </ContextMenuLabel>
+                                <ContextMenuSeparator />
+                                <ContextMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setAvBase(acc.conta, 'parent')
+                                  }}
+                                >
+                                  Relativa à Conta Pai Imediata
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setAvBase(acc.conta, 'root')
+                                  }}
+                                >
+                                  Relativa ao Grupo Raiz (Nível 1)
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setCustomBaseTargetAcc(acc.conta)
+                                    setIsCustomBaseModalOpen(true)
+                                  }}
+                                >
+                                  Escolher Conta Específica...
+                                </ContextMenuItem>
+                                <ContextMenuSeparator />
+                                <ContextMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setAvBase(acc.conta, null)
+                                  }}
+                                  className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
+                                >
+                                  <RotateCcw className="w-4 h-4 mr-2" /> Restaurar Padrão
+                                </ContextMenuItem>
+                              </ContextMenuContent>
+                            </ContextMenu>
                           </td>
                           {periodsToDisplay.map((period: string) => {
                             const sld = acc.saldos[period]
@@ -7357,11 +7552,7 @@ export default function App() {
                             // Análise Vertical
                             let avLabel = null
                             if (showAV && rawVal > 0) {
-                              const isPatrimonial =
-                                acc.conta.startsWith('1') || acc.conta.startsWith('2')
-                              const base = isPatrimonial
-                                ? baseValuesPerPeriod[period]?.ativo
-                                : baseValuesPerPeriod[period]?.receita
+                              const base = getBaseValueForAccount(acc, period)
                               if (base && base > 0) {
                                 const avPct = (rawVal / base) * 100
                                 avLabel = (
@@ -7377,12 +7568,16 @@ export default function App() {
 
                             // Análise Horizontal
                             let ahLabel = null
-                            const originalIndex = monthlyData.periods.indexOf(period)
-                            if (showAH && originalIndex > 0) {
-                              const prevPeriod = monthlyData.periods[originalIndex - 1]
-                              const prevSld = acc.saldos[prevPeriod]
-                              let prevVal = 0
-                              if (prevSld) {
+                            let prevVal = 0
+                            let hasValidPrev = false
+
+                            if (
+                              activeProfile.globalAhMode === 'base_period' &&
+                              activeProfile.basePeriodForAh
+                            ) {
+                              const baseSld = acc.saldos[activeProfile.basePeriodForAh]
+                              if (baseSld) {
+                                hasValidPrev = true
                                 const isResult =
                                   acc.natureza === '04' ||
                                   acc.natureza === '4' ||
@@ -7391,13 +7586,37 @@ export default function App() {
                                   acc.conta.startsWith('5')
                                 if (!isAccumulated && isResult) {
                                   prevVal = Math.abs(
-                                    getRawNumber(prevSld.debito) - getRawNumber(prevSld.credito),
+                                    getRawNumber(baseSld.debito) - getRawNumber(baseSld.credito),
                                   )
                                 } else {
-                                  prevVal = Math.abs(getRawNumber(prevSld.sldFin))
+                                  prevVal = Math.abs(getRawNumber(baseSld.sldFin))
                                 }
                               }
+                            } else {
+                              const originalIndex = monthlyData.periods.indexOf(period)
+                              if (originalIndex > 0) {
+                                const prevPeriod = monthlyData.periods[originalIndex - 1]
+                                const prevSld = acc.saldos[prevPeriod]
+                                if (prevSld) {
+                                  hasValidPrev = true
+                                  const isResult =
+                                    acc.natureza === '04' ||
+                                    acc.natureza === '4' ||
+                                    acc.conta.startsWith('3') ||
+                                    acc.conta.startsWith('4') ||
+                                    acc.conta.startsWith('5')
+                                  if (!isAccumulated && isResult) {
+                                    prevVal = Math.abs(
+                                      getRawNumber(prevSld.debito) - getRawNumber(prevSld.credito),
+                                    )
+                                  } else {
+                                    prevVal = Math.abs(getRawNumber(prevSld.sldFin))
+                                  }
+                                }
+                              }
+                            }
 
+                            if (hasValidPrev) {
                               if (prevVal > 0) {
                                 const ahPct = (rawVal / prevVal - 1) * 100
                                 const isPositive = ahPct > 0
@@ -8861,6 +9080,241 @@ export default function App() {
             >
               Concluir e Ver Painel
             </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isProfileManagerOpen} onOpenChange={setIsProfileManagerOpen}>
+        <DialogContent className="sm:max-w-2xl bg-white">
+          <DialogHeader>
+            <DialogTitle>Gestor de Perfis de Análise</DialogTitle>
+            <DialogDescription>
+              Crie perfis personalizados para Análise Vertical e Horizontal.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4">
+            <div className="border-r border-slate-100 pr-4 flex flex-col gap-2">
+              <h4 className="text-sm font-bold text-slate-800 mb-2">Seus Perfis</h4>
+              {analysisProfiles.map((p) => (
+                <div
+                  key={p.id}
+                  className={`p-2 rounded-lg cursor-pointer text-sm font-medium transition-colors flex justify-between items-center group ${editingProfileId === p.id ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-700'}`}
+                  onClick={() => setEditingProfileId(p.id)}
+                >
+                  <span className="truncate">{p.name}</span>
+                  {p.id !== 'default' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setAnalysisProfiles((prev) => prev.filter((x) => x.id !== p.id))
+                        if (editingProfileId === p.id) setEditingProfileId('default')
+                        if (activeProfileId === p.id) setActiveProfileId('default')
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-700"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={() => {
+                  const newId = `profile_${Date.now()}`
+                  setAnalysisProfiles((prev) => [
+                    ...prev,
+                    {
+                      id: newId,
+                      name: `Novo Perfil ${prev.length}`,
+                      globalAvMode: 'default',
+                      globalAhMode: 'previous',
+                      customAvBases: {},
+                    },
+                  ])
+                  setEditingProfileId(newId)
+                }}
+                className="mt-2 text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> Criar Novo Perfil
+              </button>
+            </div>
+
+            <div className="md:col-span-2 flex flex-col gap-4">
+              {editingProfileId ? (
+                (() => {
+                  const profile = analysisProfiles.find((p) => p.id === editingProfileId)
+                  if (!profile) return null
+
+                  const updateProfile = (updates: Partial<AnalysisProfile>) => {
+                    setAnalysisProfiles((prev) =>
+                      prev.map((p) => (p.id === editingProfileId ? { ...p, ...updates } : p)),
+                    )
+                  }
+
+                  return (
+                    <>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
+                          Nome do Perfil
+                        </label>
+                        <Input
+                          value={profile.name}
+                          onChange={(e) => updateProfile({ name: e.target.value })}
+                          className="h-9"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
+                          Análise Vertical (Padrão Global)
+                        </label>
+                        <Select
+                          value={profile.globalAvMode}
+                          onValueChange={(val: any) => updateProfile({ globalAvMode: val })}
+                        >
+                          <SelectTrigger className="h-9 bg-white">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">
+                              Padrão (Ativo Total / Receita Líquida)
+                            </SelectItem>
+                            <SelectItem value="parent">Relativa à Conta Pai Imediata</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
+                          Análise Horizontal (Comparação)
+                        </label>
+                        <Select
+                          value={profile.globalAhMode}
+                          onValueChange={(val: any) => updateProfile({ globalAhMode: val })}
+                        >
+                          <SelectTrigger className="h-9 bg-white">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="previous">Período Imediatamente Anterior</SelectItem>
+                            <SelectItem value="base_period">Período Base Fixo</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {profile.globalAhMode === 'base_period' && (
+                        <div>
+                          <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
+                            Período Base para AH
+                          </label>
+                          <Select
+                            value={profile.basePeriodForAh || ''}
+                            onValueChange={(val) => updateProfile({ basePeriodForAh: val })}
+                          >
+                            <SelectTrigger className="h-9 bg-white">
+                              <SelectValue placeholder="Selecione um período..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {monthlyData.periods.map((p: string) => (
+                                <SelectItem key={p} value={p}>
+                                  {p.split(' a ')[0].substring(3)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      {Object.keys(profile.customAvBases || {}).length > 0 && (
+                        <div className="mt-4 border-t border-slate-100 pt-4">
+                          <label className="text-xs font-bold text-slate-500 uppercase block mb-2">
+                            Exceções de Base AV Customizadas
+                          </label>
+                          <div className="max-h-32 overflow-y-auto space-y-2 custom-scrollbar pr-2">
+                            {Object.entries(profile.customAvBases).map(([acc, base]) => (
+                              <div
+                                key={acc}
+                                className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-200 text-xs"
+                              >
+                                <div>
+                                  <span className="font-bold text-slate-700">{acc}</span>
+                                  <span className="mx-2 text-slate-400">→</span>
+                                  <span className="text-indigo-600 font-medium">
+                                    {base === 'parent'
+                                      ? 'Conta Pai'
+                                      : base === 'root'
+                                        ? 'Conta Raiz'
+                                        : base}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const newBases = { ...profile.customAvBases }
+                                    delete newBases[acc]
+                                    updateProfile({ customAvBases: newBases })
+                                  }}
+                                  className="text-rose-500 hover:bg-rose-100 p-1 rounded"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )
+                })()
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-sm text-slate-400">
+                  Selecione um perfil para editar
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isCustomBaseModalOpen} onOpenChange={setIsCustomBaseModalOpen}>
+        <DialogContent className="sm:max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle>Selecionar Base para {customBaseTargetAcc}</DialogTitle>
+            <DialogDescription>
+              Escolha qual conta será usada como 100% na Análise Vertical desta linha.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="relative mb-4">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar conta..."
+                value={customBaseSearch}
+                onChange={(e) => setCustomBaseSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <div className="max-h-64 overflow-y-auto custom-scrollbar border border-slate-100 rounded-lg">
+              {monthlyData.allAccounts
+                .filter(
+                  (a: any) =>
+                    !customBaseSearch ||
+                    a.conta.includes(customBaseSearch) ||
+                    a.nome.toLowerCase().includes(customBaseSearch.toLowerCase()),
+                )
+                .map((a: any) => (
+                  <div
+                    key={a.conta}
+                    onClick={() => {
+                      if (customBaseTargetAcc) {
+                        setAvBase(customBaseTargetAcc, a.conta)
+                      }
+                      setIsCustomBaseModalOpen(false)
+                      setCustomBaseTargetAcc(null)
+                    }}
+                    className="px-3 py-2 hover:bg-slate-50 border-b border-slate-50 cursor-pointer flex flex-col transition-colors"
+                  >
+                    <span className="font-mono text-xs font-bold text-slate-600">{a.conta}</span>
+                    <span className="text-sm text-slate-800 truncate">{a.nome}</span>
+                  </div>
+                ))}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
