@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useMemo, useEffect, useRef } from 'react'
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   BarChart,
   Bar,
@@ -1760,13 +1760,32 @@ export default function App() {
     return map
   }, [monthlyData])
 
-  const isAccountVisibleInTree = (conta: string) => {
-    let curr = accountParentMap[conta]
-    while (curr) {
-      if (!expandedAccounts.has(curr)) return false
-      curr = accountParentMap[curr]
-    }
-    return true
+  const isAccountVisibleInTree = useCallback(
+    (conta: string) => {
+      let curr = accountParentMap[conta]
+      while (curr) {
+        if (!expandedAccounts.has(curr)) return false
+        curr = accountParentMap[curr]
+      }
+      return true
+    },
+    [accountParentMap, expandedAccounts],
+  )
+
+  const tableAccountsToDisplay = useMemo(() => {
+    return accountsToDisplay.filter((acc: any) => isAccountVisibleInTree(acc.conta))
+  }, [accountsToDisplay, isAccountVisibleInTree])
+
+  const expandAllAccounts = () => {
+    if (!monthlyData?.allAccounts) return
+    const allSinteticas = monthlyData.allAccounts
+      .filter((a: any) => a.tipo === 'S')
+      .map((a: any) => a.conta)
+    setExpandedAccounts(new Set(allSinteticas))
+  }
+
+  const collapseToLevel1 = () => {
+    setExpandedAccounts(new Set())
   }
 
   const toggleAccountSelection = (conta: string, currentState: boolean) => {
@@ -6955,6 +6974,23 @@ export default function App() {
 
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                   <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+                      <button
+                        onClick={collapseToLevel1}
+                        className="px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap hover:bg-white hover:shadow-sm text-slate-600 hover:text-indigo-700"
+                        title="Recolher para o Nível 1"
+                      >
+                        Recolher (N1)
+                      </button>
+                      <button
+                        onClick={expandAllAccounts}
+                        className="px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap hover:bg-white hover:shadow-sm text-slate-600 hover:text-indigo-700"
+                        title="Expandir todas as contas"
+                      >
+                        Expandir Todos
+                      </button>
+                    </div>
+
                     <div className="relative period-dropdown-container w-full sm:w-auto z-30">
                       <button
                         onClick={() => setIsPeriodDropdownOpen(!isPeriodDropdownOpen)}
@@ -7131,22 +7167,49 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {accountsToDisplay.map((acc: any, index: number) => {
+                    {tableAccountsToDisplay.map((acc: any, index: number) => {
                       const isSintetica = acc.tipo === 'S'
                       const isEven = index % 2 === 0
-                      const rowBg = isEven ? 'bg-white' : 'bg-blue-200'
+                      const rowBg = isEven ? 'bg-white' : 'bg-blue-50/30'
+                      const isExpanded = expandedAccounts.has(acc.conta)
+                      const indent = (parseInt(acc.nivel) - 1) * 16
 
                       return (
                         <tr
                           key={acc.conta}
-                          onClick={() => !isSintetica && openRazao(acc)}
-                          className={`transition-colors ${rowBg} hover:bg-blue-300 ${!isSintetica ? 'cursor-pointer' : ''}`}
+                          onClick={() => {
+                            if (isSintetica) {
+                              toggleAccountExpand(acc.conta)
+                            } else {
+                              openRazao(acc)
+                            }
+                          }}
+                          className={`transition-colors ${rowBg} hover:bg-blue-100/50 cursor-pointer`}
                         >
-                          <td className="py-1.5 px-4 font-mono text-[11px] text-slate-600 border-r border-slate-50 group">
-                            {isSintetica ? null : (
-                              <Search className="w-3.5 h-3.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity inline mr-1" />
-                            )}
-                            {isSintetica ? <strong>{acc.conta}</strong> : acc.conta}
+                          <td
+                            className="py-1.5 px-4 font-mono text-[11px] text-slate-600 border-r border-slate-50 group"
+                            style={{ paddingLeft: `${indent + 16}px` }}
+                          >
+                            <div className="flex items-center gap-1">
+                              {isSintetica ? (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggleAccountExpand(acc.conta)
+                                  }}
+                                  className="w-4 h-4 flex items-center justify-center text-slate-500 hover:bg-slate-200 rounded"
+                                >
+                                  <ChevronDown
+                                    className={`w-3.5 h-3.5 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
+                                  />
+                                </button>
+                              ) : (
+                                <div className="w-4 h-4 flex items-center justify-center">
+                                  <Search className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                              )}
+                              {isSintetica ? <strong>{acc.conta}</strong> : acc.conta}
+                            </div>
                           </td>
                           <td
                             className={`py-1.5 px-4 text-[13px] ${isSintetica ? 'font-bold text-slate-800' : 'text-slate-600'}`}
@@ -7380,7 +7443,7 @@ export default function App() {
                         </tr>
                       )
                     })}
-                    {accountsToDisplay.length === 0 && (
+                    {tableAccountsToDisplay.length === 0 && (
                       <tr>
                         <td
                           colSpan={
