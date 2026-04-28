@@ -459,6 +459,13 @@ export default function App() {
   const [filesCount, setFilesCount] = useState(0)
   const [isConfigLoaded, setIsConfigLoaded] = useState(false)
 
+  const [isStagingModalOpen, setIsStagingModalOpen] = useState(false)
+  const [stagingPayload, setStagingPayload] = useState<{
+    info: any
+    extractedData: any[]
+    extractedTx: any[]
+  } | null>(null)
+
   const [isAccumulated, setIsAccumulated] = useState(true)
   const [showAV, setShowAV] = useState(false)
   const [showAH, setShowAH] = useState(false)
@@ -1289,13 +1296,37 @@ export default function App() {
       return a.conta.localeCompare(b.conta)
     })
 
-    setCompanyInfo(mergedInfo)
-    setData(allExtracted)
-
-    // Save to Supabase (we wait for it so it fully syncs)
-    await saveToSupabase(mergedInfo, allExtracted, allExtractedTx)
-
+    setStagingPayload({
+      info: mergedInfo,
+      extractedData: allExtracted,
+      extractedTx: allExtractedTx,
+    })
+    setIsStagingModalOpen(true)
     setLoading(false)
+    if (e.target) e.target.value = ''
+  }
+
+  const confirmImport = async () => {
+    if (!stagingPayload) return
+    setIsStagingModalOpen(false)
+    setLoading(true)
+
+    setCompanyInfo(stagingPayload.info)
+    setData(stagingPayload.extractedData)
+
+    await saveToSupabase(
+      stagingPayload.info,
+      stagingPayload.extractedData,
+      stagingPayload.extractedTx,
+    )
+
+    setStagingPayload(null)
+    setLoading(false)
+  }
+
+  const cancelImport = () => {
+    setStagingPayload(null)
+    setIsStagingModalOpen(false)
   }
 
   const saveToSupabase = async (info: any, extractedData: any[], extractedTx: any[]) => {
@@ -8029,6 +8060,117 @@ export default function App() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* --- MODAL DE STAGING (PREVIEW IMPORTAÇÃO) --- */}
+      <Dialog
+        open={isStagingModalOpen}
+        onOpenChange={(open) => {
+          if (!open) cancelImport()
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black text-slate-800 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-indigo-600" />
+              Revisão de Importação
+            </DialogTitle>
+            <DialogDescription>
+              Analisamos o arquivo SPED selecionado. Verifique o resumo abaixo antes de confirmar a
+              gravação no banco de dados.
+            </DialogDescription>
+          </DialogHeader>
+
+          {stagingPayload && (
+            <div className="space-y-4 py-4">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                  Empresa Identificada
+                </h4>
+                <p className="font-bold text-slate-800 text-lg">
+                  {stagingPayload.info?.nome || 'N/A'}
+                </p>
+                <p className="font-mono text-slate-500 text-sm mt-1">
+                  {stagingPayload.info?.cnpj || 'N/A'}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                    Períodos Encontrados
+                  </h4>
+                  <div className="max-h-24 overflow-y-auto custom-scrollbar pr-2">
+                    {Array.from(
+                      new Set(stagingPayload.extractedData.map((d: any) => d.periodo)),
+                    ).map((p: any) => (
+                      <div key={p} className="text-sm font-medium text-slate-700 mb-1">
+                        {p}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-center">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                    Volume de Dados
+                  </h4>
+                  <div className="space-y-2">
+                    <p className="text-sm text-slate-600 flex justify-between">
+                      <span>Contas Analíticas:</span>
+                      <span className="font-bold text-slate-800">
+                        {
+                          new Set(
+                            stagingPayload.extractedData
+                              .filter((d) => d.tipo !== 'S')
+                              .map((d) => d.conta),
+                          ).size
+                        }
+                      </span>
+                    </p>
+                    <p className="text-sm text-slate-600 flex justify-between">
+                      <span>Saldos Mensais:</span>
+                      <span className="font-bold text-slate-800">
+                        {stagingPayload.extractedData.length}
+                      </span>
+                    </p>
+                    <p className="text-sm text-slate-600 flex justify-between">
+                      <span>Lançamentos (I250):</span>
+                      <span className="font-bold text-slate-800">
+                        {stagingPayload.extractedTx.length}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <Alert className="bg-amber-50/50 border-amber-200 mt-4">
+                <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5" />
+                <AlertTitle className="text-amber-800 font-bold text-sm">
+                  Atenção à Duplicidade
+                </AlertTitle>
+                <AlertDescription className="text-amber-700/80 text-xs mt-1">
+                  Ao confirmar, o sistema usará a lógica de atualização segura. Se estes períodos já
+                  existirem para o CNPJ, os saldos serão atualizados com os novos valores.
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+            <button
+              onClick={cancelImport}
+              className="px-4 py-2 rounded-lg font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={confirmImport}
+              className="px-6 py-2.5 rounded-lg font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-md flex items-center gap-2"
+            >
+              <Check className="w-4 h-4" /> Confirmar Importação
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <style
         dangerouslySetInnerHTML={{
