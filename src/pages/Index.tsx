@@ -119,6 +119,9 @@ import {
   ContextMenuItem,
   ContextMenuLabel,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubTrigger,
+  ContextMenuSubContent,
 } from '@/components/ui/context-menu'
 import {
   Select,
@@ -398,7 +401,7 @@ interface AnalysisProfile {
   globalAvMode: 'default' | 'parent'
   globalAhMode: 'previous' | 'base_period'
   basePeriodForAh?: string
-  customAvBases: Record<string, string>
+  customAvBases: Record<string, string | string[]>
 }
 
 const EditableTitle = ({
@@ -688,6 +691,11 @@ export default function App() {
   const [isCustomBaseModalOpen, setIsCustomBaseModalOpen] = useState(false)
   const [customBaseTargetAcc, setCustomBaseTargetAcc] = useState<string | null>(null)
   const [customBaseSearch, setCustomBaseSearch] = useState('')
+
+  const [isCustomMultiBaseModalOpen, setIsCustomMultiBaseModalOpen] = useState(false)
+  const [customMultiBaseTargetAcc, setCustomMultiBaseTargetAcc] = useState<string | null>(null)
+  const [customMultiBaseSearch, setCustomMultiBaseSearch] = useState('')
+  const [customMultiBaseSelection, setCustomMultiBaseSelection] = useState<string[]>([])
 
   const [selectedMonthlyAccounts, setSelectedMonthlyAccounts] = useState<string[]>([])
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set())
@@ -1879,7 +1887,7 @@ export default function App() {
     })
   }
 
-  const setAvBase = (accountCode: string, base: string | null) => {
+  const setAvBase = (accountCode: string, base: string | string[] | null) => {
     setAnalysisProfiles((prev) =>
       prev.map((p) => {
         if (p.id === activeProfileId) {
@@ -3558,7 +3566,33 @@ export default function App() {
     analysisProfiles.find((p) => p.id === activeProfileId) || analysisProfiles[0]
 
   const getBaseValueForAccount = (acc: any, period: string) => {
-    let baseAccCode = activeProfile.customAvBases?.[acc.conta]
+    const baseConfig = activeProfile.customAvBases?.[acc.conta]
+
+    if (Array.isArray(baseConfig)) {
+      let totalBase = 0
+      baseConfig.forEach((baseAccCode) => {
+        const baseAcc = monthlyData.allAccounts.find((a: any) => a.conta === baseAccCode)
+        if (baseAcc) {
+          const sld = baseAcc.saldos[period]
+          if (sld) {
+            const isResult =
+              baseAcc.natureza === '04' ||
+              baseAcc.natureza === '4' ||
+              baseAcc.conta.startsWith('3') ||
+              baseAcc.conta.startsWith('4') ||
+              baseAcc.conta.startsWith('5')
+            if (!isAccumulated && isResult) {
+              totalBase += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
+            } else {
+              totalBase += Math.abs(getRawNumber(sld.sldFin))
+            }
+          }
+        }
+      })
+      return totalBase
+    }
+
+    let baseAccCode = baseConfig as string | undefined
 
     if (!baseAccCode) {
       if (activeProfile.globalAvMode === 'parent') {
@@ -7478,22 +7512,52 @@ export default function App() {
                                   Configurar AV Base
                                 </ContextMenuLabel>
                                 <ContextMenuSeparator />
-                                <ContextMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setAvBase(acc.conta, 'parent')
-                                  }}
-                                >
-                                  Relativa à Conta Pai Imediata
-                                </ContextMenuItem>
-                                <ContextMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setAvBase(acc.conta, 'root')
-                                  }}
-                                >
-                                  Relativa ao Grupo Raiz (Nível 1)
-                                </ContextMenuItem>
+                                <ContextMenuSub>
+                                  <ContextMenuSubTrigger>
+                                    Relativa a Nível Superior
+                                  </ContextMenuSubTrigger>
+                                  <ContextMenuSubContent className="w-48">
+                                    <ContextMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setAvBase(acc.conta, 'parent')
+                                      }}
+                                    >
+                                      Pai Imediato (Padrão)
+                                    </ContextMenuItem>
+                                    <ContextMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setAvBase(acc.conta, 'root')
+                                      }}
+                                    >
+                                      Grupo Raiz (Nível 1)
+                                    </ContextMenuItem>
+                                    <ContextMenuSeparator />
+                                    {(() => {
+                                      const ancs = []
+                                      let curr = accountParentMap[acc.conta]
+                                      while (curr) {
+                                        ancs.push(curr)
+                                        curr = accountParentMap[curr]
+                                      }
+                                      if (ancs.length > 0) {
+                                        return ancs.map((anc) => (
+                                          <ContextMenuItem
+                                            key={anc}
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              setAvBase(acc.conta, anc)
+                                            }}
+                                          >
+                                            Nível {anc}
+                                          </ContextMenuItem>
+                                        ))
+                                      }
+                                      return null
+                                    })()}
+                                  </ContextMenuSubContent>
+                                </ContextMenuSub>
                                 <ContextMenuItem
                                   onClick={(e) => {
                                     e.stopPropagation()
@@ -7501,7 +7565,20 @@ export default function App() {
                                     setIsCustomBaseModalOpen(true)
                                   }}
                                 >
-                                  Escolher Conta Específica...
+                                  Escolher Conta Única...
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setCustomMultiBaseTargetAcc(acc.conta)
+                                    const existing = activeProfile.customAvBases?.[acc.conta]
+                                    setCustomMultiBaseSelection(
+                                      Array.isArray(existing) ? existing : [],
+                                    )
+                                    setIsCustomMultiBaseModalOpen(true)
+                                  }}
+                                >
+                                  Compor Base Manualmente...
                                 </ContextMenuItem>
                                 <ContextMenuSeparator />
                                 <ContextMenuItem
@@ -9236,11 +9313,13 @@ export default function App() {
                                   <span className="font-bold text-slate-700">{acc}</span>
                                   <span className="mx-2 text-slate-400">→</span>
                                   <span className="text-indigo-600 font-medium">
-                                    {base === 'parent'
-                                      ? 'Conta Pai'
-                                      : base === 'root'
-                                        ? 'Conta Raiz'
-                                        : base}
+                                    {Array.isArray(base)
+                                      ? `Composição (${base.length} contas)`
+                                      : base === 'parent'
+                                        ? 'Conta Pai'
+                                        : base === 'root'
+                                          ? 'Conta Raiz'
+                                          : base}
                                   </span>
                                 </div>
                                 <button
@@ -9267,6 +9346,84 @@ export default function App() {
                 </div>
               )}
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isCustomMultiBaseModalOpen} onOpenChange={setIsCustomMultiBaseModalOpen}>
+        <DialogContent className="sm:max-w-md bg-white max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Compor Base Manual</DialogTitle>
+            <DialogDescription>
+              Selecione as contas que serão somadas para formar o 100% da Análise Vertical de{' '}
+              <strong className="text-indigo-600">{customMultiBaseTargetAcc}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 flex flex-col min-h-0 py-4">
+            <div className="relative mb-4 shrink-0">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar conta..."
+                value={customMultiBaseSearch}
+                onChange={(e) => setCustomMultiBaseSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar border border-slate-100 rounded-lg">
+              {monthlyData.allAccounts
+                .filter(
+                  (a: any) =>
+                    !customMultiBaseSearch ||
+                    a.conta.includes(customMultiBaseSearch) ||
+                    a.nome.toLowerCase().includes(customMultiBaseSearch.toLowerCase()),
+                )
+                .map((a: any) => {
+                  const isSelected = customMultiBaseSelection.includes(a.conta)
+                  return (
+                    <label
+                      key={a.conta}
+                      className="flex items-start gap-3 px-3 py-2 hover:bg-slate-50 border-b border-slate-50 cursor-pointer transition-colors"
+                    >
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => {
+                          if (checked === true) {
+                            setCustomMultiBaseSelection((prev) => [...prev, a.conta])
+                          } else {
+                            setCustomMultiBaseSelection((prev) => prev.filter((c) => c !== a.conta))
+                          }
+                        }}
+                        className="mt-1 data-[state=checked]:bg-indigo-600 border-slate-300"
+                      />
+                      <div className="flex flex-col">
+                        <span className="font-mono text-xs font-bold text-slate-600">
+                          {a.conta}
+                        </span>
+                        <span className="text-sm text-slate-800">{a.nome}</span>
+                      </div>
+                    </label>
+                  )
+                })}
+            </div>
+          </div>
+          <div className="shrink-0 pt-4 border-t border-slate-100 flex justify-end">
+            <button
+              onClick={() => {
+                if (customMultiBaseTargetAcc) {
+                  if (customMultiBaseSelection.length === 0) {
+                    setAvBase(customMultiBaseTargetAcc, null)
+                  } else {
+                    setAvBase(customMultiBaseTargetAcc, customMultiBaseSelection)
+                  }
+                }
+                setIsCustomMultiBaseModalOpen(false)
+                setCustomMultiBaseTargetAcc(null)
+              }}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-bold transition-all shadow-md"
+            >
+              Salvar Composição ({customMultiBaseSelection.length})
+            </button>
           </div>
         </DialogContent>
       </Dialog>
