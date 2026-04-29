@@ -7234,36 +7234,59 @@ export default function App() {
             />
 
             <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100/60 flex flex-col overflow-hidden">
-              <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 bg-white">
-                <div className="relative w-full">
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                    Balancete Comparativo
-                  </h2>
-                  <p className="text-sm text-slate-500 font-medium mt-1">
-                    Evolução dos saldos contábeis ao longo do tempo extraída do arquivo SPED.
-                  </p>
+              <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col gap-6 bg-white">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div className="relative">
+                    <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                      Balancete Comparativo
+                    </h2>
+                    <p className="text-sm text-slate-500 font-medium mt-1">
+                      Evolução dos saldos contábeis ao longo do tempo extraída do arquivo SPED.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                    <div className="relative w-full sm:w-64">
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Pesquisar conta..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      />
+                    </div>
+                    <button
+                      onClick={exportCSV}
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 bg-slate-900 hover:bg-indigo-600 text-white px-6 py-2.5 rounded-lg font-bold transition-all shadow-md whitespace-nowrap"
+                    >
+                      <Download className="w-4 h-4" /> Exportar CSV
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                <div className="flex flex-col xl:flex-row justify-between gap-4 p-4 bg-slate-50/80 rounded-xl border border-slate-200">
                   <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+                    <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
                       <button
                         onClick={collapseToLevel1}
-                        className="px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap hover:bg-white hover:shadow-sm text-slate-600 hover:text-indigo-700"
+                        className="px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap hover:bg-slate-50 text-slate-600 hover:text-indigo-700"
                         title="Recolher para o Nível 1"
                       >
                         Recolher (N1)
                       </button>
+                      <div className="w-px bg-slate-100 my-1 mx-0.5"></div>
                       <button
                         onClick={expandAllAccounts}
-                        className="px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap hover:bg-white hover:shadow-sm text-slate-600 hover:text-indigo-700"
+                        className="px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap hover:bg-slate-50 text-slate-600 hover:text-indigo-700"
                         title="Expandir Todas"
                       >
                         Expandir Todas
                       </button>
+                      <div className="w-px bg-slate-100 my-1 mx-0.5"></div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap hover:bg-white hover:shadow-sm text-slate-600 hover:text-indigo-700 flex items-center gap-1">
+                          <button className="px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap hover:bg-slate-50 text-slate-600 hover:text-indigo-700 flex items-center gap-1">
                             Expandir por Nível <ChevronDown className="w-3 h-3" />
                           </button>
                         </DropdownMenuTrigger>
@@ -7333,10 +7356,10 @@ export default function App() {
                       </DropdownMenu>
                     </div>
 
-                    <div className="relative period-dropdown-container w-full sm:w-auto z-30">
+                    <div className="relative period-dropdown-container z-30 w-full sm:w-auto">
                       <button
                         onClick={() => setIsPeriodDropdownOpen(!isPeriodDropdownOpen)}
-                        className="flex items-center justify-between w-full sm:w-48 bg-white border border-slate-200 px-4 py-2.5 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                        className="flex items-center justify-between w-full sm:w-44 bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
                       >
                         <span className="flex items-center gap-2">
                           <CalendarDays className="w-4 h-4 text-indigo-600" />
@@ -7348,7 +7371,7 @@ export default function App() {
                       </button>
 
                       {isPeriodDropdownOpen && (
-                        <div className="absolute right-0 sm:left-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden flex flex-col">
+                        <div className="absolute left-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden flex flex-col">
                           <div className="p-3 border-b border-slate-100 flex justify-between gap-2 bg-slate-50">
                             <button
                               onClick={() => setSelectedMonthlyPeriods(monthlyData.periods)}
@@ -7401,41 +7424,15 @@ export default function App() {
 
                     <button
                       onClick={() => setIsAccountFilterOpen(true)}
-                      className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2.5 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                      className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm w-full sm:w-auto"
                     >
                       <Layers className="w-4 h-4 text-indigo-600" />
                       Filtro de Contas & Presets
                     </button>
+                  </div>
 
-                    <div className="flex items-center gap-2 border-l border-slate-200 pl-4 ml-2">
-                      <span className="text-xs font-bold text-slate-500 uppercase tracking-widest hidden xl:block">
-                        Perfil 1:
-                      </span>
-                      <Select value={activeProfileId} onValueChange={setActiveProfileId}>
-                        <SelectTrigger className="w-[160px] h-9 text-sm bg-white font-bold text-indigo-700 shadow-sm border-slate-200">
-                          <SelectValue placeholder="Selecione um Perfil" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {analysisProfiles.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {p.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <button
-                        onClick={() => {
-                          setEditingProfileId(activeProfileId)
-                          setIsProfileManagerOpen(true)
-                        }}
-                        className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors border border-transparent hover:border-slate-200 bg-white shadow-sm"
-                        title="Gerir Perfis de Análise"
-                      >
-                        <Settings className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-3 border-l border-slate-200 pl-4">
+                  <div className="flex flex-wrap xl:flex-nowrap items-center gap-3 xl:border-l xl:border-slate-200 xl:pl-4">
+                    <div className="flex items-center gap-3 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm w-full sm:w-auto">
                       <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
                         <input
                           type="checkbox"
@@ -7453,29 +7450,58 @@ export default function App() {
                       </label>
                     </div>
 
-                    {isComparingProfiles && (
-                      <div className="flex items-center gap-2 border-l border-slate-200 pl-4 animate-in fade-in slide-in-from-left-2">
-                        <span className="text-xs font-bold text-indigo-500 uppercase tracking-widest hidden xl:block">
-                          Perfil 2:
-                        </span>
-                        <Select value={compareProfileId} onValueChange={setCompareProfileId}>
-                          <SelectTrigger className="w-[160px] h-9 text-sm bg-indigo-50 font-bold text-indigo-700 shadow-sm border-indigo-200">
-                            <SelectValue placeholder="Selecione um Perfil" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {analysisProfiles
-                              .filter((p) => p.id !== activeProfileId)
-                              .map((p) => (
-                                <SelectItem key={p.id} value={p.id}>
-                                  {p.name}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-widest hidden sm:block">
+                        P1:
+                      </span>
+                      <Select value={activeProfileId} onValueChange={setActiveProfileId}>
+                        <SelectTrigger className="w-[140px] h-9 text-sm bg-white font-bold text-indigo-700 shadow-sm border-slate-200">
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {analysisProfiles.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
 
-                    <div className="flex items-center gap-4 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 ml-auto">
+                      {isComparingProfiles && (
+                        <>
+                          <span className="text-xs font-bold text-indigo-500 uppercase tracking-widest hidden sm:block ml-1">
+                            P2:
+                          </span>
+                          <Select value={compareProfileId} onValueChange={setCompareProfileId}>
+                            <SelectTrigger className="w-[140px] h-9 text-sm bg-indigo-50 font-bold text-indigo-700 shadow-sm border-indigo-200">
+                              <SelectValue placeholder="Selecione..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {analysisProfiles
+                                .filter((p) => p.id !== activeProfileId)
+                                .map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </>
+                      )}
+
+                      <button
+                        onClick={() => {
+                          setEditingProfileId(activeProfileId)
+                          setIsProfileManagerOpen(true)
+                        }}
+                        className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors border border-slate-200 bg-white shadow-sm ml-1"
+                        title="Gerir Perfis de Análise"
+                      >
+                        <Settings className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-4 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm w-full sm:w-auto xl:ml-auto">
                       <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
                         <input
                           type="checkbox"
@@ -7483,8 +7509,9 @@ export default function App() {
                           onChange={() => setShowAV(!showAV)}
                           className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                         />
-                        <span>Exibir AV%</span>
+                        <span>AV%</span>
                       </label>
+                      <div className="w-px h-4 bg-slate-200"></div>
                       <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
                         <input
                           type="checkbox"
@@ -7492,26 +7519,10 @@ export default function App() {
                           onChange={() => setShowAH(!showAH)}
                           className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                         />
-                        <span>Exibir AH%</span>
+                        <span>AH%</span>
                       </label>
                     </div>
                   </div>
-                  <div className="relative w-full sm:w-64 mt-3 sm:mt-0">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Pesquisar conta..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-                  <button
-                    onClick={exportCSV}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-slate-900 hover:bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-bold transition-all shadow-md"
-                  >
-                    <Download className="w-4 h-4" /> Exportar CSV
-                  </button>
                 </div>
               </div>
 
