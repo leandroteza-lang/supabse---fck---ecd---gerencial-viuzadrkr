@@ -752,6 +752,10 @@ export default function App() {
 
   const [selectedExpenseTrend, setSelectedExpenseTrend] = useState<any>(null)
 
+  const [isComparingProfiles, setIsComparingProfiles] = useState(false)
+  const [compareProfileId, setCompareProfileId] = useState<string>('')
+  const [explodedAvContext, setExplodedAvContext] = useState<any>(null)
+
   const clearRazaoFilters = () => {
     setRazaoSearch('')
     setRazaoDateFrom('')
@@ -3346,7 +3350,19 @@ export default function App() {
       })
     } else if (activeTab === 'monthly') {
       csv = 'Conta;Nome;Tipo;Nível;'
-      periodsToDisplay.forEach((p: any) => (csv += `${p} (Saldo Final);${p} (D/C);`))
+      periodsToDisplay.forEach((p: any) => {
+        csv += `${p} (Saldo Final);${p} (D/C);`
+        if (showAV) {
+          csv += `${p} AV% (${activeProfile.name});`
+          if (isComparingProfiles && compareProfileId) {
+            const p2 = analysisProfiles.find((x: any) => x.id === compareProfileId)
+            if (p2) csv += `${p} AV% (${p2.name});`
+          }
+        }
+        if (showAH) {
+          csv += `${p} AH%;`
+        }
+      })
       csv += `Acumulado ${periodsToDisplay.length} per. (Valor);Acumulado ${periodsToDisplay.length} per. (D/C);\n`
 
       monthlyData.accounts.forEach((acc: any) => {
@@ -3355,6 +3371,7 @@ export default function App() {
         csv += `${acc.conta};${acc.nome};${acc.tipo};${acc.nivel};`
         periodsToDisplay.forEach((p: any) => {
           const sld = acc.saldos[p]
+          let rawVal = 0
           if (sld) {
             const isResult =
               acc.natureza === '04' ||
@@ -3368,11 +3385,74 @@ export default function App() {
               const net = Math.abs(deb - cred)
               const ind = deb > cred ? 'D' : cred > deb ? 'C' : ''
               csv += `${net.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })};${ind};`
+              rawVal = net
             } else {
               csv += `${sld.sldFin};${sld.indDcFin};`
+              rawVal = Math.abs(getRawNumber(sld.sldFin))
             }
           } else {
             csv += '0,00;;'
+          }
+
+          if (showAV) {
+            const base1 = getBaseValueForAccountWithProfile(acc, p, activeProfile)
+            const av1 = base1 && rawVal > 0 ? ((rawVal / base1) * 100).toFixed(2) + '%' : ''
+            csv += `${av1};`
+            if (isComparingProfiles && compareProfileId) {
+              const p2 = analysisProfiles.find((x: any) => x.id === compareProfileId)
+              const base2 = p2 ? getBaseValueForAccountWithProfile(acc, p, p2) : 0
+              const av2 = base2 && rawVal > 0 ? ((rawVal / base2) * 100).toFixed(2) + '%' : ''
+              csv += `${av2};`
+            }
+          }
+
+          if (showAH) {
+            let ahPct = ''
+            let prevVal = 0
+            let hasValidPrev = false
+            if (activeProfile.globalAhMode === 'base_period' && activeProfile.basePeriodForAh) {
+              const baseSld = acc.saldos[activeProfile.basePeriodForAh]
+              if (baseSld) {
+                hasValidPrev = true
+                const isResult =
+                  acc.natureza === '04' ||
+                  acc.natureza === '4' ||
+                  acc.conta.startsWith('3') ||
+                  acc.conta.startsWith('4') ||
+                  acc.conta.startsWith('5')
+                if (!isAccumulated && isResult) {
+                  prevVal = Math.abs(getRawNumber(baseSld.debito) - getRawNumber(baseSld.credito))
+                } else {
+                  prevVal = Math.abs(getRawNumber(baseSld.sldFin))
+                }
+              }
+            } else {
+              const originalIndex = monthlyData.periods.indexOf(p)
+              if (originalIndex > 0) {
+                const prevPeriod = monthlyData.periods[originalIndex - 1]
+                const prevSld = acc.saldos[prevPeriod]
+                if (prevSld) {
+                  hasValidPrev = true
+                  const isResult =
+                    acc.natureza === '04' ||
+                    acc.natureza === '4' ||
+                    acc.conta.startsWith('3') ||
+                    acc.conta.startsWith('4') ||
+                    acc.conta.startsWith('5')
+                  if (!isAccumulated && isResult) {
+                    prevVal = Math.abs(getRawNumber(prevSld.debito) - getRawNumber(prevSld.credito))
+                  } else {
+                    prevVal = Math.abs(getRawNumber(prevSld.sldFin))
+                  }
+                }
+              }
+            }
+            if (hasValidPrev && prevVal > 0) {
+              ahPct = ((rawVal / prevVal - 1) * 100).toFixed(2) + '%'
+            } else if (hasValidPrev && prevVal === 0 && rawVal > 0) {
+              ahPct = 'N/A'
+            }
+            csv += `${ahPct};`
           }
         })
 
@@ -3565,43 +3645,51 @@ export default function App() {
   const activeProfile =
     analysisProfiles.find((p) => p.id === activeProfileId) || analysisProfiles[0]
 
-  const getBaseValueForAccount = (acc: any, period: string) => {
-    const baseConfig = activeProfile.customAvBases?.[acc.conta]
+  const getBaseDetailsForAccount = (acc: any, period: string, profile: AnalysisProfile) => {
+    const baseConfig = profile.customAvBases?.[acc.conta]
+
+    const computeVal = (baseAcc: any) => {
+      if (!baseAcc) return 0
+      const sld = baseAcc.saldos[period]
+      if (!sld) return 0
+      const isResult =
+        baseAcc.natureza === '04' ||
+        baseAcc.natureza === '4' ||
+        baseAcc.conta.startsWith('3') ||
+        baseAcc.conta.startsWith('4') ||
+        baseAcc.conta.startsWith('5')
+      if (!isAccumulated && isResult) {
+        return Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
+      }
+      return Math.abs(getRawNumber(sld.sldFin))
+    }
 
     if (Array.isArray(baseConfig)) {
-      let totalBase = 0
-      baseConfig.forEach((baseAccCode) => {
-        const baseAcc = monthlyData.allAccounts.find((a: any) => a.conta === baseAccCode)
-        if (baseAcc) {
-          const sld = baseAcc.saldos[period]
-          if (sld) {
-            const isResult =
-              baseAcc.natureza === '04' ||
-              baseAcc.natureza === '4' ||
-              baseAcc.conta.startsWith('3') ||
-              baseAcc.conta.startsWith('4') ||
-              baseAcc.conta.startsWith('5')
-            if (!isAccumulated && isResult) {
-              totalBase += Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
-            } else {
-              totalBase += Math.abs(getRawNumber(sld.sldFin))
-            }
-          }
-        }
+      const accounts = baseConfig.map((code) => {
+        const baseAcc = monthlyData.allAccounts.find((a: any) => a.conta === code)
+        return { conta: code, nome: baseAcc?.nome || 'Desconhecida', valor: computeVal(baseAcc) }
       })
-      return totalBase
+      return {
+        type: 'Composição Manual (Múltiplas Contas)',
+        totalValue: accounts.reduce((acc: number, curr: any) => acc + curr.valor, 0),
+        accounts,
+      }
     }
 
     let baseAccCode = baseConfig as string | undefined
 
     if (!baseAccCode) {
-      if (activeProfile.globalAvMode === 'parent') {
+      if (profile.globalAvMode === 'parent') {
         baseAccCode = accountParentMap[acc.conta]
       } else {
         const isPatrimonial = acc.conta.startsWith('1') || acc.conta.startsWith('2')
-        return isPatrimonial
+        const type = isPatrimonial
+          ? 'Ativo Total (Padrão Global)'
+          : 'Receita Líquida (Padrão Global)'
+        const totalValue = isPatrimonial
           ? baseValuesPerPeriod[period]?.ativo
           : baseValuesPerPeriod[period]?.receita
+        return { type, totalValue, accounts: [] }
       }
     }
 
@@ -3617,25 +3705,29 @@ export default function App() {
     if (baseAccCode) {
       const baseAcc = monthlyData.allAccounts.find((a: any) => a.conta === baseAccCode)
       if (baseAcc) {
-        const sld = baseAcc.saldos[period]
-        if (sld) {
-          const isResult =
-            baseAcc.natureza === '04' ||
-            baseAcc.natureza === '4' ||
-            baseAcc.conta.startsWith('3') ||
-            baseAcc.conta.startsWith('4') ||
-            baseAcc.conta.startsWith('5')
-          if (!isAccumulated && isResult) {
-            return Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
-          } else {
-            return Math.abs(getRawNumber(sld.sldFin))
-          }
+        const val = computeVal(baseAcc)
+        return {
+          type: `Conta Específica (${baseAccCode})`,
+          totalValue: val,
+          accounts: [{ conta: baseAcc.conta, nome: baseAcc.nome, valor: val }],
         }
       }
     }
 
     const isPatrimonial = acc.conta.startsWith('1') || acc.conta.startsWith('2')
-    return isPatrimonial ? baseValuesPerPeriod[period]?.ativo : baseValuesPerPeriod[period]?.receita
+    const type = isPatrimonial ? 'Ativo Total (Fallback)' : 'Receita Líquida (Fallback)'
+    const totalValue = isPatrimonial
+      ? baseValuesPerPeriod[period]?.ativo
+      : baseValuesPerPeriod[period]?.receita
+    return { type, totalValue, accounts: [] }
+  }
+
+  const getBaseValueForAccountWithProfile = (
+    acc: any,
+    period: string,
+    profile: AnalysisProfile,
+  ) => {
+    return getBaseDetailsForAccount(acc, period, profile).totalValue
   }
 
   const ToggleAccumulated = () => (
@@ -3926,6 +4018,17 @@ export default function App() {
               </div>
 
               {/* --- NOVA SESSÃO: GRÁFICOS DE PIZZA (COMPOSIÇÃO LIVRE) --- */}
+              <div className="mt-12 mb-6 border-b border-slate-200 pb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+                    <PieChart className="w-6 h-6 text-indigo-600" />
+                    Dashboards Gráficos de "Composição de Custos"
+                  </h3>
+                  <p className="text-slate-500 font-medium mt-1">
+                    Distribuição visual das suas bases de cálculo personalizadas.
+                  </p>
+                </div>
+              </div>
               {dashboardData.pieChartsData.map((pieConf: any, pieIndex) => (
                 <div
                   key={pieConf.id}
@@ -7300,10 +7403,10 @@ export default function App() {
 
                     <div className="flex items-center gap-2 border-l border-slate-200 pl-4 ml-2">
                       <span className="text-xs font-bold text-slate-500 uppercase tracking-widest hidden xl:block">
-                        Perfil:
+                        Perfil 1:
                       </span>
                       <Select value={activeProfileId} onValueChange={setActiveProfileId}>
-                        <SelectTrigger className="w-[180px] h-9 text-sm bg-white font-bold text-indigo-700 shadow-sm border-slate-200">
+                        <SelectTrigger className="w-[160px] h-9 text-sm bg-white font-bold text-indigo-700 shadow-sm border-slate-200">
                           <SelectValue placeholder="Selecione um Perfil" />
                         </SelectTrigger>
                         <SelectContent>
@@ -7326,7 +7429,47 @@ export default function App() {
                       </button>
                     </div>
 
-                    <div className="flex items-center gap-4 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                    <div className="flex items-center gap-3 border-l border-slate-200 pl-4">
+                      <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={isComparingProfiles}
+                          onChange={(e) => {
+                            setIsComparingProfiles(e.target.checked)
+                            if (e.target.checked && !compareProfileId) {
+                              const p2 = analysisProfiles.find((p) => p.id !== activeProfileId)
+                              if (p2) setCompareProfileId(p2.id)
+                            }
+                          }}
+                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <span className="whitespace-nowrap">Comparar Cenários</span>
+                      </label>
+                    </div>
+
+                    {isComparingProfiles && (
+                      <div className="flex items-center gap-2 border-l border-slate-200 pl-4 animate-in fade-in slide-in-from-left-2">
+                        <span className="text-xs font-bold text-indigo-500 uppercase tracking-widest hidden xl:block">
+                          Perfil 2:
+                        </span>
+                        <Select value={compareProfileId} onValueChange={setCompareProfileId}>
+                          <SelectTrigger className="w-[160px] h-9 text-sm bg-indigo-50 font-bold text-indigo-700 shadow-sm border-indigo-200">
+                            <SelectValue placeholder="Selecione um Perfil" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {analysisProfiles
+                              .filter((p) => p.id !== activeProfileId)
+                              .map((p) => (
+                                <SelectItem key={p.id} value={p.id}>
+                                  {p.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-4 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 ml-auto">
                       <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
                         <input
                           type="checkbox"
@@ -7334,7 +7477,7 @@ export default function App() {
                           onChange={() => setShowAV(!showAV)}
                           className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                         />
-                        <span>AV%</span>
+                        <span>Exibir AV%</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
                         <input
@@ -7343,11 +7486,11 @@ export default function App() {
                           onChange={() => setShowAH(!showAH)}
                           className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                         />
-                        <span>AH%</span>
+                        <span>Exibir AH%</span>
                       </label>
                     </div>
                   </div>
-                  <div className="relative w-full sm:w-64">
+                  <div className="relative w-full sm:w-64 mt-3 sm:mt-0">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="text"
@@ -7388,17 +7531,35 @@ export default function App() {
                             <span className="font-bold text-slate-700 text-xs">Saldo</span>
                           </th>
                           {showAV && (
-                            <th className="py-2 px-2 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm w-16">
-                              <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5 opacity-0">
-                                AV
-                              </div>
-                              <span
-                                className="font-bold text-slate-500 text-[10px]"
-                                title="Análise Vertical"
-                              >
-                                AV%
-                              </span>
-                            </th>
+                            <>
+                              <th className="py-2 px-2 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm w-20">
+                                <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5 opacity-0">
+                                  AV
+                                </div>
+                                <span
+                                  className="font-bold text-slate-500 text-[10px]"
+                                  title="Análise Vertical"
+                                >
+                                  AV%{' '}
+                                  {isComparingProfiles && (
+                                    <span className="text-indigo-500 ml-1">P1</span>
+                                  )}
+                                </span>
+                              </th>
+                              {isComparingProfiles && (
+                                <th className="py-2 px-2 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-indigo-50/50 z-20 shadow-sm w-20">
+                                  <div className="text-[10px] text-indigo-500 uppercase font-bold tracking-widest mb-0.5 opacity-0">
+                                    AV
+                                  </div>
+                                  <span
+                                    className="font-bold text-indigo-600 text-[10px]"
+                                    title={`Análise Vertical (${analysisProfiles.find((p) => p.id === compareProfileId)?.name})`}
+                                  >
+                                    AV% P2
+                                  </span>
+                                </th>
+                              )}
+                            </>
                           )}
                           {showAH && (
                             <th className="py-2 px-2 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm w-16">
@@ -7428,233 +7589,230 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {tableAccountsToDisplay.map((acc: any, index: number) => {
-                      const isSintetica = acc.tipo === 'S'
-                      const isExpanded = expandedAccounts.has(acc.conta)
-                      const indent = (parseInt(acc.nivel) - 1) * 16
-
-                      const level = parseInt(acc.nivel) || 1
-                      let rowClass = 'transition-colors cursor-pointer '
-                      let isDarkBg = false
-
-                      if (level === 1) {
-                        rowClass += 'bg-indigo-950 text-white hover:bg-indigo-900 font-bold'
-                        isDarkBg = true
-                      } else if (level === 2) {
-                        rowClass += 'bg-blue-800 text-white hover:bg-blue-700 font-semibold'
-                        isDarkBg = true
-                      } else if (level === 3) {
-                        rowClass += 'bg-blue-500 text-white hover:bg-blue-400 font-medium'
-                        isDarkBg = true
-                      } else if (level === 4) {
-                        rowClass += 'bg-blue-200 text-blue-950 hover:bg-blue-300 font-medium'
-                      } else {
-                        rowClass += 'bg-blue-50 text-blue-900 hover:bg-blue-100 font-medium'
+                    {(() => {
+                      const renderAvCell = (
+                        acc: any,
+                        period: string,
+                        profile: AnalysisProfile | undefined,
+                        rawVal: number,
+                        isDarkBg: boolean,
+                        isP2 = false,
+                      ) => {
+                        if (!profile || rawVal <= 0) {
+                          return (
+                            <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>
+                              -
+                            </span>
+                          )
+                        }
+                        const base = getBaseValueForAccountWithProfile(acc, period, profile)
+                        if (!base || base <= 0) {
+                          return (
+                            <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>
+                              -
+                            </span>
+                          )
+                        }
+                        const avPct = (rawVal / base) * 100
+                        return (
+                          <div className="flex items-center justify-end gap-1.5 group/av relative">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setExplodedAvContext({
+                                  acc,
+                                  period,
+                                  profileId: profile.id,
+                                  rawVal,
+                                  avPct,
+                                })
+                              }}
+                              className={`opacity-0 group-hover/av:opacity-100 p-0.5 rounded transition-all absolute right-full mr-1 ${isDarkBg ? 'hover:bg-white/20 text-white/70' : 'hover:bg-indigo-100 text-indigo-500'}`}
+                              title="Ver detalhamento da base (Drill-down)"
+                            >
+                              <Search className="w-3 h-3" />
+                            </button>
+                            <span
+                              className={`text-[11px] font-mono ${isDarkBg ? 'text-white/70' : isP2 ? 'text-indigo-700 font-bold' : 'text-blue-800/70'}`}
+                            >
+                              {avPct.toFixed(2)}%
+                            </span>
+                          </div>
+                        )
                       }
 
-                      return (
-                        <tr
-                          key={acc.conta}
-                          onClick={() => {
-                            if (isSintetica) {
-                              toggleAccountExpand(acc.conta)
-                            } else {
-                              openRazao(acc)
-                            }
-                          }}
-                          className={rowClass}
-                        >
-                          <td
-                            className={`py-1.5 px-4 font-mono text-[11px] border-r border-white/10 group ${isDarkBg ? 'text-white/80' : 'text-blue-900/60'}`}
-                            style={{ paddingLeft: `${indent + 16}px` }}
-                          >
-                            <div className="flex items-center gap-1">
-                              {isSintetica ? (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    toggleAccountExpand(acc.conta)
-                                  }}
-                                  className={`w-4 h-4 flex items-center justify-center rounded ${isDarkBg ? 'text-white/80 hover:bg-white/20' : 'text-blue-800/60 hover:bg-blue-900/10'}`}
-                                >
-                                  <ChevronDown
-                                    className={`w-3.5 h-3.5 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
-                                  />
-                                </button>
-                              ) : (
-                                <div className="w-4 h-4 flex items-center justify-center">
-                                  <Search
-                                    className={`w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ${isDarkBg ? 'text-white/80' : 'text-blue-600'}`}
-                                  />
-                                </div>
-                              )}
-                              {isSintetica ? <strong>{acc.conta}</strong> : acc.conta}
-                            </div>
-                          </td>
-                          <td
-                            className={`py-1.5 px-4 text-[13px] ${isDarkBg ? 'text-white' : 'text-blue-950'}`}
-                          >
-                            <ContextMenu>
-                              <ContextMenuTrigger asChild>
-                                <div className="w-full h-full cursor-context-menu flex items-center">
-                                  {acc.nome}
-                                  {isSintetica && (
-                                    <span
-                                      className={`ml-2 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${isDarkBg ? 'bg-white/20 text-white' : 'bg-blue-900/10 text-blue-900'}`}
-                                    >
-                                      Sintética
-                                    </span>
-                                  )}
-                                </div>
-                              </ContextMenuTrigger>
-                              <ContextMenuContent className="w-64">
-                                <ContextMenuLabel className="text-xs text-slate-500 uppercase">
-                                  Configurar AV Base
-                                </ContextMenuLabel>
-                                <ContextMenuSeparator />
-                                <ContextMenuSub>
-                                  <ContextMenuSubTrigger>
-                                    Relativa a Nível Superior
-                                  </ContextMenuSubTrigger>
-                                  <ContextMenuSubContent className="w-48">
-                                    <ContextMenuItem
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setAvBase(acc.conta, 'parent')
-                                      }}
-                                    >
-                                      Pai Imediato (Padrão)
-                                    </ContextMenuItem>
-                                    <ContextMenuItem
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setAvBase(acc.conta, 'root')
-                                      }}
-                                    >
-                                      Grupo Raiz (Nível 1)
-                                    </ContextMenuItem>
-                                    <ContextMenuSeparator />
-                                    {(() => {
-                                      const ancs = []
-                                      let curr = accountParentMap[acc.conta]
-                                      while (curr) {
-                                        ancs.push(curr)
-                                        curr = accountParentMap[curr]
-                                      }
-                                      if (ancs.length > 0) {
-                                        return ancs.map((anc) => (
-                                          <ContextMenuItem
-                                            key={anc}
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              setAvBase(acc.conta, anc)
-                                            }}
-                                          >
-                                            Nível {anc}
-                                          </ContextMenuItem>
-                                        ))
-                                      }
-                                      return null
-                                    })()}
-                                  </ContextMenuSubContent>
-                                </ContextMenuSub>
-                                <ContextMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setCustomBaseTargetAcc(acc.conta)
-                                    setIsCustomBaseModalOpen(true)
-                                  }}
-                                >
-                                  Escolher Conta Única...
-                                </ContextMenuItem>
-                                <ContextMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setCustomMultiBaseTargetAcc(acc.conta)
-                                    const existing = activeProfile.customAvBases?.[acc.conta]
-                                    setCustomMultiBaseSelection(
-                                      Array.isArray(existing) ? existing : [],
-                                    )
-                                    setIsCustomMultiBaseModalOpen(true)
-                                  }}
-                                >
-                                  Compor Base Manualmente...
-                                </ContextMenuItem>
-                                <ContextMenuSeparator />
-                                <ContextMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setAvBase(acc.conta, null)
-                                  }}
-                                  className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
-                                >
-                                  <RotateCcw className="w-4 h-4 mr-2" /> Restaurar Padrão
-                                </ContextMenuItem>
-                              </ContextMenuContent>
-                            </ContextMenu>
-                          </td>
-                          {periodsToDisplay.map((period: string) => {
-                            const sld = acc.saldos[period]
-                            let displayVal = '0,00'
-                            let displayInd = ''
-                            let rawVal = 0
+                      return tableAccountsToDisplay.map((acc: any, index: number) => {
+                        const isSintetica = acc.tipo === 'S'
+                        const isExpanded = expandedAccounts.has(acc.conta)
+                        const indent = (parseInt(acc.nivel) - 1) * 16
 
-                            if (sld) {
-                              const isResult =
-                                acc.natureza === '04' ||
-                                acc.natureza === '4' ||
-                                acc.conta.startsWith('3') ||
-                                acc.conta.startsWith('4') ||
-                                acc.conta.startsWith('5')
-                              if (!isAccumulated && isResult) {
-                                const deb = getRawNumber(sld.debito)
-                                const cred = getRawNumber(sld.credito)
-                                const net = Math.abs(deb - cred)
-                                displayVal = net.toLocaleString('pt-BR', {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })
-                                displayInd = deb > cred ? 'D' : cred > deb ? 'C' : ''
-                                rawVal = net
+                        const level = parseInt(acc.nivel) || 1
+                        let rowClass = 'transition-colors cursor-pointer '
+                        let isDarkBg = false
+
+                        if (level === 1) {
+                          rowClass += 'bg-indigo-950 text-white hover:bg-indigo-900 font-bold'
+                          isDarkBg = true
+                        } else if (level === 2) {
+                          rowClass += 'bg-blue-800 text-white hover:bg-blue-700 font-semibold'
+                          isDarkBg = true
+                        } else if (level === 3) {
+                          rowClass += 'bg-blue-500 text-white hover:bg-blue-400 font-medium'
+                          isDarkBg = true
+                        } else if (level === 4) {
+                          rowClass += 'bg-blue-200 text-blue-950 hover:bg-blue-300 font-medium'
+                        } else {
+                          rowClass += 'bg-blue-50 text-blue-900 hover:bg-blue-100 font-medium'
+                        }
+
+                        return (
+                          <tr
+                            key={acc.conta}
+                            onClick={() => {
+                              if (isSintetica) {
+                                toggleAccountExpand(acc.conta)
                               } else {
-                                rawVal = Math.abs(getRawNumber(sld.sldFin))
-                                displayVal = rawVal.toLocaleString('pt-BR', {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })
-                                displayInd = sld.indDcFin
+                                openRazao(acc)
                               }
-                            }
-
-                            // Análise Vertical
-                            let avLabel = null
-                            if (showAV && rawVal > 0) {
-                              const base = getBaseValueForAccount(acc, period)
-                              if (base && base > 0) {
-                                const avPct = (rawVal / base) * 100
-                                avLabel = (
-                                  <span
-                                    className={`text-[11px] font-mono ${isDarkBg ? 'text-white/70' : 'text-blue-800/70'}`}
-                                    title="Análise Vertical"
+                            }}
+                            className={rowClass}
+                          >
+                            <td
+                              className={`py-1.5 px-4 font-mono text-[11px] border-r border-white/10 group ${isDarkBg ? 'text-white/80' : 'text-blue-900/60'}`}
+                              style={{ paddingLeft: `${indent + 16}px` }}
+                            >
+                              <div className="flex items-center gap-1">
+                                {isSintetica ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      toggleAccountExpand(acc.conta)
+                                    }}
+                                    className={`w-4 h-4 flex items-center justify-center rounded ${isDarkBg ? 'text-white/80 hover:bg-white/20' : 'text-blue-800/60 hover:bg-blue-900/10'}`}
                                   >
-                                    {avPct.toFixed(2)}%
-                                  </span>
-                                )
-                              }
-                            }
+                                    <ChevronDown
+                                      className={`w-3.5 h-3.5 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
+                                    />
+                                  </button>
+                                ) : (
+                                  <div className="w-4 h-4 flex items-center justify-center">
+                                    <Search
+                                      className={`w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ${isDarkBg ? 'text-white/80' : 'text-blue-600'}`}
+                                    />
+                                  </div>
+                                )}
+                                {isSintetica ? <strong>{acc.conta}</strong> : acc.conta}
+                              </div>
+                            </td>
+                            <td
+                              className={`py-1.5 px-4 text-[13px] ${isDarkBg ? 'text-white' : 'text-blue-950'}`}
+                            >
+                              <ContextMenu>
+                                <ContextMenuTrigger asChild>
+                                  <div className="w-full h-full cursor-context-menu flex items-center">
+                                    {acc.nome}
+                                    {isSintetica && (
+                                      <span
+                                        className={`ml-2 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${isDarkBg ? 'bg-white/20 text-white' : 'bg-blue-900/10 text-blue-900'}`}
+                                      >
+                                        Sintética
+                                      </span>
+                                    )}
+                                  </div>
+                                </ContextMenuTrigger>
+                                <ContextMenuContent className="w-64">
+                                  <ContextMenuLabel className="text-xs text-slate-500 uppercase">
+                                    Configurar AV Base
+                                  </ContextMenuLabel>
+                                  <ContextMenuSeparator />
+                                  <ContextMenuSub>
+                                    <ContextMenuSubTrigger>
+                                      Relativa a Nível Superior
+                                    </ContextMenuSubTrigger>
+                                    <ContextMenuSubContent className="w-48">
+                                      <ContextMenuItem
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setAvBase(acc.conta, 'parent')
+                                        }}
+                                      >
+                                        Pai Imediato (Padrão)
+                                      </ContextMenuItem>
+                                      <ContextMenuItem
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setAvBase(acc.conta, 'root')
+                                        }}
+                                      >
+                                        Grupo Raiz (Nível 1)
+                                      </ContextMenuItem>
+                                      <ContextMenuSeparator />
+                                      {(() => {
+                                        const ancs = []
+                                        let curr = accountParentMap[acc.conta]
+                                        while (curr) {
+                                          ancs.push(curr)
+                                          curr = accountParentMap[curr]
+                                        }
+                                        if (ancs.length > 0) {
+                                          return ancs.map((anc) => (
+                                            <ContextMenuItem
+                                              key={anc}
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                setAvBase(acc.conta, anc)
+                                              }}
+                                            >
+                                              Nível {anc}
+                                            </ContextMenuItem>
+                                          ))
+                                        }
+                                        return null
+                                      })()}
+                                    </ContextMenuSubContent>
+                                  </ContextMenuSub>
+                                  <ContextMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setCustomBaseTargetAcc(acc.conta)
+                                      setIsCustomBaseModalOpen(true)
+                                    }}
+                                  >
+                                    Escolher Conta Única...
+                                  </ContextMenuItem>
+                                  <ContextMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setCustomMultiBaseTargetAcc(acc.conta)
+                                      const existing = activeProfile.customAvBases?.[acc.conta]
+                                      setCustomMultiBaseSelection(
+                                        Array.isArray(existing) ? existing : [],
+                                      )
+                                      setIsCustomMultiBaseModalOpen(true)
+                                    }}
+                                  >
+                                    Compor Base Manualmente...
+                                  </ContextMenuItem>
+                                  <ContextMenuSeparator />
+                                  <ContextMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setAvBase(acc.conta, null)
+                                    }}
+                                    className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
+                                  >
+                                    <RotateCcw className="w-4 h-4 mr-2" /> Restaurar Padrão
+                                  </ContextMenuItem>
+                                </ContextMenuContent>
+                              </ContextMenu>
+                            </td>
+                            {periodsToDisplay.map((period: string) => {
+                              const sld = acc.saldos[period]
+                              let displayVal = '0,00'
+                              let displayInd = ''
+                              let rawVal = 0
 
-                            // Análise Horizontal
-                            let ahLabel = null
-                            let prevVal = 0
-                            let hasValidPrev = false
-
-                            if (
-                              activeProfile.globalAhMode === 'base_period' &&
-                              activeProfile.basePeriodForAh
-                            ) {
-                              const baseSld = acc.saldos[activeProfile.basePeriodForAh]
-                              if (baseSld) {
-                                hasValidPrev = true
+                              if (sld) {
                                 const isResult =
                                   acc.natureza === '04' ||
                                   acc.natureza === '4' ||
@@ -7662,19 +7820,36 @@ export default function App() {
                                   acc.conta.startsWith('4') ||
                                   acc.conta.startsWith('5')
                                 if (!isAccumulated && isResult) {
-                                  prevVal = Math.abs(
-                                    getRawNumber(baseSld.debito) - getRawNumber(baseSld.credito),
-                                  )
+                                  const deb = getRawNumber(sld.debito)
+                                  const cred = getRawNumber(sld.credito)
+                                  const net = Math.abs(deb - cred)
+                                  displayVal = net.toLocaleString('pt-BR', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })
+                                  displayInd = deb > cred ? 'D' : cred > deb ? 'C' : ''
+                                  rawVal = net
                                 } else {
-                                  prevVal = Math.abs(getRawNumber(baseSld.sldFin))
+                                  rawVal = Math.abs(getRawNumber(sld.sldFin))
+                                  displayVal = rawVal.toLocaleString('pt-BR', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })
+                                  displayInd = sld.indDcFin
                                 }
                               }
-                            } else {
-                              const originalIndex = monthlyData.periods.indexOf(period)
-                              if (originalIndex > 0) {
-                                const prevPeriod = monthlyData.periods[originalIndex - 1]
-                                const prevSld = acc.saldos[prevPeriod]
-                                if (prevSld) {
+
+                              // Análise Horizontal
+                              let ahLabel = null
+                              let prevVal = 0
+                              let hasValidPrev = false
+
+                              if (
+                                activeProfile.globalAhMode === 'base_period' &&
+                                activeProfile.basePeriodForAh
+                              ) {
+                                const baseSld = acc.saldos[activeProfile.basePeriodForAh]
+                                if (baseSld) {
                                   hasValidPrev = true
                                   const isResult =
                                     acc.natureza === '04' ||
@@ -7684,83 +7859,212 @@ export default function App() {
                                     acc.conta.startsWith('5')
                                   if (!isAccumulated && isResult) {
                                     prevVal = Math.abs(
-                                      getRawNumber(prevSld.debito) - getRawNumber(prevSld.credito),
+                                      getRawNumber(baseSld.debito) - getRawNumber(baseSld.credito),
                                     )
                                   } else {
-                                    prevVal = Math.abs(getRawNumber(prevSld.sldFin))
+                                    prevVal = Math.abs(getRawNumber(baseSld.sldFin))
+                                  }
+                                }
+                              } else {
+                                const originalIndex = monthlyData.periods.indexOf(period)
+                                if (originalIndex > 0) {
+                                  const prevPeriod = monthlyData.periods[originalIndex - 1]
+                                  const prevSld = acc.saldos[prevPeriod]
+                                  if (prevSld) {
+                                    hasValidPrev = true
+                                    const isResult =
+                                      acc.natureza === '04' ||
+                                      acc.natureza === '4' ||
+                                      acc.conta.startsWith('3') ||
+                                      acc.conta.startsWith('4') ||
+                                      acc.conta.startsWith('5')
+                                    if (!isAccumulated && isResult) {
+                                      prevVal = Math.abs(
+                                        getRawNumber(prevSld.debito) -
+                                          getRawNumber(prevSld.credito),
+                                      )
+                                    } else {
+                                      prevVal = Math.abs(getRawNumber(prevSld.sldFin))
+                                    }
                                   }
                                 }
                               }
-                            }
 
-                            if (hasValidPrev) {
-                              if (prevVal > 0) {
-                                const ahPct = (rawVal / prevVal - 1) * 100
-                                const isPositive = ahPct > 0
-                                const isNegative = ahPct < 0
+                              if (hasValidPrev) {
+                                if (prevVal > 0) {
+                                  const ahPct = (rawVal / prevVal - 1) * 100
+                                  const isPositive = ahPct > 0
+                                  const isNegative = ahPct < 0
 
-                                const isDespesa =
-                                  acc.conta.startsWith('4') ||
-                                  acc.conta.startsWith('5') ||
-                                  (acc.natureza === '04' &&
-                                    !acc.nome.toUpperCase().includes('RECEITA'))
-                                const colorClass = isDespesa
-                                  ? isPositive
-                                    ? isDarkBg
-                                      ? 'text-rose-400'
-                                      : 'text-rose-600'
-                                    : isNegative
-                                      ? isDarkBg
-                                        ? 'text-emerald-400'
-                                        : 'text-emerald-600'
-                                      : isDarkBg
-                                        ? 'text-white/50'
-                                        : 'text-blue-800/50'
-                                  : isPositive
-                                    ? isDarkBg
-                                      ? 'text-emerald-400'
-                                      : 'text-emerald-600'
-                                    : isNegative
+                                  const isDespesa =
+                                    acc.conta.startsWith('4') ||
+                                    acc.conta.startsWith('5') ||
+                                    (acc.natureza === '04' &&
+                                      !acc.nome.toUpperCase().includes('RECEITA'))
+                                  const colorClass = isDespesa
+                                    ? isPositive
                                       ? isDarkBg
                                         ? 'text-rose-400'
                                         : 'text-rose-600'
-                                      : isDarkBg
-                                        ? 'text-white/50'
-                                        : 'text-blue-800/50'
+                                      : isNegative
+                                        ? isDarkBg
+                                          ? 'text-emerald-400'
+                                          : 'text-emerald-600'
+                                        : isDarkBg
+                                          ? 'text-white/50'
+                                          : 'text-blue-800/50'
+                                    : isPositive
+                                      ? isDarkBg
+                                        ? 'text-emerald-400'
+                                        : 'text-emerald-600'
+                                      : isNegative
+                                        ? isDarkBg
+                                          ? 'text-rose-400'
+                                          : 'text-rose-600'
+                                        : isDarkBg
+                                          ? 'text-white/50'
+                                          : 'text-blue-800/50'
 
-                                ahLabel = (
-                                  <span
-                                    className={`text-[11px] font-mono ${colorClass}`}
-                                    title="Análise Horizontal (vs Mês Anterior)"
-                                  >
-                                    {ahPct > 0 ? '+' : ''}
-                                    {ahPct.toFixed(2)}%
-                                  </span>
-                                )
-                              } else if (rawVal > 0 && prevVal === 0) {
-                                ahLabel = (
-                                  <span
-                                    className={`text-[11px] font-mono ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
-                                    title="Análise Horizontal (vs Mês Anterior)"
-                                  >
-                                    N/A (Novo)
-                                  </span>
-                                )
+                                  ahLabel = (
+                                    <span
+                                      className={`text-[11px] font-mono ${colorClass}`}
+                                      title="Análise Horizontal (vs Mês Anterior)"
+                                    >
+                                      {ahPct > 0 ? '+' : ''}
+                                      {ahPct.toFixed(2)}%
+                                    </span>
+                                  )
+                                } else if (rawVal > 0 && prevVal === 0) {
+                                  ahLabel = (
+                                    <span
+                                      className={`text-[11px] font-mono ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
+                                      title="Análise Horizontal (vs Mês Anterior)"
+                                    >
+                                      N/A (Novo)
+                                    </span>
+                                  )
+                                }
                               }
-                            }
 
-                            return (
-                              <React.Fragment key={period}>
-                                <td
-                                  className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'text-white' : 'text-blue-950'}`}
-                                >
-                                  {displayVal !== '0,00' ? (
-                                    <div className="flex items-center justify-end gap-2 w-full">
-                                      <span>{displayVal}</span>
+                              return (
+                                <React.Fragment key={period}>
+                                  <td
+                                    className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'text-white' : 'text-blue-950'}`}
+                                  >
+                                    {displayVal !== '0,00' ? (
+                                      <div className="flex items-center justify-end gap-2 w-full">
+                                        <span>{displayVal}</span>
+                                        <span
+                                          className={`text-[10px] w-3 ${displayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : isDarkBg ? 'text-red-200' : 'text-red-600'}`}
+                                        >
+                                          {displayInd}
+                                        </span>
+                                      </div>
+                                    ) : (
                                       <span
-                                        className={`text-[10px] w-3 ${displayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : isDarkBg ? 'text-red-200' : 'text-red-600'}`}
+                                        className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}
                                       >
-                                        {displayInd}
+                                        -
+                                      </span>
+                                    )}
+                                  </td>
+                                  {showAV && (
+                                    <>
+                                      <td
+                                        className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-black/10 text-white/80' : 'bg-black/[0.02] text-blue-900/70'}`}
+                                      >
+                                        {renderAvCell(acc, period, activeProfile, rawVal, isDarkBg)}
+                                      </td>
+                                      {isComparingProfiles && (
+                                        <td
+                                          className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-indigo-900/30 text-white/80' : 'bg-indigo-50/30 text-blue-900/70'}`}
+                                        >
+                                          {renderAvCell(
+                                            acc,
+                                            period,
+                                            analysisProfiles.find((p) => p.id === compareProfileId),
+                                            rawVal,
+                                            isDarkBg,
+                                            true,
+                                          )}
+                                        </td>
+                                      )}
+                                    </>
+                                  )}
+                                  {showAH && (
+                                    <td
+                                      className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-black/10 text-white/80' : 'bg-black/[0.02] text-blue-900/70'}`}
+                                    >
+                                      {ahLabel || (
+                                        <span
+                                          className={
+                                            isDarkBg ? 'text-white/30' : 'text-blue-900/30'
+                                          }
+                                        >
+                                          -
+                                        </span>
+                                      )}
+                                    </td>
+                                  )}
+                                </React.Fragment>
+                              )
+                            })}
+                            {(() => {
+                              let accDisplayVal = '0,00'
+                              let accDisplayInd = ''
+
+                              const isResult =
+                                acc.natureza === '04' ||
+                                acc.natureza === '4' ||
+                                acc.conta.startsWith('3') ||
+                                acc.conta.startsWith('4') ||
+                                acc.conta.startsWith('5')
+
+                              if (isResult && !isAccumulated) {
+                                let sumDeb = 0
+                                let sumCred = 0
+                                periodsToDisplay.forEach((period: string) => {
+                                  const sld = acc.saldos[period]
+                                  if (sld) {
+                                    sumDeb += getRawNumber(sld.debito)
+                                    sumCred += getRawNumber(sld.credito)
+                                  }
+                                })
+                                const net = Math.abs(sumDeb - sumCred)
+                                accDisplayVal = net.toLocaleString('pt-BR', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })
+                                if (net > 0) {
+                                  accDisplayInd =
+                                    sumDeb > sumCred ? 'D' : sumCred > sumDeb ? 'C' : ''
+                                }
+                              } else {
+                                if (periodsToDisplay.length > 0) {
+                                  const lastPeriod = periodsToDisplay[periodsToDisplay.length - 1]
+                                  const sld = acc.saldos[lastPeriod]
+                                  if (sld) {
+                                    const rawVal = Math.abs(getRawNumber(sld.sldFin))
+                                    accDisplayVal = rawVal.toLocaleString('pt-BR', {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })
+                                    accDisplayInd = sld.indDcFin
+                                  }
+                                }
+                              }
+
+                              return (
+                                <td
+                                  className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-white/10 text-white' : 'bg-black/[0.04] text-blue-950'}`}
+                                >
+                                  {accDisplayVal !== '0,00' ? (
+                                    <div className="flex items-center justify-end gap-2 w-full">
+                                      <span>{accDisplayVal}</span>
+                                      <span
+                                        className={`text-[10px] w-3 ${accDisplayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : isDarkBg ? 'text-red-200' : 'text-red-600'}`}
+                                      >
+                                        {accDisplayInd}
                                       </span>
                                     </div>
                                   ) : (
@@ -7771,108 +8075,21 @@ export default function App() {
                                     </span>
                                   )}
                                 </td>
-                                {showAV && (
-                                  <td
-                                    className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-black/10 text-white/80' : 'bg-black/[0.02] text-blue-900/70'}`}
-                                  >
-                                    {avLabel || (
-                                      <span
-                                        className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}
-                                      >
-                                        -
-                                      </span>
-                                    )}
-                                  </td>
-                                )}
-                                {showAH && (
-                                  <td
-                                    className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-black/10 text-white/80' : 'bg-black/[0.02] text-blue-900/70'}`}
-                                  >
-                                    {ahLabel || (
-                                      <span
-                                        className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}
-                                      >
-                                        -
-                                      </span>
-                                    )}
-                                  </td>
-                                )}
-                              </React.Fragment>
-                            )
-                          })}
-                          {(() => {
-                            let accDisplayVal = '0,00'
-                            let accDisplayInd = ''
-
-                            const isResult =
-                              acc.natureza === '04' ||
-                              acc.natureza === '4' ||
-                              acc.conta.startsWith('3') ||
-                              acc.conta.startsWith('4') ||
-                              acc.conta.startsWith('5')
-
-                            if (isResult && !isAccumulated) {
-                              let sumDeb = 0
-                              let sumCred = 0
-                              periodsToDisplay.forEach((period: string) => {
-                                const sld = acc.saldos[period]
-                                if (sld) {
-                                  sumDeb += getRawNumber(sld.debito)
-                                  sumCred += getRawNumber(sld.credito)
-                                }
-                              })
-                              const net = Math.abs(sumDeb - sumCred)
-                              accDisplayVal = net.toLocaleString('pt-BR', {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })
-                              if (net > 0) {
-                                accDisplayInd = sumDeb > sumCred ? 'D' : sumCred > sumDeb ? 'C' : ''
-                              }
-                            } else {
-                              if (periodsToDisplay.length > 0) {
-                                const lastPeriod = periodsToDisplay[periodsToDisplay.length - 1]
-                                const sld = acc.saldos[lastPeriod]
-                                if (sld) {
-                                  const rawVal = Math.abs(getRawNumber(sld.sldFin))
-                                  accDisplayVal = rawVal.toLocaleString('pt-BR', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })
-                                  accDisplayInd = sld.indDcFin
-                                }
-                              }
-                            }
-
-                            return (
-                              <td
-                                className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-white/10 text-white' : 'bg-black/[0.04] text-blue-950'}`}
-                              >
-                                {accDisplayVal !== '0,00' ? (
-                                  <div className="flex items-center justify-end gap-2 w-full">
-                                    <span>{accDisplayVal}</span>
-                                    <span
-                                      className={`text-[10px] w-3 ${accDisplayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : isDarkBg ? 'text-red-200' : 'text-red-600'}`}
-                                    >
-                                      {accDisplayInd}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>
-                                    -
-                                  </span>
-                                )}
-                              </td>
-                            )
-                          })()}
-                        </tr>
-                      )
-                    })}
+                              )
+                            })()}
+                          </tr>
+                        )
+                      })
+                    })()}
                     {tableAccountsToDisplay.length === 0 && (
                       <tr>
                         <td
                           colSpan={
-                            periodsToDisplay.length * (1 + (showAV ? 1 : 0) + (showAH ? 1 : 0)) + 3
+                            periodsToDisplay.length *
+                              (1 +
+                                (showAV ? (isComparingProfiles ? 2 : 1) : 0) +
+                                (showAH ? 1 : 0)) +
+                            3
                           }
                           className="p-12 text-center text-slate-500"
                         >
@@ -9473,6 +9690,111 @@ export default function App() {
                 ))}
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!explodedAvContext}
+        onOpenChange={(open) => !open && setExplodedAvContext(null)}
+      >
+        <DialogContent className="sm:max-w-xl bg-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-black text-slate-800">
+              <Layers className="w-5 h-5 text-indigo-600" /> Detalhamento da Base de Cálculo (AV%)
+            </DialogTitle>
+            <DialogDescription>
+              Transparência total: veja exatamente como chegamos a este percentual.
+            </DialogDescription>
+          </DialogHeader>
+          {explodedAvContext &&
+            (() => {
+              const profile =
+                analysisProfiles.find((p) => p.id === explodedAvContext.profileId) || activeProfile
+              const details = getBaseDetailsForAccount(
+                explodedAvContext.acc,
+                explodedAvContext.period,
+                profile,
+              )
+
+              return (
+                <div className="py-4 space-y-6">
+                  <div className="flex gap-4">
+                    <div className="flex-1 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                        Conta Analisada ({explodedAvContext.period})
+                      </span>
+                      <p className="font-mono text-xs text-slate-500 mb-1">
+                        {explodedAvContext.acc.conta}
+                      </p>
+                      <p
+                        className="font-bold text-slate-800 text-sm truncate"
+                        title={explodedAvContext.acc.nome}
+                      >
+                        {explodedAvContext.acc.nome}
+                      </p>
+                      <p className="text-xl font-black text-indigo-600 mt-2">
+                        R$ {formatCompact(explodedAvContext.rawVal)}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-center">
+                      <span className="text-2xl font-black text-slate-300">÷</span>
+                    </div>
+                    <div className="flex-1 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                        Base de Cálculo (Denominador)
+                      </span>
+                      <p className="font-mono text-xs text-slate-500 mb-1">
+                        Perfil: {profile.name}
+                      </p>
+                      <p className="font-bold text-slate-800 text-sm truncate" title={details.type}>
+                        {details.type}
+                      </p>
+                      <p className="text-xl font-black text-indigo-600 mt-2">
+                        R$ {formatCompact(details.totalValue)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-indigo-600 p-4 rounded-xl text-center shadow-md">
+                    <span className="text-indigo-200 text-sm font-bold uppercase tracking-widest">
+                      Resultado da Análise Vertical
+                    </span>
+                    <p className="text-4xl font-black text-white mt-1">
+                      {explodedAvContext.avPct.toFixed(2)}%
+                    </p>
+                  </div>
+
+                  {details.accounts && details.accounts.length > 0 && (
+                    <div className="border border-slate-200 rounded-xl overflow-hidden">
+                      <div className="bg-slate-50 p-3 border-b border-slate-200">
+                        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest">
+                          Composição da Base
+                        </h4>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto custom-scrollbar p-0">
+                        <table className="w-full text-left text-sm">
+                          <tbody className="divide-y divide-slate-100">
+                            {details.accounts.map((a: any, i: number) => (
+                              <tr key={i} className="hover:bg-slate-50">
+                                <td className="p-3 font-mono text-xs text-slate-500 w-28">
+                                  {a.conta}
+                                </td>
+                                <td className="p-3 text-slate-700 truncate max-w-[200px]">
+                                  {a.nome}
+                                </td>
+                                <td className="p-3 text-right font-bold text-slate-800">
+                                  R$ {formatCompact(a.valor)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
         </DialogContent>
       </Dialog>
 
