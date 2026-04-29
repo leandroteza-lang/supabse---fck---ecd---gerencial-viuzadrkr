@@ -402,6 +402,8 @@ interface AnalysisProfile {
   globalAhMode: 'previous' | 'base_period'
   basePeriodForAh?: string
   customAvBases: Record<string, string | string[]>
+  ahAlertThreshold?: number | null
+  avAlertThreshold?: number | null
 }
 
 const EditableTitle = ({
@@ -7224,6 +7226,10 @@ export default function App() {
                   name: 'AH% (Análise Horizontal)',
                   desc: 'Marque para ver o quanto aquela conta cresceu em relação ao mês anterior. Exemplo: um "AH: +20%" verde na receita indica que você vendeu 20% a mais do que no mês passado.',
                 },
+                {
+                  name: 'Alertas de Desvio (Ícones ⚠️)',
+                  desc: 'Se configurado no Perfil, um ícone de alerta aparecerá ao lado de variações que ultrapassarem sua margem de segurança. Passe o mouse sobre o ícone para ver os detalhes.',
+                },
               ]}
             />
 
@@ -7614,8 +7620,24 @@ export default function App() {
                           )
                         }
                         const avPct = (rawVal / base) * 100
+                        const hasAlert =
+                          profile?.avAlertThreshold != null && avPct > profile.avAlertThreshold
+
                         return (
                           <div className="flex items-center justify-end gap-1.5 group/av relative">
+                            {hasAlert && (
+                              <UITooltip delayDuration={0}>
+                                <TooltipTrigger asChild>
+                                  <AlertCircle
+                                    className={`w-3.5 h-3.5 cursor-help shrink-0 ${isDarkBg ? 'text-amber-400' : 'text-amber-500'}`}
+                                  />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[250px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
+                                  Atenção: O peso de {avPct.toFixed(2)}% ultrapassa o limite de
+                                  alerta de {profile?.avAlertThreshold}% configurado no perfil.
+                                </TooltipContent>
+                              </UITooltip>
+                            )}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
@@ -7925,23 +7947,45 @@ export default function App() {
                                           ? 'text-white/50'
                                           : 'text-blue-800/50'
 
+                                  const hasAlert =
+                                    activeProfile.ahAlertThreshold != null &&
+                                    Math.abs(ahPct) > activeProfile.ahAlertThreshold
+
                                   ahLabel = (
-                                    <span
-                                      className={`text-[11px] font-mono ${colorClass}`}
-                                      title="Análise Horizontal (vs Mês Anterior)"
-                                    >
-                                      {ahPct > 0 ? '+' : ''}
-                                      {ahPct.toFixed(2)}%
-                                    </span>
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      {hasAlert && (
+                                        <UITooltip delayDuration={0}>
+                                          <TooltipTrigger asChild>
+                                            <AlertCircle
+                                              className={`w-3.5 h-3.5 cursor-help shrink-0 ${isDarkBg ? 'text-amber-400' : 'text-amber-500'}`}
+                                            />
+                                          </TooltipTrigger>
+                                          <TooltipContent className="max-w-[250px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
+                                            Atenção: A variação de {ahPct.toFixed(2)}% ultrapassa o
+                                            limite de alerta de ±{activeProfile.ahAlertThreshold}%
+                                            configurado no perfil.
+                                          </TooltipContent>
+                                        </UITooltip>
+                                      )}
+                                      <span
+                                        className={`text-[11px] font-mono ${colorClass}`}
+                                        title="Análise Horizontal (vs Mês Anterior)"
+                                      >
+                                        {ahPct > 0 ? '+' : ''}
+                                        {ahPct.toFixed(2)}%
+                                      </span>
+                                    </div>
                                   )
                                 } else if (rawVal > 0 && prevVal === 0) {
                                   ahLabel = (
-                                    <span
-                                      className={`text-[11px] font-mono ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
-                                      title="Análise Horizontal (vs Mês Anterior)"
-                                    >
-                                      N/A (Novo)
-                                    </span>
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <span
+                                        className={`text-[11px] font-mono ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
+                                        title="Análise Horizontal (vs Mês Anterior)"
+                                      >
+                                        N/A (Novo)
+                                      </span>
+                                    </div>
                                   )
                                 }
                               }
@@ -9422,6 +9466,8 @@ export default function App() {
                       globalAvMode: 'default',
                       globalAhMode: 'previous',
                       customAvBases: {},
+                      ahAlertThreshold: null,
+                      avAlertThreshold: null,
                     },
                   ])
                   setEditingProfileId(newId)
@@ -9514,6 +9560,47 @@ export default function App() {
                           </Select>
                         </div>
                       )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                            Alerta de Desvio (AV%)
+                          </label>
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              value={profile.avAlertThreshold ?? ''}
+                              onChange={(e) =>
+                                updateProfile({
+                                  avAlertThreshold: e.target.value ? Number(e.target.value) : null,
+                                })
+                              }
+                              placeholder="Ex: 5 (para > 5%)"
+                              className="h-9 pr-8"
+                            />
+                            <Percent className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                            Alerta de Desvio (AH%)
+                          </label>
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              value={profile.ahAlertThreshold ?? ''}
+                              onChange={(e) =>
+                                updateProfile({
+                                  ahAlertThreshold: e.target.value ? Number(e.target.value) : null,
+                                })
+                              }
+                              placeholder="Ex: 10 (para > ±10%)"
+                              className="h-9 pr-8"
+                            />
+                            <Percent className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          </div>
+                        </div>
+                      </div>
 
                       {Object.keys(profile.customAvBases || {}).length > 0 && (
                         <div className="mt-4 border-t border-slate-100 pt-4">
