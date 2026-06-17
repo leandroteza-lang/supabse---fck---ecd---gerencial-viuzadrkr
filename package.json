@@ -4,6 +4,9 @@
   "private": true,
   "version": "0.0.95",
   "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "start": "vite dev",
     "dev": "vite",
