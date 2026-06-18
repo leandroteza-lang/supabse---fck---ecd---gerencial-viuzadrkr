@@ -586,7 +586,8 @@ const ExplanationPanel = ({
   description: string
   indicators: any[]
 }) => {
-  const [isOpen, setIsOpen] = useState(true)
+  // Padrão recolhido para telas mais limpas; o usuário expande quando quiser.
+  const [isOpen, setIsOpen] = useState(false)
   return (
     <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-5 md:p-6 mb-8 transition-all">
       <div
