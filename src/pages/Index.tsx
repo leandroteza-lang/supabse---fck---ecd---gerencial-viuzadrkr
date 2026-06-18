@@ -4295,7 +4295,8 @@ export default function App() {
               <div className="w-full lg:w-auto flex-1"></div>
               {activeTab !== 'dashboard' &&
                 activeTab !== 'liquidez' &&
-                activeTab !== 'endividamento' && (
+                activeTab !== 'endividamento' &&
+                activeTab !== 'monthly' && (
                   <div className="flex items-center gap-3 shrink-0 py-2 lg:py-0 border-t lg:border-t-0 border-slate-100/50 w-full lg:w-auto justify-end">
                     <span className="text-sm font-bold text-slate-500 hidden sm:inline-block">
                       Perspectiva:
@@ -7645,6 +7646,12 @@ export default function App() {
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wide hidden md:inline">
+                        Perspectiva:
+                      </span>
+                      <ToggleAccumulated />
+                    </div>
                     <div className="relative w-full sm:w-64">
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
