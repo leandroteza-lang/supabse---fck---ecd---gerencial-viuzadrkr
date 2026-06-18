@@ -8201,13 +8201,6 @@ export default function App() {
                                     className={`w-full h-full cursor-context-menu flex items-center ${BC_ALIGN_JUSTIFY[getColAlign('descricao', 'left')]}`}
                                   >
                                     {acc.nome}
-                                    {isSintetica && (
-                                      <span
-                                        className={`ml-2 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${isDarkBg ? 'bg-white/20 text-white' : 'bg-blue-900/10 text-blue-900'}`}
-                                      >
-                                        Sintética
-                                      </span>
-                                    )}
                                   </div>
                                 </ContextMenuTrigger>
                                 <ContextMenuContent className="w-64">
@@ -8461,27 +8454,19 @@ export default function App() {
                               return (
                                 <React.Fragment key={period}>
                                   <td
-                                    className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${BC_ALIGN_TEXT[getColAlign(period, 'right')]} ${isDarkBg ? 'text-white' : isLevel5 ? 'text-black' : 'text-blue-950'}`}
+                                    className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'text-white' : isLevel5 ? 'text-black' : 'text-blue-950'}`}
                                   >
-                                    <div
-                                      className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign(period, 'right')]}`}
-                                    >
-                                      {displayVal !== '0,00' ? (
-                                        <span className="flex items-center justify-end gap-2">
-                                          <span>{displayVal}</span>
-                                          <span
-                                            className={`text-[10px] w-3 ${displayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : isDarkBg ? 'text-red-200' : 'text-red-600'}`}
-                                          >
-                                            {displayInd}
-                                          </span>
-                                        </span>
-                                      ) : (
-                                        <span
-                                          className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}
-                                        >
-                                          -
-                                        </span>
-                                      )}
+                                    <div className="flex items-center w-full gap-1">
+                                      <span
+                                        className={`flex-1 ${BC_ALIGN_TEXT[getColAlign(period, 'right')]} ${displayVal === '0,00' ? (isDarkBg ? 'text-white/30' : 'text-blue-900/30') : ''}`}
+                                      >
+                                        {displayVal !== '0,00' ? displayVal : '-'}
+                                      </span>
+                                      <span
+                                        className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${displayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : displayInd === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
+                                      >
+                                        {displayInd}
+                                      </span>
                                       {isSintetica && (
                                         <SortBtn
                                           active={balanceteSortConfigs[acc.conta]?.key === period}
@@ -8580,27 +8565,19 @@ export default function App() {
 
                               return (
                                 <td
-                                  className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${BC_ALIGN_TEXT[getColAlign('acumulado', 'right')]} ${isDarkBg ? 'bg-white/10 text-white' : isLevel5 ? 'bg-black/[0.04] text-black' : 'bg-black/[0.04] text-blue-950'}`}
+                                  className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-white/10 text-white' : isLevel5 ? 'bg-black/[0.04] text-black' : 'bg-black/[0.04] text-blue-950'}`}
                                 >
-                                  <div
-                                    className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign('acumulado', 'right')]}`}
-                                  >
-                                    {accDisplayVal !== '0,00' ? (
-                                      <span className="flex items-center justify-end gap-2">
-                                        <span>{accDisplayVal}</span>
-                                        <span
-                                          className={`text-[10px] w-3 ${accDisplayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : isDarkBg ? 'text-red-200' : 'text-red-600'}`}
-                                        >
-                                          {accDisplayInd}
-                                        </span>
-                                      </span>
-                                    ) : (
-                                      <span
-                                        className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}
-                                      >
-                                        -
-                                      </span>
-                                    )}
+                                  <div className="flex items-center w-full gap-1">
+                                    <span
+                                      className={`flex-1 ${BC_ALIGN_TEXT[getColAlign('acumulado', 'right')]} ${accDisplayVal === '0,00' ? (isDarkBg ? 'text-white/30' : 'text-blue-900/30') : ''}`}
+                                    >
+                                      {accDisplayVal !== '0,00' ? accDisplayVal : '-'}
+                                    </span>
+                                    <span
+                                      className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${accDisplayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : accDisplayInd === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
+                                    >
+                                      {accDisplayInd}
+                                    </span>
                                     {isSintetica && (
                                       <SortBtn
                                         active={balanceteSortConfigs[acc.conta]?.key === 'acumulado'}
