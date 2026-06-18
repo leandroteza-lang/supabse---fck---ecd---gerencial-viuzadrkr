@@ -7818,7 +7818,7 @@ export default function App() {
                       className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm w-full sm:w-auto"
                     >
                       <Layers className="w-4 h-4 text-indigo-600" />
-                      Filtro de Contas & Presets
+                      Filtro de Contas
                     </button>
                   </div>
 
@@ -9405,7 +9405,7 @@ export default function App() {
               <div className="px-6 pt-4 bg-white border-b border-slate-200">
                 <TabsList className="w-full grid grid-cols-2">
                   <TabsTrigger value="contas">Filtro de Contas</TabsTrigger>
-                  <TabsTrigger value="presets">Presets Salvos</TabsTrigger>
+                  <TabsTrigger value="presets">Preferências Salvas</TabsTrigger>
                 </TabsList>
               </div>
 
@@ -9516,7 +9516,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <h4 className="text-sm font-bold text-slate-800 mb-3">Presets Salvos</h4>
+                <h4 className="text-sm font-bold text-slate-800 mb-3">Preferências Salvas</h4>
                 {viewPresets.length > 0 ? (
                   <div className="space-y-3">
                     {viewPresets.map((preset) => (
