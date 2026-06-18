@@ -70,6 +70,10 @@ import {
   KeyRound,
   Users,
   UserCircle,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  MoreVertical,
 } from 'lucide-react'
 import localforage from 'localforage'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -91,6 +95,7 @@ import {
 } from '@/components/ui/chart'
 import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Sheet,
   SheetContent,
@@ -426,6 +431,96 @@ const CenariosHelp = () => (
   </HoverCard>
 )
 
+// Alinhamento por coluna (texto e flex)
+const BC_ALIGN_TEXT: Record<string, string> = {
+  left: 'text-left',
+  center: 'text-center',
+  right: 'text-right',
+}
+const BC_ALIGN_JUSTIFY: Record<string, string> = {
+  left: 'justify-start',
+  center: 'justify-center',
+  right: 'justify-end',
+}
+
+// Menu (kebab) de alinhamento exibido no cabeçalho de cada coluna do Balancete
+const ColAlignMenu = ({
+  colKey,
+  current,
+  onChange,
+}: {
+  colKey: string
+  current: 'left' | 'center' | 'right'
+  onChange: (key: string, val: 'left' | 'center' | 'right') => void
+}) => (
+  <Popover>
+    <PopoverTrigger asChild>
+      <button
+        onClick={(e) => e.stopPropagation()}
+        className="p-0.5 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors"
+        title="Alinhamento da coluna"
+      >
+        <MoreVertical className="w-3.5 h-3.5" />
+      </button>
+    </PopoverTrigger>
+    <PopoverContent align="end" className="w-auto p-2 z-[60]">
+      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 px-1">
+        Alinhamento
+      </p>
+      <div className="flex gap-1">
+        {(['left', 'center', 'right'] as const).map((a) => (
+          <button
+            key={a}
+            onClick={() => onChange(colKey, a)}
+            className={`p-1.5 rounded transition-colors ${current === a ? 'bg-indigo-100 text-indigo-700' : 'text-slate-500 hover:bg-slate-100'}`}
+            title={a === 'left' ? 'Esquerda' : a === 'center' ? 'Centro' : 'Direita'}
+          >
+            {a === 'left' ? (
+              <AlignLeft className="w-4 h-4" />
+            ) : a === 'center' ? (
+              <AlignCenter className="w-4 h-4" />
+            ) : (
+              <AlignRight className="w-4 h-4" />
+            )}
+          </button>
+        ))}
+      </div>
+    </PopoverContent>
+  </Popover>
+)
+
+// Botão de ordenação por grupo (aparece nas linhas sintéticas, por coluna)
+const SortBtn = ({
+  active,
+  direction,
+  onClick,
+  dark,
+}: {
+  active: boolean
+  direction?: 'asc' | 'desc'
+  onClick: () => void
+  dark?: boolean
+}) => (
+  <button
+    onClick={(e) => {
+      e.stopPropagation()
+      onClick()
+    }}
+    className="ml-1 inline-flex items-center shrink-0 align-middle"
+    title="Ordenar este grupo por esta coluna"
+  >
+    {active && direction === 'asc' ? (
+      <ArrowUp className={`w-3.5 h-3.5 ${dark ? 'text-amber-300' : 'text-indigo-600'}`} />
+    ) : active && direction === 'desc' ? (
+      <ArrowDown className={`w-3.5 h-3.5 ${dark ? 'text-amber-300' : 'text-indigo-600'}`} />
+    ) : (
+      <ArrowUpDown
+        className={`w-3.5 h-3.5 opacity-40 hover:opacity-100 transition-opacity ${dark ? 'text-white' : 'text-slate-400'}`}
+      />
+    )}
+  </button>
+)
+
 const dateStrToMs = (dateStr: string) => {
   if (!dateStr || dateStr.length < 10) return 0
   const [d, m, y] = dateStr.split('/')
@@ -588,6 +683,31 @@ export default function App() {
   // Preferências de visualização da tabela do Balancete Comparativo
   const { prefs: balancetePrefs, updatePrefs: updateBalancetePrefs } =
     useTablePreferences('balancete_comparativo')
+
+  // Alinhamento por coluna (persistido nas prefs)
+  const setColAlign = (key: string, val: 'left' | 'center' | 'right') =>
+    updateBalancetePrefs({
+      alignments: { ...(balancetePrefs.alignments || {}), [key]: val },
+    })
+  const getColAlign = (key: string, fallback: 'left' | 'center' | 'right') =>
+    (balancetePrefs.alignments?.[key] as 'left' | 'center' | 'right') || fallback
+
+  // Ordenação por grupo (cada conta sintética pode ordenar seus filhos por uma coluna)
+  const [balanceteSortConfigs, setBalanceteSortConfigs] = useState<
+    Record<string, { key: string; direction: 'asc' | 'desc' }>
+  >({})
+  const handleBalanceteSort = (parentConta: string, key: string) => {
+    setBalanceteSortConfigs((prev) => {
+      const cur = prev[parentConta]
+      if (cur?.key === key) {
+        if (cur.direction === 'desc') return { ...prev, [parentConta]: { key, direction: 'asc' } }
+        const next = { ...prev }
+        delete next[parentConta]
+        return next
+      }
+      return { ...prev, [parentConta]: { key, direction: 'desc' } }
+    })
+  }
   const [data, setData] = useState([])
   const [companyInfo, setCompanyInfo] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -1950,6 +2070,112 @@ export default function App() {
   const tableAccountsToDisplay = useMemo(() => {
     return accountsToDisplay.filter((acc: any) => isAccountVisibleInTree(acc.conta))
   }, [accountsToDisplay, isAccountVisibleInTree])
+
+  // Valor exibido de uma conta num período (espelha a lógica das células de saldo)
+  const getBalanceteRawVal = useCallback(
+    (acc: any, period: string) => {
+      const sld = acc?.saldos?.[period]
+      if (!sld) return 0
+      const isResult =
+        acc.natureza === '04' ||
+        acc.natureza === '4' ||
+        acc.conta.startsWith('3') ||
+        acc.conta.startsWith('4') ||
+        acc.conta.startsWith('5')
+      if (!isAccumulated && isResult) {
+        return Math.abs(getRawNumber(sld.debito) - getRawNumber(sld.credito))
+      }
+      return Math.abs(getRawNumber(sld.sldFin))
+    },
+    [isAccumulated],
+  )
+
+  const getBalanceteAccTotal = useCallback(
+    (acc: any) => {
+      const isResult =
+        acc.natureza === '04' ||
+        acc.natureza === '4' ||
+        acc.conta.startsWith('3') ||
+        acc.conta.startsWith('4') ||
+        acc.conta.startsWith('5')
+      if (isResult && !isAccumulated) {
+        let sumDeb = 0
+        let sumCred = 0
+        periodsToDisplay.forEach((p: string) => {
+          const s = acc.saldos[p]
+          if (s) {
+            sumDeb += getRawNumber(s.debito)
+            sumCred += getRawNumber(s.credito)
+          }
+        })
+        return Math.abs(sumDeb - sumCred)
+      }
+      if (periodsToDisplay.length > 0) {
+        const last = periodsToDisplay[periodsToDisplay.length - 1]
+        const s = acc.saldos[last]
+        if (s) return Math.abs(getRawNumber(s.sldFin))
+      }
+      return 0
+    },
+    [isAccumulated, periodsToDisplay],
+  )
+
+  // Reordena as linhas visíveis aplicando a ordenação escolhida em cada grupo (conta pai),
+  // mantendo a hierarquia: filhos de um pai são ordenados entre si pela coluna selecionada.
+  const orderedBalanceteRows = useMemo(() => {
+    const list = tableAccountsToDisplay
+    if (!list.length) return list
+    const inSet = new Set(list.map((a: any) => a.conta))
+    const childrenMap: Record<string, any[]> = {}
+    const roots: any[] = []
+    list.forEach((acc: any) => {
+      const parent = accountParentMap[acc.conta]
+      if (parent && inSet.has(parent)) {
+        if (!childrenMap[parent]) childrenMap[parent] = []
+        childrenMap[parent].push(acc)
+      } else {
+        roots.push(acc)
+      }
+    })
+
+    const byCode = (a: any, b: any) =>
+      String(a.conta).localeCompare(String(b.conta), undefined, { numeric: true })
+
+    const sortSiblings = (sibs: any[], parentConta: string | null) => {
+      const cfg = parentConta ? balanceteSortConfigs[parentConta] : null
+      const arr = [...sibs]
+      if (!cfg) return arr.sort(byCode)
+      return arr.sort((a, b) => {
+        let cmp = 0
+        if (cfg.key === 'conta') {
+          cmp = byCode(a, b)
+        } else if (cfg.key === 'descricao') {
+          cmp = String(a.nome || '').localeCompare(String(b.nome || ''))
+        } else if (cfg.key === 'acumulado') {
+          cmp = getBalanceteAccTotal(a) - getBalanceteAccTotal(b)
+        } else {
+          cmp = getBalanceteRawVal(a, cfg.key) - getBalanceteRawVal(b, cfg.key)
+        }
+        if (cmp === 0) cmp = byCode(a, b)
+        return cfg.direction === 'asc' ? cmp : -cmp
+      })
+    }
+
+    const result: any[] = []
+    const walk = (node: any) => {
+      result.push(node)
+      const kids = childrenMap[node.conta]
+      if (kids && kids.length) sortSiblings(kids, node.conta).forEach(walk)
+    }
+    sortSiblings(roots, null).forEach(walk)
+    return result
+  }, [
+    tableAccountsToDisplay,
+    accountParentMap,
+    balanceteSortConfigs,
+    getBalanceteRawVal,
+    getBalanceteAccTotal,
+  ])
 
   const expandAllAccounts = () => {
     if (!monthlyData?.allAccounts) return
@@ -7695,19 +7921,52 @@ export default function App() {
                 >
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="py-2 px-4 font-bold text-slate-500 uppercase tracking-widest text-[11px] border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm border-r-0">
-                        Conta
+                      <th
+                        className={`py-2 px-4 font-bold text-slate-500 uppercase tracking-widest text-[11px] border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm border-r-0 ${BC_ALIGN_TEXT[getColAlign('conta', 'left')]}`}
+                      >
+                        <div
+                          className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign('conta', 'left')]}`}
+                        >
+                          <span>Conta</span>
+                          <ColAlignMenu
+                            colKey="conta"
+                            current={getColAlign('conta', 'left')}
+                            onChange={setColAlign}
+                          />
+                        </div>
                       </th>
-                      <th className="py-2 px-4 font-bold text-slate-500 uppercase tracking-widest text-[11px] border-b border-slate-200 min-w-[300px] sticky top-0 bg-slate-50 z-20 shadow-sm border-r-0">
-                        Descrição
+                      <th
+                        className={`py-2 px-4 font-bold text-slate-500 uppercase tracking-widest text-[11px] border-b border-slate-200 min-w-[300px] sticky top-0 bg-slate-50 z-20 shadow-sm border-r-0 ${BC_ALIGN_TEXT[getColAlign('descricao', 'left')]}`}
+                      >
+                        <div
+                          className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign('descricao', 'left')]}`}
+                        >
+                          <span>Descrição</span>
+                          <ColAlignMenu
+                            colKey="descricao"
+                            current={getColAlign('descricao', 'left')}
+                            onChange={setColAlign}
+                          />
+                        </div>
                       </th>
                       {periodsToDisplay.map((period: string) => (
                         <React.Fragment key={period}>
-                          <th className="py-2 px-4 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm">
+                          <th
+                            className={`py-2 px-4 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm ${BC_ALIGN_TEXT[getColAlign(period, 'right')]}`}
+                          >
                             <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">
                               {period.split(' a ')[0].substring(3)}
                             </div>
-                            <span className="font-bold text-slate-700 text-xs">Saldo</span>
+                            <div
+                              className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign(period, 'right')]}`}
+                            >
+                              <span className="font-bold text-slate-700 text-xs">Saldo</span>
+                              <ColAlignMenu
+                                colKey={period}
+                                current={getColAlign(period, 'right')}
+                                onChange={setColAlign}
+                              />
+                            </div>
                           </th>
                           {showAV && (
                             <>
@@ -7755,7 +8014,9 @@ export default function App() {
                           )}
                         </React.Fragment>
                       ))}
-                      <th className="py-2 px-4 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-indigo-50 z-20 shadow-sm">
+                      <th
+                        className={`py-2 px-4 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-indigo-50 z-20 shadow-sm ${BC_ALIGN_TEXT[getColAlign('acumulado', 'right')]}`}
+                      >
                         <div className="text-[10px] text-indigo-500 uppercase font-bold tracking-widest mb-0.5 flex items-center justify-end gap-1">
                           Acumulado {periodsToDisplay.length > 0 && `(${periodsToDisplay.length})`}
                           <IndicatorTooltip
@@ -7763,7 +8024,16 @@ export default function App() {
                             example="Soma a movimentação das contas de resultado (no modo isolado) ou exibe o saldo final do último período selecionado."
                           />
                         </div>
-                        <span className="font-bold text-indigo-700 text-xs">Saldo Total</span>
+                        <div
+                          className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign('acumulado', 'right')]}`}
+                        >
+                          <span className="font-bold text-indigo-700 text-xs">Saldo Total</span>
+                          <ColAlignMenu
+                            colKey="acumulado"
+                            current={getColAlign('acumulado', 'right')}
+                            onChange={setColAlign}
+                          />
+                        </div>
                       </th>
                     </tr>
                   </thead>
@@ -7836,7 +8106,7 @@ export default function App() {
                         )
                       }
 
-                      return tableAccountsToDisplay.map((acc: any, index: number) => {
+                      return orderedBalanceteRows.map((acc: any, index: number) => {
                         const isSintetica = acc.tipo === 'S'
                         const isExpanded = expandedAccounts.has(acc.conta)
                         const indent = (parseInt(acc.nivel) - 1) * 16
@@ -7879,7 +8149,9 @@ export default function App() {
                               className={`py-1.5 px-4 font-mono text-[0.8em] border-r border-white/10 group ${isDarkBg ? 'text-white/80' : isLevel5 ? 'text-black' : 'text-blue-900/60'}`}
                               style={{ paddingLeft: `${indent + 16}px` }}
                             >
-                              <div className="flex items-center gap-1">
+                              <div
+                                className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign('conta', 'left')]}`}
+                              >
                                 {isSintetica ? (
                                   <button
                                     onClick={(e) => {
@@ -7900,14 +8172,24 @@ export default function App() {
                                   </div>
                                 )}
                                 {isSintetica ? <strong>{acc.conta}</strong> : acc.conta}
+                                {isSintetica && (
+                                  <SortBtn
+                                    active={balanceteSortConfigs[acc.conta]?.key === 'conta'}
+                                    direction={balanceteSortConfigs[acc.conta]?.direction}
+                                    onClick={() => handleBalanceteSort(acc.conta, 'conta')}
+                                    dark={isDarkBg}
+                                  />
+                                )}
                               </div>
                             </td>
                             <td
-                              className={`py-1.5 px-4 text-[0.92em] ${isDarkBg ? 'text-white' : isLevel5 ? 'text-black' : 'text-blue-950'}`}
+                              className={`py-1.5 px-4 text-[0.92em] ${BC_ALIGN_TEXT[getColAlign('descricao', 'left')]} ${isDarkBg ? 'text-white' : isLevel5 ? 'text-black' : 'text-blue-950'}`}
                             >
                               <ContextMenu>
                                 <ContextMenuTrigger asChild>
-                                  <div className="w-full h-full cursor-context-menu flex items-center">
+                                  <div
+                                    className={`w-full h-full cursor-context-menu flex items-center ${BC_ALIGN_JUSTIFY[getColAlign('descricao', 'left')]}`}
+                                  >
                                     {acc.nome}
                                     {isSintetica && (
                                       <span
@@ -8169,24 +8451,36 @@ export default function App() {
                               return (
                                 <React.Fragment key={period}>
                                   <td
-                                    className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'text-white' : isLevel5 ? 'text-black' : 'text-blue-950'}`}
+                                    className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${BC_ALIGN_TEXT[getColAlign(period, 'right')]} ${isDarkBg ? 'text-white' : isLevel5 ? 'text-black' : 'text-blue-950'}`}
                                   >
-                                    {displayVal !== '0,00' ? (
-                                      <div className="flex items-center justify-end gap-2 w-full">
-                                        <span>{displayVal}</span>
-                                        <span
-                                          className={`text-[10px] w-3 ${displayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : isDarkBg ? 'text-red-200' : 'text-red-600'}`}
-                                        >
-                                          {displayInd}
+                                    <div
+                                      className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign(period, 'right')]}`}
+                                    >
+                                      {displayVal !== '0,00' ? (
+                                        <span className="flex items-center justify-end gap-2">
+                                          <span>{displayVal}</span>
+                                          <span
+                                            className={`text-[10px] w-3 ${displayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : isDarkBg ? 'text-red-200' : 'text-red-600'}`}
+                                          >
+                                            {displayInd}
+                                          </span>
                                         </span>
-                                      </div>
-                                    ) : (
-                                      <span
-                                        className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}
-                                      >
-                                        -
-                                      </span>
-                                    )}
+                                      ) : (
+                                        <span
+                                          className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}
+                                        >
+                                          -
+                                        </span>
+                                      )}
+                                      {isSintetica && (
+                                        <SortBtn
+                                          active={balanceteSortConfigs[acc.conta]?.key === period}
+                                          direction={balanceteSortConfigs[acc.conta]?.direction}
+                                          onClick={() => handleBalanceteSort(acc.conta, period)}
+                                          dark={isDarkBg}
+                                        />
+                                      )}
+                                    </div>
                                   </td>
                                   {showAV && (
                                     <>
@@ -8276,24 +8570,36 @@ export default function App() {
 
                               return (
                                 <td
-                                  className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-white/10 text-white' : isLevel5 ? 'bg-black/[0.04] text-black' : 'bg-black/[0.04] text-blue-950'}`}
+                                  className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${BC_ALIGN_TEXT[getColAlign('acumulado', 'right')]} ${isDarkBg ? 'bg-white/10 text-white' : isLevel5 ? 'bg-black/[0.04] text-black' : 'bg-black/[0.04] text-blue-950'}`}
                                 >
-                                  {accDisplayVal !== '0,00' ? (
-                                    <div className="flex items-center justify-end gap-2 w-full">
-                                      <span>{accDisplayVal}</span>
-                                      <span
-                                        className={`text-[10px] w-3 ${accDisplayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : isDarkBg ? 'text-red-200' : 'text-red-600'}`}
-                                      >
-                                        {accDisplayInd}
+                                  <div
+                                    className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign('acumulado', 'right')]}`}
+                                  >
+                                    {accDisplayVal !== '0,00' ? (
+                                      <span className="flex items-center justify-end gap-2">
+                                        <span>{accDisplayVal}</span>
+                                        <span
+                                          className={`text-[10px] w-3 ${accDisplayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : isDarkBg ? 'text-red-200' : 'text-red-600'}`}
+                                        >
+                                          {accDisplayInd}
+                                        </span>
                                       </span>
-                                    </div>
-                                  ) : (
-                                    <span
-                                      className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}
-                                    >
-                                      -
-                                    </span>
-                                  )}
+                                    ) : (
+                                      <span
+                                        className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}
+                                      >
+                                        -
+                                      </span>
+                                    )}
+                                    {isSintetica && (
+                                      <SortBtn
+                                        active={balanceteSortConfigs[acc.conta]?.key === 'acumulado'}
+                                        direction={balanceteSortConfigs[acc.conta]?.direction}
+                                        onClick={() => handleBalanceteSort(acc.conta, 'acumulado')}
+                                        dark={isDarkBg}
+                                      />
+                                    )}
+                                  </div>
                                 </td>
                               )
                             })()}

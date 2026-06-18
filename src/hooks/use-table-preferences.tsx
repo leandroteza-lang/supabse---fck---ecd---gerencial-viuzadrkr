@@ -10,6 +10,7 @@ export interface TablePrefs {
   gridlineColor: string
   rowHeight: 'compact' | 'standard' | 'comfortable'
   fontSize: number
+  alignments?: Record<string, 'left' | 'center' | 'right'>
 }
 
 export const DEFAULT_TABLE_PREFS: TablePrefs = {
