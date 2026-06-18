@@ -66,6 +66,10 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  LogOut,
+  KeyRound,
+  Users,
+  UserCircle,
 } from 'lucide-react'
 import localforage from 'localforage'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -133,6 +137,8 @@ import {
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
+import ChangePasswordDialog from '@/components/ChangePasswordDialog'
+import AdminUsersDialog from '@/components/AdminUsersDialog'
 
 const CHART_COLORS = [
   {
@@ -487,8 +493,10 @@ const EditableTitle = ({
 }
 
 export default function App() {
-  const { user, signOut } = useAuth()
+  const { user, signOut, isAdmin } = useAuth()
   const { toast } = useToast()
+  const [showChangePassword, setShowChangePassword] = useState(false)
+  const [showAdminUsers, setShowAdminUsers] = useState(false)
   const [data, setData] = useState([])
   const [companyInfo, setCompanyInfo] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -3800,12 +3808,31 @@ export default function App() {
                 </div>
               )}
 
-              <button
-                onClick={signOut}
-                className="text-sm font-bold text-slate-500 hover:text-rose-600 transition-colors mr-2 hidden sm:block"
-              >
-                Sair
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-indigo-600 transition-colors mr-2 px-2 py-1.5 rounded-lg hover:bg-slate-100">
+                    <UserCircle className="w-5 h-5" />
+                    <span className="hidden sm:inline max-w-[160px] truncate">{user?.email}</span>
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 z-50">
+                  <DropdownMenuLabel className="truncate">{user?.email}</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setShowChangePassword(true)}>
+                    <KeyRound className="w-4 h-4 mr-2" /> Alterar minha senha
+                  </DropdownMenuItem>
+                  {isAdmin && (
+                    <DropdownMenuItem onClick={() => setShowAdminUsers(true)}>
+                      <Users className="w-4 h-4 mr-2" /> Gerenciar usuários
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={signOut} className="text-rose-600 focus:text-rose-600">
+                    <LogOut className="w-4 h-4 mr-2" /> Sair
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <div className="relative">
                 <input
                   type="file"
@@ -9908,6 +9935,9 @@ export default function App() {
       `,
         }}
       />
+
+      <ChangePasswordDialog open={showChangePassword} onOpenChange={setShowChangePassword} />
+      {isAdmin && <AdminUsersDialog open={showAdminUsers} onOpenChange={setShowAdminUsers} />}
     </div>
   )
 }

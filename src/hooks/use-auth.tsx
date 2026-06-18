@@ -5,9 +5,11 @@ import { supabase } from '@/lib/supabase/client'
 interface AuthContextType {
   user: User | null
   session: Session | null
+  isAdmin: boolean
   signUp: (email: string, password: string) => Promise<{ error: any }>
   signIn: (email: string, password: string) => Promise<{ error: any }>
   signOut: () => Promise<{ error: any }>
+  updateOwnPassword: (newPassword: string) => Promise<{ error: any }>
   loading: boolean
 }
 
@@ -22,6 +24,7 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -40,6 +43,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe()
   }, [])
 
+  // Carrega a flag de admin a partir do próprio perfil sempre que o usuário muda
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false)
+      return
+    }
+    let active = true
+    supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (active) setIsAdmin(Boolean((data as { is_admin?: boolean } | null)?.is_admin))
+      })
+    return () => {
+      active = false
+    }
+  }, [user])
+
   const signUp = async (email: string, password: string) => {
     const { error } = await supabase.auth.signUp({
       email,
@@ -56,9 +79,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { error } = await supabase.auth.signOut()
     return { error }
   }
+  const updateOwnPassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    return { error }
+  }
 
   return (
-    <AuthContext.Provider value={{ user, session, signUp, signIn, signOut, loading }}>
+    <AuthContext.Provider
+      value={{ user, session, isAdmin, signUp, signIn, signOut, updateOwnPassword, loading }}
+    >
       {children}
     </AuthContext.Provider>
   )
