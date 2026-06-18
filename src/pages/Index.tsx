@@ -139,6 +139,12 @@ import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog'
 import AdminUsersDialog from '@/components/AdminUsersDialog'
+import { TableSettingsControls } from '@/components/TableSettingsControls'
+import {
+  useTablePreferences,
+  FONT_SIZE_MIN,
+  FONT_SIZE_MAX,
+} from '@/hooks/use-table-preferences'
 
 const CHART_COLORS = [
   {
@@ -497,6 +503,9 @@ export default function App() {
   const { toast } = useToast()
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [showAdminUsers, setShowAdminUsers] = useState(false)
+  // Preferências de visualização da tabela do Balancete Comparativo
+  const { prefs: balancetePrefs, updatePrefs: updateBalancetePrefs } =
+    useTablePreferences('balancete_comparativo')
   const [data, setData] = useState([])
   const [companyInfo, setCompanyInfo] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -7549,6 +7558,40 @@ export default function App() {
                         <span>AH%</span>
                       </label>
                     </div>
+
+                    <div className="flex items-center gap-1 bg-white px-2 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                      <button
+                        onClick={() =>
+                          updateBalancetePrefs({
+                            fontSize: Math.max(FONT_SIZE_MIN, balancetePrefs.fontSize - 1),
+                          })
+                        }
+                        className="h-7 w-7 flex items-center justify-center rounded text-[12px] font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                        title="Diminuir fonte da tabela"
+                      >
+                        A-
+                      </button>
+                      <span className="text-xs font-bold text-slate-500 w-5 text-center select-none">
+                        {balancetePrefs.fontSize}
+                      </span>
+                      <button
+                        onClick={() =>
+                          updateBalancetePrefs({
+                            fontSize: Math.min(FONT_SIZE_MAX, balancetePrefs.fontSize + 1),
+                          })
+                        }
+                        className="h-7 w-7 flex items-center justify-center rounded text-[15px] font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                        title="Aumentar fonte da tabela"
+                      >
+                        A+
+                      </button>
+                      <div className="w-px h-5 bg-slate-200 mx-0.5"></div>
+                      <TableSettingsControls
+                        prefs={balancetePrefs}
+                        updatePrefs={updateBalancetePrefs}
+                        className="border-0 shadow-none bg-transparent h-7 w-7"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -7557,7 +7600,16 @@ export default function App() {
                 className="overflow-x-auto overflow-y-auto custom-scrollbar"
                 style={{ maxHeight: 'calc(100vh - 280px)', minHeight: '400px' }}
               >
-                <table className="w-full text-left border-collapse text-sm">
+                <table
+                  className="w-full text-left border-collapse text-sm bc-viz-table"
+                  data-grid={balancetePrefs.showGridlines ? 'on' : 'off'}
+                  data-density={balancetePrefs.rowHeight || 'standard'}
+                  style={{
+                    fontSize: `${balancetePrefs.fontSize}px`,
+                    ['--bc-gw']: `${balancetePrefs.gridlineWidth}px`,
+                    ['--bc-gl']: balancetePrefs.gridlineColor,
+                  }}
+                >
                   <thead className="bg-slate-50">
                     <tr>
                       <th className="py-2 px-4 font-bold text-slate-500 uppercase tracking-widest text-[11px] border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm border-r-0">
@@ -9932,6 +9984,24 @@ export default function App() {
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Visualização da Tabela (Balancete Comparativo) */
+        .bc-viz-table[data-grid='on'] th,
+        .bc-viz-table[data-grid='on'] td {
+          border-width: var(--bc-gw, 1px) !important;
+          border-style: solid !important;
+          border-color: var(--bc-gl, #cbd5e1) !important;
+        }
+        .bc-viz-table[data-density='compact'] th,
+        .bc-viz-table[data-density='compact'] td {
+          padding-top: 2px !important;
+          padding-bottom: 2px !important;
+        }
+        .bc-viz-table[data-density='comfortable'] th,
+        .bc-viz-table[data-density='comfortable'] td {
+          padding-top: 14px !important;
+          padding-bottom: 14px !important;
+        }
       `,
         }}
       />
