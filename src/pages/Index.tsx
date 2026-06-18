@@ -7842,6 +7842,7 @@ export default function App() {
                         const indent = (parseInt(acc.nivel) - 1) * 16
 
                         const level = parseInt(acc.nivel) || 1
+                        const isLevel5 = level === 5
                         let rowClass = 'transition-colors cursor-pointer '
                         let isDarkBg = false
 
@@ -7856,6 +7857,8 @@ export default function App() {
                           isDarkBg = true
                         } else if (level === 4) {
                           rowClass += 'bg-blue-200 text-blue-950 hover:bg-blue-300 font-medium'
+                        } else if (isLevel5) {
+                          rowClass += 'bg-blue-50 text-black hover:bg-blue-100 font-medium'
                         } else {
                           rowClass += 'bg-blue-50 text-blue-900 hover:bg-blue-100 font-medium'
                         }
@@ -7873,7 +7876,7 @@ export default function App() {
                             className={rowClass}
                           >
                             <td
-                              className={`py-1.5 px-4 font-mono text-[11px] border-r border-white/10 group ${isDarkBg ? 'text-white/80' : 'text-blue-900/60'}`}
+                              className={`py-1.5 px-4 font-mono text-[0.8em] border-r border-white/10 group ${isDarkBg ? 'text-white/80' : isLevel5 ? 'text-black' : 'text-blue-900/60'}`}
                               style={{ paddingLeft: `${indent + 16}px` }}
                             >
                               <div className="flex items-center gap-1">
@@ -7900,7 +7903,7 @@ export default function App() {
                               </div>
                             </td>
                             <td
-                              className={`py-1.5 px-4 text-[13px] ${isDarkBg ? 'text-white' : 'text-blue-950'}`}
+                              className={`py-1.5 px-4 text-[0.92em] ${isDarkBg ? 'text-white' : isLevel5 ? 'text-black' : 'text-blue-950'}`}
                             >
                               <ContextMenu>
                                 <ContextMenuTrigger asChild>
@@ -8166,7 +8169,7 @@ export default function App() {
                               return (
                                 <React.Fragment key={period}>
                                   <td
-                                    className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'text-white' : 'text-blue-950'}`}
+                                    className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'text-white' : isLevel5 ? 'text-black' : 'text-blue-950'}`}
                                   >
                                     {displayVal !== '0,00' ? (
                                       <div className="flex items-center justify-end gap-2 w-full">
@@ -8273,7 +8276,7 @@ export default function App() {
 
                               return (
                                 <td
-                                  className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-white/10 text-white' : 'bg-black/[0.04] text-blue-950'}`}
+                                  className={`py-1.5 px-4 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-white/10 text-white' : isLevel5 ? 'bg-black/[0.04] text-black' : 'bg-black/[0.04] text-blue-950'}`}
                                 >
                                   {accDisplayVal !== '0,00' ? (
                                     <div className="flex items-center justify-end gap-2 w-full">
