@@ -506,7 +506,7 @@ const SortBtn = ({
       e.stopPropagation()
       onClick()
     }}
-    className="ml-1 inline-flex items-center shrink-0 align-middle"
+    className="inline-flex items-center shrink-0 align-middle"
     title="Ordenar este grupo por esta coluna"
   >
     {active && direction === 'asc' ? (
@@ -519,6 +519,48 @@ const SortBtn = ({
       />
     )}
   </button>
+)
+
+// Ajuda da Perspectiva (Mensal Isolado vs Acumulado Mensal)
+const PerspectivaHelp = () => (
+  <HoverCard openDelay={150} closeDelay={100}>
+    <HoverCardTrigger asChild>
+      <button
+        type="button"
+        className="text-slate-400 hover:text-indigo-600 transition-colors"
+        title="Como funciona a Perspectiva?"
+      >
+        <HelpCircle className="w-4 h-4" />
+      </button>
+    </HoverCardTrigger>
+    <HoverCardContent
+      align="end"
+      className="w-[380px] p-4 text-xs leading-relaxed shadow-2xl border-slate-200 z-[60] bg-white text-left"
+    >
+      <h4 className="text-sm font-black text-slate-900 mb-2">Perspectiva de leitura dos valores</h4>
+      <div className="space-y-2.5">
+        <div>
+          <p className="font-bold text-slate-800">Mensal Isolado</p>
+          <p className="text-slate-600">
+            Cada coluna mostra <strong>apenas a movimentação daquele mês</strong>, isoladamente. Ex.:
+            a coluna 03/2026 traz só o que aconteceu em março.
+          </p>
+        </div>
+        <div>
+          <p className="font-bold text-slate-800">Acumulado Mensal</p>
+          <p className="text-slate-600">
+            Cada coluna <strong>soma desde o primeiro mês até ela</strong>. Ex.: 03/2026 = janeiro +
+            fevereiro + março. Em contas de resultado mostra o total no período; em contas
+            patrimoniais (ativo/passivo), o saldo final acumulado.
+          </p>
+        </div>
+      </div>
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-slate-700 mt-3">
+        <strong>Dica:</strong> use <strong>Mensal Isolado</strong> para comparar o desempenho mês a
+        mês e <strong>Acumulado Mensal</strong> para ver a evolução total ao longo do tempo.
+      </div>
+    </HoverCardContent>
+  </HoverCard>
 )
 
 const dateStrToMs = (dateStr: string) => {
@@ -4058,19 +4100,24 @@ export default function App() {
   }
 
   const ToggleAccumulated = () => (
-    <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 mr-2 shrink-0">
-      <button
-        onClick={() => setIsAccumulated(false)}
-        className={`px-4 py-2 rounded-md text-xs font-bold transition-all whitespace-nowrap ${!isAccumulated ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
-      >
-        Mensal Isolado
-      </button>
-      <button
-        onClick={() => setIsAccumulated(true)}
-        className={`px-4 py-2 rounded-md text-xs font-bold transition-all whitespace-nowrap ${isAccumulated ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
-      >
-        Acumulado (YTD)
-      </button>
+    <div className="flex items-center gap-1.5 mr-2 shrink-0">
+      <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+        <button
+          onClick={() => setIsAccumulated(false)}
+          title="Mostra apenas a movimentação do próprio mês (ex.: só o que ocorreu em março), sem somar os meses anteriores."
+          className={`px-4 py-2 rounded-md text-xs font-bold transition-all whitespace-nowrap ${!isAccumulated ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Mensal Isolado
+        </button>
+        <button
+          onClick={() => setIsAccumulated(true)}
+          title="Soma a movimentação desde o 1º mês até cada coluna (ex.: março = jan+fev+mar). Em contas patrimoniais, exibe o saldo final acumulado."
+          className={`px-4 py-2 rounded-md text-xs font-bold transition-all whitespace-nowrap ${isAccumulated ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Acumulado Mensal
+        </button>
+      </div>
+      <PerspectivaHelp />
     </div>
   )
 
@@ -8467,14 +8514,16 @@ export default function App() {
                                       >
                                         {displayInd}
                                       </span>
-                                      {isSintetica && (
-                                        <SortBtn
-                                          active={balanceteSortConfigs[acc.conta]?.key === period}
-                                          direction={balanceteSortConfigs[acc.conta]?.direction}
-                                          onClick={() => handleBalanceteSort(acc.conta, period)}
-                                          dark={isDarkBg}
-                                        />
-                                      )}
+                                      <span className="w-4 shrink-0 flex items-center justify-center">
+                                        {isSintetica && (
+                                          <SortBtn
+                                            active={balanceteSortConfigs[acc.conta]?.key === period}
+                                            direction={balanceteSortConfigs[acc.conta]?.direction}
+                                            onClick={() => handleBalanceteSort(acc.conta, period)}
+                                            dark={isDarkBg}
+                                          />
+                                        )}
+                                      </span>
                                     </div>
                                   </td>
                                   {showAV && (
@@ -8578,14 +8627,16 @@ export default function App() {
                                     >
                                       {accDisplayInd}
                                     </span>
-                                    {isSintetica && (
-                                      <SortBtn
-                                        active={balanceteSortConfigs[acc.conta]?.key === 'acumulado'}
-                                        direction={balanceteSortConfigs[acc.conta]?.direction}
-                                        onClick={() => handleBalanceteSort(acc.conta, 'acumulado')}
-                                        dark={isDarkBg}
-                                      />
-                                    )}
+                                    <span className="w-4 shrink-0 flex items-center justify-center">
+                                      {isSintetica && (
+                                        <SortBtn
+                                          active={balanceteSortConfigs[acc.conta]?.key === 'acumulado'}
+                                          direction={balanceteSortConfigs[acc.conta]?.direction}
+                                          onClick={() => handleBalanceteSort(acc.conta, 'acumulado')}
+                                          dark={isDarkBg}
+                                        />
+                                      )}
+                                    </span>
                                   </div>
                                 </td>
                               )
