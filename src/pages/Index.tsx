@@ -90,6 +90,7 @@ import {
   ChartLegendContent,
 } from '@/components/ui/chart'
 import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import {
   Sheet,
   SheetContent,
@@ -342,6 +343,87 @@ const IndicatorTooltip = ({ text, example }: { text: string; example: string }) 
       <p className="text-slate-500 italic">{example}</p>
     </TooltipContent>
   </UITooltip>
+)
+
+// Ajuda detalhada do recurso "Comparar Cenários" (Perfis de Análise)
+const CenariosHelp = () => (
+  <HoverCard openDelay={150} closeDelay={100}>
+    <HoverCardTrigger asChild>
+      <button
+        type="button"
+        className="text-slate-400 hover:text-indigo-600 transition-colors"
+        title="O que é Comparar Cenários?"
+      >
+        <HelpCircle className="w-4 h-4" />
+      </button>
+    </HoverCardTrigger>
+    <HoverCardContent
+      align="start"
+      className="w-[400px] max-h-[70vh] overflow-y-auto custom-scrollbar p-4 text-xs leading-relaxed shadow-2xl border-slate-200 z-[60] bg-white text-left"
+    >
+      <h4 className="text-sm font-black text-slate-900 mb-1">
+        Comparar Cenários — Perfis de Análise
+      </h4>
+      <p className="text-slate-600 mb-3">
+        Um <strong>Cenário</strong> (Perfil de Análise) é uma configuração salva de{' '}
+        <strong>como os percentuais da tabela são calculados</strong>. Ele muda a metodologia de
+        leitura, <em>não os saldos</em> — os valores em R$ continuam idênticos.
+      </p>
+
+      <p className="font-bold text-slate-800 mb-1">O que cada cenário define:</p>
+      <ul className="list-disc pl-4 space-y-1.5 text-slate-600 mb-3">
+        <li>
+          <strong>Análise Vertical (AV%)</strong> — qual é a base de “100%”:{' '}
+          <em>Padrão</em> (conta como % do Ativo Total / Receita Líquida) ou{' '}
+          <em>Relativa à Conta Pai</em> (conta como % do grupo imediatamente acima).
+        </li>
+        <li>
+          <strong>Análise Horizontal (AH%)</strong> — contra o que comparar:{' '}
+          <em>Período anterior</em> (mês a mês) ou <em>Período Base Fixo</em> (tudo comparado a um
+          mês de referência).
+        </li>
+        <li>
+          <strong>Alertas de desvio (⚠️)</strong> — limites de AV%/AH% acima dos quais a célula
+          sinaliza.
+        </li>
+      </ul>
+
+      <p className="font-bold text-slate-800 mb-1">Como funciona o P1 / P2:</p>
+      <p className="text-slate-600 mb-3">
+        <strong>P1</strong> é o cenário ativo. Ao marcar <strong>Comparar Cenários</strong>,
+        habilita-se o <strong>P2</strong> (um segundo cenário) e a tabela passa a mostrar os
+        percentuais <strong>lado a lado, nas duas metodologias ao mesmo tempo</strong> (colunas{' '}
+        <code className="bg-slate-100 px-1 rounded">AV% P1</code> e{' '}
+        <code className="bg-slate-100 px-1 rounded">AV% P2</code>).
+      </p>
+
+      <p className="font-bold text-slate-800 mb-1">Exemplos práticos:</p>
+      <ul className="list-disc pl-4 space-y-1.5 text-slate-600 mb-3">
+        <li>
+          <strong>Telefonia:</strong> no P1 (Padrão) representa <strong>3% da receita total</strong>;
+          no P2 (Relativa à Pai) representa <strong>40% das Despesas Administrativas</strong>. Os
+          dois números aparecem juntos para você dimensionar o gasto por ângulos diferentes.
+        </li>
+        <li>
+          <strong>Crescimento de Receita:</strong> P1 com AH “Período anterior” mostra que Março
+          cresceu <strong>+5% sobre Fevereiro</strong>; P2 com AH “Base fixo = Janeiro” mostra que
+          Março está <strong>+18% sobre Janeiro</strong>. Útil para separar a variação do mês da
+          tendência do ano.
+        </li>
+        <li>
+          <strong>Auditoria de relevância:</strong> um cenário “Conservador” com alerta de AV% em 5%
+          (P1) versus um “Tolerante” com alerta em 15% (P2) — você vê quais contas disparam ⚠️ em
+          cada régua de materialidade.
+        </li>
+      </ul>
+
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-slate-700">
+        <strong>Importante:</strong> a comparação só aparece com <strong>AV%</strong> (ou AH%)
+        marcado — é nesses percentuais que P1 e P2 diferem. Use a{' '}
+        <strong>engrenagem (⚙️)</strong> ao lado para criar, editar ou excluir cenários.
+      </div>
+    </HoverCardContent>
+  </HoverCard>
 )
 
 const dateStrToMs = (dateStr: string) => {
@@ -7484,6 +7566,7 @@ export default function App() {
                         />
                         <span className="whitespace-nowrap">Comparar Cenários</span>
                       </label>
+                      <CenariosHelp />
                     </div>
 
                     <div className="flex items-center gap-2 w-full sm:w-auto">
