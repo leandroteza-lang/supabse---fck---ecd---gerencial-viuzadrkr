@@ -74,6 +74,7 @@ import {
   AlignCenter,
   AlignRight,
   MoreVertical,
+  BookOpen,
 } from 'lucide-react'
 import localforage from 'localforage'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -430,6 +431,13 @@ const CenariosHelp = () => (
     </HoverCardContent>
   </HoverCard>
 )
+
+// Formatação de moeda BRL para as memórias de cálculo
+const fmtBRL = (n: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n || 0)
+
+// Rótulo curto de período (ex.: "01/01/2026 a 31/01/2026" -> "01/2026")
+const periodLabel = (p?: string) => (p ? p.split(' a ')[0].substring(3) : 'N/A')
 
 // Alinhamento por coluna (texto e flex)
 const BC_ALIGN_TEXT: Record<string, string> = {
@@ -8111,7 +8119,8 @@ export default function App() {
                             </span>
                           )
                         }
-                        const base = getBaseValueForAccountWithProfile(acc, period, profile)
+                        const baseDetails = getBaseDetailsForAccount(acc, period, profile)
+                        const base = baseDetails.totalValue
                         if (!base || base <= 0) {
                           return (
                             <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>
@@ -8154,11 +8163,55 @@ export default function App() {
                             >
                               <Search className="w-3 h-3" />
                             </button>
-                            <span
-                              className={`text-[11px] font-mono ${isDarkBg ? 'text-white/70' : isP2 ? 'text-indigo-700 font-bold' : 'text-blue-800/70'}`}
-                            >
-                              {avPct.toFixed(2)}%
-                            </span>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <span
+                                  onClick={(e) => e.stopPropagation()}
+                                  className={`text-[11px] font-mono border-b border-dotted cursor-pointer hover:opacity-80 transition-opacity ${isDarkBg ? 'text-white/70 border-white/40' : isP2 ? 'text-indigo-700 font-bold border-indigo-300' : 'text-blue-800/70 border-blue-800/40'}`}
+                                  title="Clique para ver a memória de cálculo"
+                                >
+                                  {avPct.toFixed(2)}%
+                                </span>
+                              </PopoverTrigger>
+                              <PopoverContent
+                                side="top"
+                                align="end"
+                                className="w-80 p-4 text-sm z-[120]"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <h4 className="font-bold text-slate-800 mb-2 border-b pb-1 flex items-center gap-1.5">
+                                  <BookOpen className="h-4 w-4 text-indigo-600" /> Memória de Cálculo
+                                  (AV%)
+                                </h4>
+                                <div className="space-y-2 mt-3">
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-500">
+                                      Valor Atual ({periodLabel(period)}):
+                                    </span>
+                                    <span className="font-medium text-slate-700">
+                                      {fmtBRL(rawVal)}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-500 truncate mr-2" title={baseDetails.type}>
+                                      Base ({baseDetails.type}):
+                                    </span>
+                                    <span className="font-medium text-slate-700 shrink-0">
+                                      {fmtBRL(base)}
+                                    </span>
+                                  </div>
+                                  <div className="bg-slate-50 p-2 rounded-md border border-slate-100 mt-2 font-mono text-[10px] text-center text-slate-600 leading-tight">
+                                    (|{fmtBRL(rawVal)}| / {fmtBRL(base)}) × 100
+                                  </div>
+                                  <div className="flex justify-between items-center text-sm font-bold pt-1 border-t mt-1">
+                                    <span className="text-slate-700">Resultado:</span>
+                                    <span className="text-slate-700">
+                                      {avPct.toFixed(2).replace('.', ',')}%
+                                    </span>
+                                  </div>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           </div>
                         )
                       }
@@ -8372,6 +8425,7 @@ export default function App() {
                               // Análise Horizontal
                               let ahLabel = null
                               let prevVal = 0
+                              let prevPeriodLabel = ''
                               let hasValidPrev = false
 
                               if (
@@ -8381,6 +8435,7 @@ export default function App() {
                                 const baseSld = acc.saldos[activeProfile.basePeriodForAh]
                                 if (baseSld) {
                                   hasValidPrev = true
+                                  prevPeriodLabel = activeProfile.basePeriodForAh
                                   const isResult =
                                     acc.natureza === '04' ||
                                     acc.natureza === '4' ||
@@ -8402,6 +8457,7 @@ export default function App() {
                                   const prevSld = acc.saldos[prevPeriod]
                                   if (prevSld) {
                                     hasValidPrev = true
+                                    prevPeriodLabel = prevPeriod
                                     const isResult =
                                       acc.natureza === '04' ||
                                       acc.natureza === '4' ||
@@ -8475,13 +8531,66 @@ export default function App() {
                                           </TooltipContent>
                                         </UITooltip>
                                       )}
-                                      <span
-                                        className={`text-[11px] font-mono ${colorClass}`}
-                                        title="Análise Horizontal (vs Mês Anterior)"
-                                      >
-                                        {ahPct > 0 ? '+' : ''}
-                                        {ahPct.toFixed(2)}%
-                                      </span>
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <span
+                                            onClick={(e) => e.stopPropagation()}
+                                            className={`text-[11px] font-mono border-b border-dotted border-current cursor-pointer hover:opacity-80 transition-opacity ${colorClass}`}
+                                            title="Clique para ver a memória de cálculo"
+                                          >
+                                            {ahPct > 0 ? '+' : ''}
+                                            {ahPct.toFixed(2)}%
+                                          </span>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                          side="top"
+                                          align="end"
+                                          className="w-80 p-4 text-sm z-[120]"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <h4 className="font-bold text-slate-800 mb-2 border-b pb-1 flex items-center gap-1.5">
+                                            <BookOpen className="h-4 w-4 text-emerald-600" /> Memória
+                                            de Cálculo (AH%)
+                                          </h4>
+                                          <div className="space-y-2 mt-3">
+                                            <div className="flex justify-between items-center text-xs">
+                                              <span className="text-slate-500">
+                                                Valor Atual ({periodLabel(period)}):
+                                              </span>
+                                              <span className="font-medium text-slate-700">
+                                                {fmtBRL(rawVal)}
+                                              </span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-xs">
+                                              <span className="text-slate-500">
+                                                Valor Anterior ({periodLabel(prevPeriodLabel)}):
+                                              </span>
+                                              <span className="font-medium text-slate-700">
+                                                {fmtBRL(prevVal)}
+                                              </span>
+                                            </div>
+                                            <div className="bg-slate-50 p-2 rounded-md border border-slate-100 mt-2 font-mono text-[10px] text-center text-slate-600 leading-tight">
+                                              (({fmtBRL(rawVal)} - {fmtBRL(prevVal)}) / |
+                                              {fmtBRL(prevVal)}|) × 100
+                                            </div>
+                                            <div className="flex justify-between items-center text-sm font-bold pt-1 border-t mt-1">
+                                              <span className="text-slate-700">Resultado:</span>
+                                              <span
+                                                className={
+                                                  ahPct > 0
+                                                    ? 'text-emerald-600'
+                                                    : ahPct < 0
+                                                      ? 'text-rose-600'
+                                                      : 'text-slate-600'
+                                                }
+                                              >
+                                                {ahPct > 0 ? '+' : ''}
+                                                {ahPct.toFixed(2).replace('.', ',')}%
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </PopoverContent>
+                                      </Popover>
                                     </div>
                                   )
                                 } else if (rawVal > 0 && prevVal === 0) {
