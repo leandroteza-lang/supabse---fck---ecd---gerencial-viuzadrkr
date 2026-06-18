@@ -7868,6 +7868,16 @@ export default function App() {
                       </label>
                     </div>
 
+                    {Object.keys(balanceteSortConfigs).length > 0 && (
+                      <button
+                        onClick={() => setBalanceteSortConfigs({})}
+                        className="flex items-center gap-2 bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors whitespace-nowrap"
+                        title="Remover todas as ordenações por valor e voltar à ordem padrão por código contábil"
+                      >
+                        <RotateCcw className="w-4 h-4" /> Restaurar Ordem (Conta)
+                      </button>
+                    )}
+
                     <div className="flex items-center gap-1 bg-white px-2 py-1.5 rounded-lg border border-slate-200 shadow-sm">
                       <button
                         onClick={() =>
