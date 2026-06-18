@@ -8121,6 +8121,10 @@ export default function App() {
                         }
                         const baseDetails = getBaseDetailsForAccount(acc, period, profile)
                         const base = baseDetails.totalValue
+                        const baseAcc =
+                          baseDetails.accounts && baseDetails.accounts.length === 1
+                            ? baseDetails.accounts[0]
+                            : null
                         if (!base || base <= 0) {
                           return (
                             <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>
@@ -8183,11 +8187,28 @@ export default function App() {
                                   <BookOpen className="h-4 w-4 text-indigo-600" /> Memória de Cálculo
                                   (AV%)
                                 </h4>
-                                <div className="text-xs mb-3 pb-2 border-b border-slate-100">
-                                  <span className="text-slate-500">Conta analisada:</span>
-                                  <div className="font-medium text-slate-700 leading-snug mt-0.5">
-                                    <span className="font-mono text-indigo-600">{acc.conta}</span>{' '}
-                                    {acc.nome}
+                                <div className="text-xs mb-3 pb-2 border-b border-slate-100 space-y-2">
+                                  <div>
+                                    <span className="text-slate-500">Conta base:</span>
+                                    <div className="font-medium text-slate-700 leading-snug mt-0.5">
+                                      {baseAcc ? (
+                                        <>
+                                          <span className="font-mono text-indigo-600">
+                                            {baseAcc.conta}
+                                          </span>{' '}
+                                          {baseAcc.nome}
+                                        </>
+                                      ) : (
+                                        <span className="text-slate-600">{baseDetails.type}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-500">Conta analisada:</span>
+                                    <div className="font-medium text-slate-700 leading-snug mt-0.5">
+                                      <span className="font-mono text-indigo-600">{acc.conta}</span>{' '}
+                                      {acc.nome}
+                                    </div>
                                   </div>
                                 </div>
                                 <div className="space-y-2 mt-3">
@@ -8200,9 +8221,7 @@ export default function App() {
                                     </span>
                                   </div>
                                   <div className="flex justify-between items-center text-xs">
-                                    <span className="text-slate-500 truncate mr-2" title={baseDetails.type}>
-                                      Base ({baseDetails.type}):
-                                    </span>
+                                    <span className="text-slate-500 mr-2">Valor da Base:</span>
                                     <span className="font-medium text-slate-700 shrink-0">
                                       {fmtBRL(base)}
                                     </span>
