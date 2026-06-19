@@ -1219,6 +1219,18 @@ export default function App() {
     setRazaoSortConfig({ key, direction })
   }
 
+  // Totais do razão (sobre os lançamentos já filtrados)
+  const razaoTotals = useMemo(() => {
+    const parseV = (s: any) => parseFloat(String(s).replace(/\./g, '').replace(',', '.')) || 0
+    let d = 0
+    let c = 0
+    filteredRazaoTransactions.forEach((t) => {
+      if (t.indDc === 'D') d += parseV(t.valor)
+      else if (t.indDc === 'C') c += parseV(t.valor)
+    })
+    return { d, c, saldo: d - c, count: filteredRazaoTransactions.length }
+  }, [filteredRazaoTransactions])
+
   // Abre o razão atual (já filtrado/ordenado) como uma página HTML autônoma em nova aba
   const openRazaoAsPage = () => {
     const acc = selectedAccountForRazao
@@ -9512,8 +9524,39 @@ export default function App() {
               </p>
             </div>
           ) : razaoTransactions.length > 0 ? (
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-              {razaoTransactions.length >= 2000 && (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Débitos
+                  </div>
+                  <div className="text-sm font-black text-blue-600">{fmtBRL(razaoTotals.d)}</div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Créditos
+                  </div>
+                  <div className="text-sm font-black text-rose-600">{fmtBRL(razaoTotals.c)}</div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Saldo
+                  </div>
+                  <div
+                    className={`text-sm font-black ${razaoTotals.saldo >= 0 ? 'text-blue-600' : 'text-rose-600'}`}
+                  >
+                    {fmtBRL(Math.abs(razaoTotals.saldo))} {razaoTotals.saldo >= 0 ? 'D' : 'C'}
+                  </div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Lançamentos
+                  </div>
+                  <div className="text-sm font-black text-slate-800">{razaoTotals.count}</div>
+                </div>
+              </div>
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                {razaoTransactions.length >= 2000 && (
                 <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs text-amber-700 font-medium">
                   Exibindo os <strong>2.000 lançamentos mais recentes</strong> do(s) período(s)
                   selecionado(s). Use os filtros (período, valor, histórico) ou selecione um período
@@ -9595,7 +9638,8 @@ export default function App() {
                   )}
                 </TableBody>
               </Table>
-            </div>
+              </div>
+            </>
           ) : (
             <div className="text-center py-16 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
               <Files className="w-10 h-10 text-slate-300 mx-auto mb-4" />
