@@ -1062,7 +1062,11 @@ export default function App() {
             .single()
 
           if (accounts) {
-            let query = supabase.from('transactions').select('*').eq('account_id', accounts.id)
+            let query = supabase
+              .from('transactions')
+              .select('*')
+              .eq('company_id', companies.id)
+              .eq('account_id', accounts.id)
 
             if (selectedMonthlyPeriods.length > 0) {
               let minMs = Infinity
@@ -1094,7 +1098,7 @@ export default function App() {
               if (maxDate) query = query.lte('date', maxDate)
             }
 
-            const { data: txs } = await query.order('date', { ascending: true })
+            const { data: txs } = await query.order('date', { ascending: false }).limit(2000)
 
             if (txs) {
               const uniqueTxs: any[] = []
@@ -9390,6 +9394,13 @@ export default function App() {
             </div>
           ) : razaoTransactions.length > 0 ? (
             <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+              {razaoTransactions.length >= 2000 && (
+                <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs text-amber-700 font-medium">
+                  Exibindo os <strong>2.000 lançamentos mais recentes</strong> do(s) período(s)
+                  selecionado(s). Use os filtros (período, valor, histórico) ou selecione um período
+                  menor para refinar a análise.
+                </div>
+              )}
               <Table>
                 <TableHeader className="bg-slate-50 border-b-2 border-slate-200">
                   <TableRow>
