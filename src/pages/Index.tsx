@@ -75,6 +75,7 @@ import {
   AlignRight,
   MoreVertical,
   BookOpen,
+  ExternalLink,
 } from 'lucide-react'
 import localforage from 'localforage'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -1216,6 +1217,116 @@ export default function App() {
       direction = 'desc'
     }
     setRazaoSortConfig({ key, direction })
+  }
+
+  // Abre o razão atual (já filtrado/ordenado) como uma página HTML autônoma em nova aba
+  const openRazaoAsPage = () => {
+    const acc = selectedAccountForRazao
+    if (!acc) return
+    const rows = sortedRazaoTransactions
+    const parseV = (s: any) => parseFloat(String(s).replace(/\./g, '').replace(',', '.')) || 0
+    const esc = (s: any) =>
+      String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+    const totD = rows.filter((t) => t.indDc === 'D').reduce((a, t) => a + parseV(t.valor), 0)
+    const totC = rows.filter((t) => t.indDc === 'C').reduce((a, t) => a + parseV(t.valor), 0)
+    const saldo = totD - totC
+    const saldoInd = saldo >= 0 ? 'D' : 'C'
+
+    const filtros: string[] = []
+    if (razaoSearch) filtros.push(`Histórico contém "${esc(razaoSearch)}"`)
+    if (razaoDateFrom || razaoDateTo)
+      filtros.push(`Data ${razaoDateFrom || '…'} a ${razaoDateTo || '…'}`)
+    if (razaoValueMin || razaoValueMax)
+      filtros.push(`Valor ${razaoValueMin || '0'} a ${razaoValueMax || '∞'}`)
+    if (razaoIndDc !== 'ALL') filtros.push(`Apenas ${razaoIndDc === 'D' ? 'Débitos' : 'Créditos'}`)
+
+    const rowsHtml = rows.length
+      ? rows
+          .map(
+            (t) => `<tr>
+          <td class="mono">${esc(t.data)}</td>
+          <td>${esc(t.historico)}</td>
+          <td class="num ${t.indDc === 'D' ? 'd' : 'c'}">R$ ${esc(t.valor)}</td>
+          <td class="ind ${t.indDc === 'D' ? 'd' : 'c'}">${esc(t.indDc)}</td>
+        </tr>`,
+          )
+          .join('')
+      : `<tr><td colspan="4" class="empty">Nenhum lançamento.</td></tr>`
+
+    const html = `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Razão • ${esc(acc.conta)} ${esc(acc.nome)}</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f1f5f9;color:#0f172a}
+  .wrap{max-width:1100px;margin:0 auto;padding:24px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+  .brand{font-weight:900;font-size:20px;letter-spacing:-.02em}
+  .brand span{color:#4f46e5}
+  .btn{background:#0f172a;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 8px 30px rgba(0,0,0,.04)}
+  h1{font-size:24px;margin:0 0 4px}
+  .sub{color:#64748b;font-size:14px;margin:0 0 4px}
+  .meta{color:#94a3b8;font-size:12px;margin-top:8px}
+  .chip{display:inline-block;background:#eef2ff;color:#4338ca;border:1px solid #e0e7ff;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700;margin:2px 4px 2px 0}
+  .tots{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}
+  .tot{border:1px solid #e2e8f0;border-radius:12px;padding:14px}
+  .tot .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:800}
+  .tot .val{font-size:18px;font-weight:900;margin-top:4px}
+  .d{color:#2563eb}.c{color:#e11d48}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+  thead th{text-align:left;text-transform:uppercase;font-size:10px;letter-spacing:.08em;color:#64748b;border-bottom:2px solid #e2e8f0;padding:10px 8px}
+  thead th.num,thead th.ind{text-align:right}
+  tbody td{padding:9px 8px;border-bottom:1px solid #f1f5f9}
+  tbody tr:nth-child(even){background:#f8fafc}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;color:#475569;font-size:12px}
+  .num{text-align:right;font-weight:700;white-space:nowrap}
+  .ind{text-align:right;font-weight:700;width:36px}
+  .empty{text-align:center;color:#94a3b8;padding:40px}
+  @media print{body{background:#fff}.btn{display:none}.card{box-shadow:none;border:0}.wrap{max-width:none;padding:0}}
+</style></head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">Board<span>ECD</span> — Razão Contábil</div>
+      <button class="btn" onclick="window.print()">Imprimir / Salvar PDF</button>
+    </div>
+    <div class="card">
+      <h1>${esc(acc.conta)} — ${esc(acc.nome)}</h1>
+      <p class="sub">${esc(companyInfo?.nome || '')}${companyInfo?.cnpj ? ' • CNPJ ' + esc(companyInfo.cnpj) : ''}</p>
+      <p class="sub">Perspectiva: <strong>${isAccumulated ? 'Acumulado Mensal' : 'Mensal Isolado'}</strong> • ${rows.length} lançamento(s)</p>
+      ${filtros.length ? `<div class="meta">Filtros: ${filtros.map((f) => `<span class="chip">${f}</span>`).join('')}</div>` : ''}
+      <div class="meta">Gerado em ${new Date().toLocaleString('pt-BR')}</div>
+      <div class="tots">
+        <div class="tot"><div class="lbl">Total Débitos</div><div class="val d">${fmtBRL(totD)}</div></div>
+        <div class="tot"><div class="lbl">Total Créditos</div><div class="val c">${fmtBRL(totC)}</div></div>
+        <div class="tot"><div class="lbl">Saldo</div><div class="val ${saldoInd === 'D' ? 'd' : 'c'}">${fmtBRL(Math.abs(saldo))} ${saldoInd}</div></div>
+        <div class="tot"><div class="lbl">Lançamentos</div><div class="val">${rows.length}</div></div>
+      </div>
+      <table>
+        <thead><tr><th>Data</th><th>Histórico</th><th class="num">Valor</th><th class="ind">D/C</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  </div>
+</body></html>`
+
+    const w = window.open('', '_blank')
+    if (!w) {
+      toast({
+        variant: 'destructive',
+        title: 'Pop-up bloqueado',
+        description: 'Permita pop-ups deste site para abrir o razão como página.',
+      })
+      return
+    }
+    w.document.open()
+    w.document.write(html)
+    w.document.close()
   }
 
   // Sincronização Automática (Auto-Save) com o navegador e nuvem
@@ -9305,6 +9416,14 @@ export default function App() {
                 title="Filtros Avançados"
               >
                 <Filter className="w-4 h-4" />
+              </button>
+              <button
+                onClick={openRazaoAsPage}
+                disabled={sortedRazaoTransactions.length === 0}
+                className="p-2.5 border rounded-lg transition-colors flex items-center justify-center shrink-0 bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Abrir como página (nova aba) — imprimir / salvar PDF"
+              >
+                <ExternalLink className="w-4 h-4" />
               </button>
             </div>
 
