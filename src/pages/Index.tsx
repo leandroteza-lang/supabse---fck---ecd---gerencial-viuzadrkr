@@ -148,6 +148,7 @@ import { supabase } from '@/lib/supabase/client'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog'
 import AdminUsersDialog from '@/components/AdminUsersDialog'
 import { TableSettingsControls } from '@/components/TableSettingsControls'
+import RazaoAvancado from '@/components/RazaoAvancado'
 import {
   useTablePreferences,
   FONT_SIZE_MIN,
@@ -732,6 +733,7 @@ export default function App() {
   const { toast } = useToast()
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [showAdminUsers, setShowAdminUsers] = useState(false)
+  const [showRazaoAvancado, setShowRazaoAvancado] = useState(false)
   // Preferências de visualização da tabela do Balancete Comparativo
   const { prefs: balancetePrefs, updatePrefs: updateBalancetePrefs } =
     useTablePreferences('balancete_comparativo')
@@ -1588,6 +1590,7 @@ export default function App() {
           let currentPeriod = ''
           let currentLctoDate = ''
           let currentLctoDateDb = ''
+          let currentLctoId = ''
           let periodsMap = {}
           let info = null
           let extractedTx = []
@@ -1620,6 +1623,11 @@ export default function App() {
             } else if (reg === 'I200') {
               currentLctoDate = parseSpedDate(parts[3])
               currentLctoDateDb = parseSpedDateDb(parts[3])
+              // Identificador único do lançamento (agrupa débito↔crédito p/ contrapartida)
+              currentLctoId =
+                typeof crypto !== 'undefined' && crypto.randomUUID
+                  ? crypto.randomUUID()
+                  : `${currentLctoDateDb}-${parts[2] || ''}-${i}`
             } else if (reg === 'I250') {
               extractedTx.push({
                 conta: parts[2],
@@ -1628,6 +1636,7 @@ export default function App() {
                 valor: parts[4],
                 indDc: parts[5],
                 historico: parts[8] || '',
+                lancamentoId: currentLctoId,
               })
             } else if (reg === 'I050') {
               accounts[parts[6]] = {
@@ -2068,6 +2077,7 @@ export default function App() {
             amount: parseFloat(t.valor.toString().replace(/\./g, '').replace(',', '.')) || 0,
             indicator: t.indDc,
             history: t.historico,
+            lancamento_id: t.lancamentoId || null,
           }))
           .filter((t) => {
             const key = `${t.account_id}_${t.date}_${t.amount}_${t.indicator}_${t.history}`
@@ -7963,6 +7973,14 @@ export default function App() {
                       <Layers className="w-4 h-4 text-indigo-600" />
                       Filtro de Contas
                     </button>
+                    <button
+                      onClick={() => setShowRazaoAvancado(true)}
+                      className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm w-full sm:w-auto"
+                      title="Razão contábil avançado (várias contas, contrapartida, totais)"
+                    >
+                      <ListOrdered className="w-4 h-4 text-indigo-600" />
+                      Razão Avançado
+                    </button>
                   </div>
 
                   <div className="flex flex-wrap xl:flex-nowrap items-center gap-3 xl:border-l xl:border-slate-200 xl:pl-4">
@@ -10784,6 +10802,15 @@ export default function App() {
 
       <ChangePasswordDialog open={showChangePassword} onOpenChange={setShowChangePassword} />
       {isAdmin && <AdminUsersDialog open={showAdminUsers} onOpenChange={setShowAdminUsers} />}
+      <RazaoAvancado
+        open={showRazaoAvancado}
+        onOpenChange={setShowRazaoAvancado}
+        accounts={monthlyData.allAccounts}
+        accountParentMap={accountParentMap}
+        periods={monthlyData.periods}
+        companyName={companyInfo?.nome}
+        companyCnpj={companyInfo?.cnpj}
+      />
     </div>
   )
 }
