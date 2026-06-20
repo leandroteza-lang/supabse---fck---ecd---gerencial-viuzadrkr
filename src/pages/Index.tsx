@@ -752,6 +752,7 @@ export default function App() {
       conta: val,
       descricao: val,
       acumulado: val,
+      media: val,
     }
     periodsToDisplay.forEach((p: string) => {
       a[p] = val
@@ -2331,6 +2332,44 @@ export default function App() {
     [isAccumulated, periodsToDisplay],
   )
 
+  // Média dos saldos no período (média dos valores exibidos em cada mês)
+  const getBalanceteMedia = useCallback(
+    (acc: any) => {
+      const n = periodsToDisplay.length
+      if (!n) return { val: 0, ind: '' }
+      const isResult =
+        acc.natureza === '04' ||
+        acc.natureza === '4' ||
+        acc.conta.startsWith('3') ||
+        acc.conta.startsWith('4') ||
+        acc.conta.startsWith('5')
+      if (isResult && !isAccumulated) {
+        let sumDeb = 0
+        let sumCred = 0
+        periodsToDisplay.forEach((p: string) => {
+          const s = acc.saldos[p]
+          if (s) {
+            sumDeb += getRawNumber(s.debito)
+            sumCred += getRawNumber(s.credito)
+          }
+        })
+        const net = Math.abs(sumDeb - sumCred)
+        return { val: net / n, ind: net > 0 ? (sumDeb > sumCred ? 'D' : 'C') : '' }
+      }
+      let sum = 0
+      let lastInd = ''
+      periodsToDisplay.forEach((p: string) => {
+        const s = acc.saldos[p]
+        if (s) {
+          sum += Math.abs(getRawNumber(s.sldFin))
+          lastInd = s.indDcFin
+        }
+      })
+      return { val: sum / n, ind: lastInd }
+    },
+    [isAccumulated, periodsToDisplay],
+  )
+
   // Reordena as linhas visíveis aplicando a ordenação escolhida em cada grupo (conta pai),
   // mantendo a hierarquia: filhos de um pai são ordenados entre si pela coluna selecionada.
   const orderedBalanceteRows = useMemo(() => {
@@ -2362,6 +2401,8 @@ export default function App() {
           cmp = byCode(a, b)
         } else if (cfg.key === 'descricao') {
           cmp = String(a.nome || '').localeCompare(String(b.nome || ''))
+        } else if (cfg.key === 'media') {
+          cmp = getBalanceteMedia(a).val - getBalanceteMedia(b).val
         } else if (cfg.key === 'acumulado') {
           cmp = getBalanceteAccTotal(a) - getBalanceteAccTotal(b)
         } else {
@@ -2386,6 +2427,7 @@ export default function App() {
     balanceteSortConfigs,
     getBalanceteRawVal,
     getBalanceteAccTotal,
+    getBalanceteMedia,
   ])
 
   const expandAllAccounts = () => {
@@ -8277,6 +8319,27 @@ export default function App() {
                           />
                         </div>
                       </th>
+                      <th
+                        className={`py-2 px-4 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-violet-50 z-20 shadow-sm ${BC_ALIGN_TEXT[getColAlign('media', 'right')]}`}
+                      >
+                        <div className="text-[10px] text-violet-500 uppercase font-bold tracking-widest mb-0.5 flex items-center justify-end gap-1">
+                          Média {periodsToDisplay.length > 0 && `(${periodsToDisplay.length})`}
+                          <IndicatorTooltip
+                            text="Média dos saldos no período."
+                            example="Soma os valores exibidos nos períodos selecionados e divide pela quantidade de períodos."
+                          />
+                        </div>
+                        <div
+                          className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign('media', 'right')]}`}
+                        >
+                          <span className="font-bold text-violet-700 text-xs">Saldo Médio</span>
+                          <ColAlignMenu
+                            colKey="media"
+                            current={getColAlign('media', 'right')}
+                            onChange={setColAlign}
+                          />
+                        </div>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -8982,6 +9045,45 @@ export default function App() {
                                 </td>
                               )
                             })()}
+                            {(() => {
+                              const m = getBalanceteMedia(acc)
+                              const mAlign = getColAlign('media', 'right')
+                              const mStr =
+                                m.val > 0
+                                  ? m.val.toLocaleString('pt-BR', {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })
+                                  : '0,00'
+                              return (
+                                <td
+                                  className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-white/10 text-white' : isLevel5 ? 'bg-violet-50/50 text-black' : 'bg-violet-50/50 text-blue-950'}`}
+                                >
+                                  <div className="flex items-center w-full gap-1">
+                                    <span
+                                      className={`flex-1 ${BC_ALIGN_TEXT[mAlign]} ${mStr === '0,00' ? (isDarkBg ? 'text-white/30' : 'text-blue-900/30') : ''}`}
+                                    >
+                                      {mStr !== '0,00' ? mStr : '-'}
+                                    </span>
+                                    <span
+                                      className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${m.ind === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : m.ind === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
+                                    >
+                                      {m.ind}
+                                    </span>
+                                    <span className="w-4 shrink-0 flex items-center justify-center">
+                                      {isSintetica && (
+                                        <SortBtn
+                                          active={balanceteSortConfigs[acc.conta]?.key === 'media'}
+                                          direction={balanceteSortConfigs[acc.conta]?.direction}
+                                          onClick={() => handleBalanceteSort(acc.conta, 'media')}
+                                          dark={isDarkBg}
+                                        />
+                                      )}
+                                    </span>
+                                  </div>
+                                </td>
+                              )
+                            })()}
                           </tr>
                         )
                       })
@@ -8994,7 +9096,7 @@ export default function App() {
                               (1 +
                                 (showAV ? (isComparingProfiles ? 2 : 1) : 0) +
                                 (showAH ? 1 : 0)) +
-                            3
+                            4
                           }
                           className="p-12 text-center text-slate-500"
                         >
