@@ -8778,6 +8778,11 @@ export default function App() {
                           </th>
                         </>
                       )}
+                      <th
+                        aria-hidden
+                        className="border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm"
+                        style={{ width: '100%' }}
+                      />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -9598,6 +9603,7 @@ export default function App() {
                                 </td>
                               )
                             })()}
+                            <td style={{ width: '100%' }} />
                           </tr>
                         )
                       })
@@ -9610,7 +9616,7 @@ export default function App() {
                               ((soIndices ? 0 : 1) +
                                 (showAV ? (isComparingProfiles ? 2 : 1) : 0) +
                                 (showAH ? 1 : 0)) +
-                            (soIndices ? 2 : 4)
+                            (soIndices ? 3 : 5)
                           }
                           className="p-12 text-center text-slate-500"
                         >
