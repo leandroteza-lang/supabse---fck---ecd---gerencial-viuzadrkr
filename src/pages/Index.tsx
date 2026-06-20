@@ -951,6 +951,7 @@ export default function App() {
   const [showAV, setShowAV] = useState(false)
   const [showAH, setShowAH] = useState(false)
   const [ocultarValores, setOcultarValores] = useState(false)
+  const [soDivergencias, setSoDivergencias] = useState(false)
   // Com AV%/AH% visível, oculta as colunas de valor (Saldo, Acumulado, Média),
   // deixando literalmente só os índices. Sem índice, apenas mascara os valores.
   const soIndices = ocultarValores && (showAV || showAH)
@@ -4691,6 +4692,61 @@ export default function App() {
   ) => {
     return getBaseDetailsForAccount(acc, period, profile).totalValue
   }
+
+  // Linhas a renderizar no Balancete: aplica o filtro "Só divergências" (mostra
+  // apenas contas que disparam algum alerta AV%/AH% do perfil ativo + seus pais).
+  const rowsToRender = useMemo(() => {
+    if (!soDivergencias) return orderedBalanceteRows
+    const avC = effCond(activeProfile, 'av') as any
+    const ahC = effCond(activeProfile, 'ah') as any
+    if (avC.op === 'none' && ahC.op === 'none') return orderedBalanceteRows
+    const allP = monthlyData.periods
+
+    const diverge = (acc: any) => {
+      for (const p of periodsToDisplay) {
+        const rawVal = getBalanceteRawVal(acc, p)
+        if (avC.op !== 'none' && rawVal > 0) {
+          const base = getBaseValueForAccountWithProfile(acc, p, activeProfile)
+          if (base > 0 && condDispara((rawVal / base) * 100, avC)) return true
+        }
+        if (ahC.op !== 'none') {
+          let prevVal = 0
+          if (activeProfile.globalAhMode === 'base_period' && activeProfile.basePeriodForAh) {
+            prevVal = getBalanceteRawVal(acc, activeProfile.basePeriodForAh)
+          } else {
+            const idx = allP.indexOf(p)
+            if (idx > 0) prevVal = getBalanceteRawVal(acc, allP[idx - 1])
+          }
+          if (prevVal > 0 && condDispara((rawVal / prevVal - 1) * 100, ahC)) return true
+        }
+      }
+      return false
+    }
+
+    const keep = new Set<string>()
+    orderedBalanceteRows.forEach((acc: any) => {
+      if (diverge(acc)) {
+        keep.add(acc.conta)
+        let par = accountParentMap[acc.conta]
+        while (par) {
+          keep.add(par)
+          par = accountParentMap[par]
+        }
+      }
+    })
+    return orderedBalanceteRows.filter((acc: any) => keep.has(acc.conta))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    orderedBalanceteRows,
+    soDivergencias,
+    activeProfileId,
+    analysisProfiles,
+    periodsToDisplay,
+    monthlyData.periods,
+    accountParentMap,
+    getBalanceteRawVal,
+    isAccumulated,
+  ])
 
   const ToggleAccumulated = () => (
     <div className="flex items-center gap-1.5 mr-2 shrink-0">
@@ -8561,6 +8617,20 @@ export default function App() {
                         )}
                         <span className="whitespace-nowrap">Ocultar valores</span>
                       </label>
+                      <div className="w-px h-4 bg-slate-200"></div>
+                      <label
+                        className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600"
+                        title="Mostra apenas as contas que divergem dos limites de alerta (AV%/AH%) do perfil ativo"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={soDivergencias}
+                          onChange={() => setSoDivergencias(!soDivergencias)}
+                          className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                        />
+                        <AlertCircle className="w-4 h-4 text-amber-500" />
+                        <span className="whitespace-nowrap">Só divergências</span>
+                      </label>
                     </div>
 
                     {Object.keys(balanceteSortConfigs).length > 0 && (
@@ -8984,7 +9054,7 @@ export default function App() {
                         )
                       }
 
-                      return orderedBalanceteRows.map((acc: any, index: number) => {
+                      return rowsToRender.map((acc: any, index: number) => {
                         const isSintetica = acc.tipo === 'S'
                         const isExpanded = expandedAccounts.has(acc.conta)
                         const indent = (parseInt(acc.nivel) - 1) * 16
@@ -9639,7 +9709,7 @@ export default function App() {
                         )
                       })
                     })()}
-                    {tableAccountsToDisplay.length === 0 && (
+                    {rowsToRender.length === 0 && (
                       <tr>
                         <td
                           colSpan={
@@ -9651,7 +9721,9 @@ export default function App() {
                           }
                           className="p-12 text-center text-slate-500"
                         >
-                          Nenhuma conta encontrada ou selecionada no filtro.
+                          {soDivergencias
+                            ? 'Nenhuma divergência encontrada para os limites de alerta do perfil.'
+                            : 'Nenhuma conta encontrada ou selecionada no filtro.'}
                         </td>
                       </tr>
                     )}
