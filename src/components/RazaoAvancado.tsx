@@ -811,7 +811,7 @@ export default function RazaoAvancado({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {totalMes && (
                       <div className="border border-slate-200 rounded-xl overflow-hidden">
-                        <div className="bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600 uppercase tracking-wider">
+                        <div className="bg-indigo-950 px-3 py-2 text-xs font-bold text-white uppercase tracking-wider">
                           Totais por mês
                         </div>
                         <div className="max-h-48 overflow-auto custom-scrollbar">
@@ -831,7 +831,7 @@ export default function RazaoAvancado({
                     )}
                     {totalDia && (
                       <div className="border border-slate-200 rounded-xl overflow-hidden">
-                        <div className="bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600 uppercase tracking-wider">
+                        <div className="bg-indigo-950 px-3 py-2 text-xs font-bold text-white uppercase tracking-wider">
                           Totais por dia
                         </div>
                         <div className="max-h-48 overflow-auto custom-scrollbar">
