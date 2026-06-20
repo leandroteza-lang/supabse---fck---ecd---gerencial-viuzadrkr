@@ -955,6 +955,7 @@ export default function App() {
   const [soDivergencias, setSoDivergencias] = useState(false)
   const [ocultarDC, setOcultarDC] = useState(false)
   const [ocultarAlertas, setOcultarAlertas] = useState(false)
+  const [showAhDelta, setShowAhDelta] = useState(false)
   // Com AV%/AH% visível, oculta as colunas de valor (Saldo, Acumulado, Média),
   // deixando literalmente só os índices. Sem índice, apenas mascara os valores.
   const soIndices = ocultarValores && (showAV || showAH)
@@ -8771,6 +8772,13 @@ export default function App() {
                             onChange: setOcultarAlertas,
                             hint: 'Esconde os ícones de aviso (⚠) de desvio nas colunas AV%/AH%',
                           },
+                          {
+                            id: 'ah-delta',
+                            label: 'Variação em R$ (sob o AH%)',
+                            checked: showAhDelta,
+                            onChange: setShowAhDelta,
+                            hint: 'Mostra, abaixo do AH%, a diferença em R$ entre o mês e o anterior',
+                          },
                         ]}
                       />
                     </div>
@@ -9387,8 +9395,14 @@ export default function App() {
                               // Análise Horizontal
                               let ahContent: any = null
                               let ahAlertNode: any = null
-                              const ahJustify =
-                                BC_ALIGN_JUSTIFY[getColAlign(`${period}_ah`, 'right')]
+                              const ahAlignKey = getColAlign(`${period}_ah`, 'right')
+                              const ahJustify = BC_ALIGN_JUSTIFY[ahAlignKey]
+                              const ahItems =
+                                ahAlignKey === 'left'
+                                  ? 'items-start'
+                                  : ahAlignKey === 'center'
+                                    ? 'items-center'
+                                    : 'items-end'
                               let prevVal = 0
                               let prevPeriodLabel = ''
                               let hasValidPrev = false
@@ -9494,7 +9508,8 @@ export default function App() {
                                   ) : null
 
                                   ahContent = (
-                                    <Popover>
+                                    <div className={`flex flex-col ${ahItems} leading-tight`}>
+                                      <Popover>
                                         <PopoverTrigger asChild>
                                           <span
                                             onClick={(e) => e.stopPropagation()}
@@ -9563,15 +9578,35 @@ export default function App() {
                                           </div>
                                         </PopoverContent>
                                       </Popover>
+                                      {showAhDelta && (
+                                        <span
+                                          className={`text-[10px] font-mono opacity-80 ${colorClass}`}
+                                          title="Diferença em R$ vs período anterior"
+                                        >
+                                          {rawVal - prevVal > 0 ? '+' : ''}
+                                          {fmtBRL(rawVal - prevVal)}
+                                        </span>
+                                      )}
+                                    </div>
                                   )
                                 } else if (rawVal > 0 && prevVal === 0) {
                                   ahContent = (
-                                    <span
-                                      className={`text-[11px] font-mono ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
-                                      title="Análise Horizontal (vs Mês Anterior)"
-                                    >
-                                      N/A (Novo)
-                                    </span>
+                                    <div className={`flex flex-col ${ahItems} leading-tight`}>
+                                      <span
+                                        className={`text-[11px] font-mono ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
+                                        title="Análise Horizontal (vs Mês Anterior)"
+                                      >
+                                        N/A (Novo)
+                                      </span>
+                                      {showAhDelta && (
+                                        <span
+                                          className={`text-[10px] font-mono opacity-80 ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
+                                          title="Diferença em R$ vs período anterior"
+                                        >
+                                          +{fmtBRL(rawVal)}
+                                        </span>
+                                      )}
+                                    </div>
                                   )
                                 }
                               }
