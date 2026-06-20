@@ -563,7 +563,7 @@ const CalcMemoPopover = ({
     <PopoverContent
       side="top"
       align="end"
-      className="w-80 p-4 text-sm z-[120]"
+      className="w-80 p-4 text-sm z-[120] max-h-[70vh] overflow-y-auto custom-scrollbar"
       onClick={(e) => e.stopPropagation()}
     >
       <h4 className="font-bold text-slate-800 mb-2 border-b pb-1 flex items-center gap-1.5">
@@ -2444,6 +2444,28 @@ export default function App() {
     acc.conta.startsWith('4') ||
     acc.conta.startsWith('5')
 
+  // Valor exibido de uma conta num período (mesma lógica das células de saldo)
+  const periodVal = (acc: any, p: string) => {
+    const sld = acc.saldos[p]
+    if (!sld) return { val: 0, ind: '' }
+    if (!isAccumulated && isResultConta(acc)) {
+      const deb = getRawNumber(sld.debito)
+      const cred = getRawNumber(sld.credito)
+      const net = Math.abs(deb - cred)
+      return { val: net, ind: net > 0 ? (deb > cred ? 'D' : 'C') : '' }
+    }
+    return { val: Math.abs(getRawNumber(sld.sldFin)), ind: sld.indDcFin }
+  }
+  const periodLines = (acc: any) =>
+    periodsToDisplay.map((p: string) => {
+      const v = periodVal(acc, p)
+      return {
+        label: `${periodLabel(p)}:`,
+        value: v.val > 0 ? `${fmtBRL(v.val)}${v.ind ? ' ' + v.ind : ''}` : '—',
+      }
+    })
+
+  // Memória do Acumulado: traz o valor de cada mês filtrado e a soma
   const getAcumuladoMemo = (acc: any) => {
     const n = periodsToDisplay.length
     if (isResultConta(acc) && !isAccumulated) {
@@ -2457,42 +2479,36 @@ export default function App() {
         }
       })
       const net = Math.abs(sd - sc)
+      const ind = net > 0 ? (sd > sc ? 'D' : 'C') : ''
       return {
-        mode: 'result' as const,
-        sumDeb: sd,
-        sumCred: sc,
-        val: net,
-        ind: net > 0 ? (sd > sc ? 'D' : 'C') : '',
-        n,
+        lines: periodLines(acc),
+        formula: `Soma dos ${n} período(s) selecionado(s)`,
+        resultado: `${fmtBRL(net)}${ind ? ' ' + ind : ''}`,
       }
     }
     const last = n > 0 ? periodsToDisplay[n - 1] : null
-    const s = last ? acc.saldos[last] : null
+    const v = last ? periodVal(acc, last) : { val: 0, ind: '' }
     return {
-      mode: 'patrimonial' as const,
-      lastPeriod: last,
-      val: s ? Math.abs(getRawNumber(s.sldFin)) : 0,
-      ind: s ? s.indDcFin : '',
-      n,
+      lines: [
+        {
+          label: `Saldo final (${periodLabel(last || '')}):`,
+          value: `${fmtBRL(v.val)}${v.ind ? ' ' + v.ind : ''}`,
+        },
+      ],
+      formula: 'Saldo final do último período selecionado',
+      resultado: `${fmtBRL(v.val)}${v.ind ? ' ' + v.ind : ''}`,
     }
   }
 
+  // Memória da Média: valores de cada mês ÷ quantidade de períodos
   const getMediaMemo = (acc: any) => {
     const n = periodsToDisplay.length || 1
-    if (isResultConta(acc) && !isAccumulated) {
-      const am = getAcumuladoMemo(acc)
-      return { mode: 'result' as const, acumulado: am.val, n, val: am.val / n, ind: am.ind }
+    const m = getBalanceteMedia(acc)
+    return {
+      lines: periodLines(acc),
+      formula: `Soma dos ${n} período(s) ÷ ${n}`,
+      resultado: `${fmtBRL(m.val)}${m.ind ? ' ' + m.ind : ''}`,
     }
-    let sum = 0
-    let lastInd = ''
-    periodsToDisplay.forEach((p: string) => {
-      const s = acc.saldos[p]
-      if (s) {
-        sum += Math.abs(getRawNumber(s.sldFin))
-        lastInd = s.indDcFin
-      }
-    })
-    return { mode: 'patrimonial' as const, soma: sum, n, val: sum / n, ind: lastInd }
   }
 
   // Reordena as linhas visíveis aplicando a ordenação escolhida em cada grupo (conta pai),
@@ -9321,25 +9337,9 @@ export default function App() {
                                               accent="text-indigo-600"
                                               conta={acc.conta}
                                               nome={acc.nome}
-                                              lines={
-                                                memo.mode === 'result'
-                                                  ? [
-                                                      { label: 'Total Débitos:', value: fmtBRL(memo.sumDeb) },
-                                                      { label: 'Total Créditos:', value: fmtBRL(memo.sumCred) },
-                                                    ]
-                                                  : [
-                                                      {
-                                                        label: `Saldo final (${periodLabel(memo.lastPeriod || '')}):`,
-                                                        value: `${fmtBRL(memo.val)} ${memo.ind}`,
-                                                      },
-                                                    ]
-                                              }
-                                              formula={
-                                                memo.mode === 'result'
-                                                  ? `| ${fmtBRL(memo.sumDeb)} − ${fmtBRL(memo.sumCred)} |`
-                                                  : 'Saldo final do último período selecionado'
-                                              }
-                                              resultado={`${fmtBRL(memo.val)} ${memo.ind}`}
+                                              lines={memo.lines}
+                                              formula={memo.formula}
+                                              resultado={memo.resultado}
                                             >
                                               <span
                                                 onClick={(e) => e.stopPropagation()}
@@ -9400,23 +9400,9 @@ export default function App() {
                                               accent="text-violet-600"
                                               conta={acc.conta}
                                               nome={acc.nome}
-                                              lines={
-                                                memo.mode === 'result'
-                                                  ? [
-                                                      { label: 'Acumulado do período:', value: fmtBRL(memo.acumulado) },
-                                                      { label: 'Qtd. de períodos:', value: String(memo.n) },
-                                                    ]
-                                                  : [
-                                                      { label: 'Soma dos saldos:', value: fmtBRL(memo.soma) },
-                                                      { label: 'Qtd. de períodos:', value: String(memo.n) },
-                                                    ]
-                                              }
-                                              formula={
-                                                memo.mode === 'result'
-                                                  ? `${fmtBRL(memo.acumulado)} ÷ ${memo.n}`
-                                                  : `${fmtBRL(memo.soma)} ÷ ${memo.n}`
-                                              }
-                                              resultado={`${fmtBRL(memo.val)} ${memo.ind}`}
+                                              lines={memo.lines}
+                                              formula={memo.formula}
+                                              resultado={memo.resultado}
                                             >
                                               <span
                                                 onClick={(e) => e.stopPropagation()}
