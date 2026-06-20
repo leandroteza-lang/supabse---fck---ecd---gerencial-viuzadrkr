@@ -7782,7 +7782,7 @@ export default function App() {
             />
 
             <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100/60 flex flex-col overflow-hidden">
-              <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col gap-6 bg-white">
+              <div className="p-6 md:p-8 pb-0 flex flex-col gap-6 bg-white">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div className="relative">
                     <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
@@ -8134,8 +8134,8 @@ export default function App() {
               </div>
 
               <div
-                className="overflow-x-auto overflow-y-auto custom-scrollbar"
-                style={{ maxHeight: 'calc(100vh - 280px)', minHeight: '400px' }}
+                className="overflow-x-auto overflow-y-auto custom-scrollbar rounded-xl border border-slate-200 m-6 md:m-8 mt-2 md:mt-2"
+                style={{ maxHeight: 'calc(100vh - 300px)', minHeight: '400px' }}
               >
                 <table
                   className="w-full text-left border-collapse text-sm bc-viz-table"
