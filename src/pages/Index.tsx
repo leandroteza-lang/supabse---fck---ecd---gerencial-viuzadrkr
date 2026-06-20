@@ -76,6 +76,7 @@ import {
   MoreVertical,
   BookOpen,
   ExternalLink,
+  FileSpreadsheet,
 } from 'lucide-react'
 import localforage from 'localforage'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -149,6 +150,12 @@ import ChangePasswordDialog from '@/components/ChangePasswordDialog'
 import AdminUsersDialog from '@/components/AdminUsersDialog'
 import { TableSettingsControls } from '@/components/TableSettingsControls'
 import RazaoAvancado from '@/components/RazaoAvancado'
+import {
+  exportCsv as dlCsv,
+  exportTxt as dlTxt,
+  exportXlsx as dlXlsx,
+  openInBrowser as openExport,
+} from '@/lib/balancete-export'
 import {
   useTablePreferences,
   FONT_SIZE_MIN,
@@ -3900,6 +3907,150 @@ export default function App() {
       })
       return copy
     })
+  }
+
+  // Monta os dados do Balancete para exportação (CSV/TXT/XLSX/PDF/HTML)
+  const buildBalanceteExportData = () => {
+    const fmt = (n: number) =>
+      n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const isResultAcc = (acc: any) =>
+      acc.natureza === '04' ||
+      acc.natureza === '4' ||
+      acc.conta.startsWith('3') ||
+      acc.conta.startsWith('4') ||
+      acc.conta.startsWith('5')
+
+    const periodVI = (acc: any, p: string) => {
+      const sld = acc.saldos[p]
+      if (!sld) return { val: 0, ind: '' }
+      if (!isAccumulated && isResultAcc(acc)) {
+        const deb = getRawNumber(sld.debito)
+        const cred = getRawNumber(sld.credito)
+        const net = Math.abs(deb - cred)
+        return { val: net, ind: net > 0 ? (deb > cred ? 'D' : 'C') : '' }
+      }
+      return { val: Math.abs(getRawNumber(sld.sldFin)), ind: sld.indDcFin }
+    }
+    const acumVI = (acc: any) => {
+      if (isResultAcc(acc) && !isAccumulated) {
+        let sd = 0
+        let sc = 0
+        periodsToDisplay.forEach((p: string) => {
+          const s = acc.saldos[p]
+          if (s) {
+            sd += getRawNumber(s.debito)
+            sc += getRawNumber(s.credito)
+          }
+        })
+        const net = Math.abs(sd - sc)
+        return { val: net, ind: net > 0 ? (sd > sc ? 'D' : 'C') : '' }
+      }
+      if (periodsToDisplay.length > 0) {
+        const last = periodsToDisplay[periodsToDisplay.length - 1]
+        const s = acc.saldos[last]
+        if (s) return { val: Math.abs(getRawNumber(s.sldFin)), ind: s.indDcFin }
+      }
+      return { val: 0, ind: '' }
+    }
+    const ahPctOf = (acc: any, p: string, vi: { val: number }) => {
+      let prevVal = 0
+      let ok = false
+      if (activeProfile.globalAhMode === 'base_period' && activeProfile.basePeriodForAh) {
+        const b = acc.saldos[activeProfile.basePeriodForAh]
+        if (b) {
+          ok = true
+          prevVal =
+            !isAccumulated && isResultAcc(acc)
+              ? Math.abs(getRawNumber(b.debito) - getRawNumber(b.credito))
+              : Math.abs(getRawNumber(b.sldFin))
+        }
+      } else {
+        const idx = monthlyData.periods.indexOf(p)
+        if (idx > 0) {
+          const b = acc.saldos[monthlyData.periods[idx - 1]]
+          if (b) {
+            ok = true
+            prevVal =
+              !isAccumulated && isResultAcc(acc)
+                ? Math.abs(getRawNumber(b.debito) - getRawNumber(b.credito))
+                : Math.abs(getRawNumber(b.sldFin))
+          }
+        }
+      }
+      if (ok && prevVal > 0) return ((vi.val / prevVal - 1) * 100).toFixed(2).replace('.', ',') + '%'
+      if (ok && prevVal === 0 && vi.val > 0) return 'N/A'
+      return ''
+    }
+
+    const p2 =
+      isComparingProfiles && compareProfileId
+        ? analysisProfiles.find((x: any) => x.id === compareProfileId)
+        : null
+    const n = periodsToDisplay.length
+
+    const columns: any[] = [
+      { label: 'Conta', kind: 'text' },
+      { label: 'Descrição', kind: 'text', indent: true },
+    ]
+    periodsToDisplay.forEach((p: string) => {
+      const lbl = p.split(' a ')[0].substring(3)
+      columns.push({ label: `${lbl} Saldo`, kind: 'num' }, { label: 'D/C', kind: 'ind' })
+      if (showAV) {
+        columns.push({ label: `${lbl} AV%`, kind: 'pct' })
+        if (p2) columns.push({ label: `${lbl} AV% P2`, kind: 'pct' })
+      }
+      if (showAH) columns.push({ label: `${lbl} AH%`, kind: 'pct' })
+    })
+    columns.push({ label: `Acumulado (${n})`, kind: 'num' }, { label: 'D/C', kind: 'ind' })
+    columns.push({ label: `Média (${n})`, kind: 'num' }, { label: 'D/C', kind: 'ind' })
+
+    const rows = monthlyData.accounts
+      .filter((acc: any) => selectedMonthlyAccounts.includes(acc.conta))
+      .map((acc: any) => {
+        const cells: any[] = [{ text: acc.conta }, { text: acc.nome }]
+        periodsToDisplay.forEach((p: string) => {
+          const vi = periodVI(acc, p)
+          cells.push({ text: vi.val > 0 ? fmt(vi.val) : '', value: vi.val }, { text: vi.ind })
+          if (showAV) {
+            const base1 = getBaseValueForAccountWithProfile(acc, p, activeProfile)
+            cells.push({
+              text: base1 && vi.val > 0 ? ((vi.val / base1) * 100).toFixed(2).replace('.', ',') + '%' : '',
+            })
+            if (p2) {
+              const base2 = getBaseValueForAccountWithProfile(acc, p, p2)
+              cells.push({
+                text:
+                  base2 && vi.val > 0 ? ((vi.val / base2) * 100).toFixed(2).replace('.', ',') + '%' : '',
+              })
+            }
+          }
+          if (showAH) cells.push({ text: ahPctOf(acc, p, vi) })
+        })
+        const ac = acumVI(acc)
+        cells.push({ text: ac.val > 0 ? fmt(ac.val) : '', value: ac.val }, { text: ac.ind })
+        const m = getBalanceteMedia(acc)
+        cells.push({ text: m.val > 0 ? fmt(m.val) : '', value: m.val }, { text: m.ind })
+        return { level: parseInt(acc.nivel) || 1, isSintetica: acc.tipo === 'S', cells }
+      })
+
+    const title = `Balancete Comparativo${companyInfo?.nome ? ' - ' + companyInfo.nome : ''}`
+    const subtitle = `${companyInfo?.cnpj ? 'CNPJ ' + companyInfo.cnpj + ' • ' : ''}${
+      isAccumulated ? 'Acumulado Mensal' : 'Mensal Isolado'
+    } • ${n} período(s)`
+    return { title, subtitle, columns, rows }
+  }
+
+  const exportBalancete = async (format: 'csv' | 'txt' | 'xlsx' | 'pdf' | 'html') => {
+    try {
+      const data = buildBalanceteExportData()
+      if (format === 'csv') dlCsv(data)
+      else if (format === 'txt') dlTxt(data)
+      else if (format === 'xlsx') await dlXlsx(data)
+      else if (format === 'pdf') openExport(data, true)
+      else openExport(data, false)
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Erro ao exportar', description: err?.message })
+    }
   }
 
   const exportCSV = () => {
@@ -7865,12 +8016,34 @@ export default function App() {
                         className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                       />
                     </div>
-                    <button
-                      onClick={exportCSV}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 bg-slate-900 hover:bg-indigo-600 text-white px-6 py-2.5 rounded-lg font-bold transition-all shadow-md whitespace-nowrap"
-                    >
-                      <Download className="w-4 h-4" /> Exportar CSV
-                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="w-full sm:w-auto flex items-center justify-center gap-2 bg-slate-900 hover:bg-indigo-600 text-white px-6 py-2.5 rounded-lg font-bold transition-all shadow-md whitespace-nowrap">
+                          <Download className="w-4 h-4" /> Exportar
+                          <ChevronDown className="w-4 h-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56 z-50">
+                        <DropdownMenuLabel>Exportar Balancete</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => exportBalancete('xlsx')}>
+                          <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600" /> Excel (.xlsx)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => exportBalancete('pdf')}>
+                          <FileText className="w-4 h-4 mr-2 text-rose-600" /> PDF (imprimir)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => exportBalancete('csv')}>
+                          <Download className="w-4 h-4 mr-2 text-slate-500" /> CSV (.csv)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => exportBalancete('txt')}>
+                          <FileText className="w-4 h-4 mr-2 text-slate-500" /> Texto (.txt)
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => exportBalancete('html')}>
+                          <ExternalLink className="w-4 h-4 mr-2 text-indigo-600" /> Abrir no navegador
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
 
