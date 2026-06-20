@@ -896,10 +896,9 @@ export default function App() {
     (balancetePrefs.alignments?.[key] as 'left' | 'center' | 'right') || fallback
   // Alinhamento geral: aplica a todas as colunas da tabela de uma vez
   const setAllColAlign = (val: 'left' | 'center' | 'right') => {
+    // Conta e Descrição ficam de fora do "geral": só alinham pelo menu da própria coluna.
     const a: Record<string, 'left' | 'center' | 'right'> = {
       ...(balancetePrefs.alignments || {}),
-      conta: val,
-      descricao: val,
       acumulado: val,
       media: val,
     }
@@ -954,7 +953,7 @@ export default function App() {
   const [showAH, setShowAH] = useState(false)
   const [ocultarValores, setOcultarValores] = useState(false)
   const [soDivergencias, setSoDivergencias] = useState(false)
-  const [ocultarDC, setOcultarDC] = useState(false)
+  const [ocultarDC, setOcultarDC] = useState(true)
   const [ocultarAlertas, setOcultarAlertas] = useState(false)
   const [showAhDelta, setShowAhDelta] = useState(false)
   // Com AV%/AH% visível, oculta as colunas de valor (Saldo, Acumulado, Média),
