@@ -538,6 +538,66 @@ const SortBtn = ({
   </button>
 )
 
+// Popover genérico de "Memória de Cálculo" (Acumulado / Média)
+const CalcMemoPopover = ({
+  children,
+  title,
+  accent,
+  conta,
+  nome,
+  lines,
+  formula,
+  resultado,
+}: {
+  children: React.ReactNode
+  title: string
+  accent: string
+  conta?: string
+  nome?: string
+  lines: { label: string; value: string }[]
+  formula?: string
+  resultado: string
+}) => (
+  <Popover>
+    <PopoverTrigger asChild>{children}</PopoverTrigger>
+    <PopoverContent
+      side="top"
+      align="end"
+      className="w-80 p-4 text-sm z-[120]"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <h4 className="font-bold text-slate-800 mb-2 border-b pb-1 flex items-center gap-1.5">
+        <BookOpen className={`h-4 w-4 ${accent}`} /> {title}
+      </h4>
+      {conta && (
+        <div className="text-xs mb-3 pb-2 border-b border-slate-100">
+          <span className="text-slate-500">Conta:</span>
+          <div className="font-medium text-slate-700 leading-snug mt-0.5">
+            <span className="font-mono text-indigo-600">{conta}</span> {nome}
+          </div>
+        </div>
+      )}
+      <div className="space-y-2 mt-2">
+        {lines.map((l, i) => (
+          <div key={i} className="flex justify-between items-center text-xs">
+            <span className="text-slate-500">{l.label}</span>
+            <span className="font-medium text-slate-700">{l.value}</span>
+          </div>
+        ))}
+        {formula && (
+          <div className="bg-slate-50 p-2 rounded-md border border-slate-100 mt-2 font-mono text-[10px] text-center text-slate-600 leading-tight">
+            {formula}
+          </div>
+        )}
+        <div className="flex justify-between items-center text-sm font-bold pt-1 border-t mt-1">
+          <span className="text-slate-700">Resultado:</span>
+          <span className="text-slate-700">{resultado}</span>
+        </div>
+      </div>
+    </PopoverContent>
+  </Popover>
+)
+
 // Ajuda da Perspectiva (Mensal Isolado vs Acumulado Mensal)
 const PerspectivaHelp = () => (
   <HoverCard openDelay={150} closeDelay={100}>
@@ -2376,6 +2436,64 @@ export default function App() {
     },
     [isAccumulated, periodsToDisplay],
   )
+
+  const isResultConta = (acc: any) =>
+    acc.natureza === '04' ||
+    acc.natureza === '4' ||
+    acc.conta.startsWith('3') ||
+    acc.conta.startsWith('4') ||
+    acc.conta.startsWith('5')
+
+  const getAcumuladoMemo = (acc: any) => {
+    const n = periodsToDisplay.length
+    if (isResultConta(acc) && !isAccumulated) {
+      let sd = 0
+      let sc = 0
+      periodsToDisplay.forEach((p: string) => {
+        const s = acc.saldos[p]
+        if (s) {
+          sd += getRawNumber(s.debito)
+          sc += getRawNumber(s.credito)
+        }
+      })
+      const net = Math.abs(sd - sc)
+      return {
+        mode: 'result' as const,
+        sumDeb: sd,
+        sumCred: sc,
+        val: net,
+        ind: net > 0 ? (sd > sc ? 'D' : 'C') : '',
+        n,
+      }
+    }
+    const last = n > 0 ? periodsToDisplay[n - 1] : null
+    const s = last ? acc.saldos[last] : null
+    return {
+      mode: 'patrimonial' as const,
+      lastPeriod: last,
+      val: s ? Math.abs(getRawNumber(s.sldFin)) : 0,
+      ind: s ? s.indDcFin : '',
+      n,
+    }
+  }
+
+  const getMediaMemo = (acc: any) => {
+    const n = periodsToDisplay.length || 1
+    if (isResultConta(acc) && !isAccumulated) {
+      const am = getAcumuladoMemo(acc)
+      return { mode: 'result' as const, acumulado: am.val, n, val: am.val / n, ind: am.ind }
+    }
+    let sum = 0
+    let lastInd = ''
+    periodsToDisplay.forEach((p: string) => {
+      const s = acc.saldos[p]
+      if (s) {
+        sum += Math.abs(getRawNumber(s.sldFin))
+        lastInd = s.indDcFin
+      }
+    })
+    return { mode: 'patrimonial' as const, soma: sum, n, val: sum / n, ind: lastInd }
+  }
 
   // Reordena as linhas visíveis aplicando a ordenação escolhida em cada grupo (conta pai),
   // mantendo a hierarquia: filhos de um pai são ordenados entre si pela coluna selecionada.
@@ -9194,11 +9312,51 @@ export default function App() {
                                   className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-white/10 text-white' : isLevel5 ? 'bg-black/[0.04] text-black' : 'bg-black/[0.04] text-blue-950'}`}
                                 >
                                   <div className="flex items-center w-full gap-1">
-                                    <span
-                                      className={`flex-1 ${BC_ALIGN_TEXT[getColAlign('acumulado', 'right')]} ${accDisplayVal === '0,00' ? (isDarkBg ? 'text-white/30' : 'text-blue-900/30') : ''}`}
-                                    >
-                                      {accDisplayVal !== '0,00' ? accDisplayVal : '-'}
-                                    </span>
+                                    {accDisplayVal !== '0,00'
+                                      ? (() => {
+                                          const memo = getAcumuladoMemo(acc)
+                                          return (
+                                            <CalcMemoPopover
+                                              title="Memória de Cálculo (Acumulado)"
+                                              accent="text-indigo-600"
+                                              conta={acc.conta}
+                                              nome={acc.nome}
+                                              lines={
+                                                memo.mode === 'result'
+                                                  ? [
+                                                      { label: 'Total Débitos:', value: fmtBRL(memo.sumDeb) },
+                                                      { label: 'Total Créditos:', value: fmtBRL(memo.sumCred) },
+                                                    ]
+                                                  : [
+                                                      {
+                                                        label: `Saldo final (${periodLabel(memo.lastPeriod || '')}):`,
+                                                        value: `${fmtBRL(memo.val)} ${memo.ind}`,
+                                                      },
+                                                    ]
+                                              }
+                                              formula={
+                                                memo.mode === 'result'
+                                                  ? `| ${fmtBRL(memo.sumDeb)} − ${fmtBRL(memo.sumCred)} |`
+                                                  : 'Saldo final do último período selecionado'
+                                              }
+                                              resultado={`${fmtBRL(memo.val)} ${memo.ind}`}
+                                            >
+                                              <span
+                                                onClick={(e) => e.stopPropagation()}
+                                                className={`flex-1 cursor-pointer border-b border-dotted border-current hover:opacity-80 ${BC_ALIGN_TEXT[getColAlign('acumulado', 'right')]}`}
+                                              >
+                                                {accDisplayVal}
+                                              </span>
+                                            </CalcMemoPopover>
+                                          )
+                                        })()
+                                      : (
+                                          <span
+                                            className={`flex-1 ${BC_ALIGN_TEXT[getColAlign('acumulado', 'right')]} ${isDarkBg ? 'text-white/30' : 'text-blue-900/30'}`}
+                                          >
+                                            -
+                                          </span>
+                                        )}
                                     <span
                                       className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${accDisplayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : accDisplayInd === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
                                     >
@@ -9233,11 +9391,49 @@ export default function App() {
                                   className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-white/10 text-white' : isLevel5 ? 'bg-violet-50/50 text-black' : 'bg-violet-50/50 text-blue-950'}`}
                                 >
                                   <div className="flex items-center w-full gap-1">
-                                    <span
-                                      className={`flex-1 ${BC_ALIGN_TEXT[mAlign]} ${mStr === '0,00' ? (isDarkBg ? 'text-white/30' : 'text-blue-900/30') : ''}`}
-                                    >
-                                      {mStr !== '0,00' ? mStr : '-'}
-                                    </span>
+                                    {mStr !== '0,00'
+                                      ? (() => {
+                                          const memo = getMediaMemo(acc)
+                                          return (
+                                            <CalcMemoPopover
+                                              title="Memória de Cálculo (Média)"
+                                              accent="text-violet-600"
+                                              conta={acc.conta}
+                                              nome={acc.nome}
+                                              lines={
+                                                memo.mode === 'result'
+                                                  ? [
+                                                      { label: 'Acumulado do período:', value: fmtBRL(memo.acumulado) },
+                                                      { label: 'Qtd. de períodos:', value: String(memo.n) },
+                                                    ]
+                                                  : [
+                                                      { label: 'Soma dos saldos:', value: fmtBRL(memo.soma) },
+                                                      { label: 'Qtd. de períodos:', value: String(memo.n) },
+                                                    ]
+                                              }
+                                              formula={
+                                                memo.mode === 'result'
+                                                  ? `${fmtBRL(memo.acumulado)} ÷ ${memo.n}`
+                                                  : `${fmtBRL(memo.soma)} ÷ ${memo.n}`
+                                              }
+                                              resultado={`${fmtBRL(memo.val)} ${memo.ind}`}
+                                            >
+                                              <span
+                                                onClick={(e) => e.stopPropagation()}
+                                                className={`flex-1 cursor-pointer border-b border-dotted border-current hover:opacity-80 ${BC_ALIGN_TEXT[mAlign]}`}
+                                              >
+                                                {mStr}
+                                              </span>
+                                            </CalcMemoPopover>
+                                          )
+                                        })()
+                                      : (
+                                          <span
+                                            className={`flex-1 ${BC_ALIGN_TEXT[mAlign]} ${isDarkBg ? 'text-white/30' : 'text-blue-900/30'}`}
+                                          >
+                                            -
+                                          </span>
+                                        )}
                                     <span
                                       className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${m.ind === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : m.ind === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
                                     >
