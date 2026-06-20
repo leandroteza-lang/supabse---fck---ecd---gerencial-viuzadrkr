@@ -948,7 +948,7 @@ export default function App() {
   const [auditResult, setAuditResult] = useState<any>(null)
   const [showAuditDetails, setShowAuditDetails] = useState(false)
 
-  const [isAccumulated, setIsAccumulated] = useState(true)
+  const [isAccumulated, setIsAccumulated] = useState(false)
   const [showAV, setShowAV] = useState(false)
   const [showAH, setShowAH] = useState(false)
   const [ocultarValores, setOcultarValores] = useState(false)
