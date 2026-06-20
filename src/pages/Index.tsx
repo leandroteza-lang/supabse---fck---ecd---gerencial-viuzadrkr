@@ -2399,7 +2399,9 @@ export default function App() {
     [isAccumulated, periodsToDisplay],
   )
 
-  // Média dos saldos no período (média dos valores exibidos em cada mês)
+  // Média = Acumulado ÷ quantidade de períodos filtrados.
+  // Como o Acumulado é o mesmo valor nos dois modos (Mensal Isolado / Acumulado
+  // Mensal), a média também é idêntica nos dois modos.
   const getBalanceteMedia = useCallback(
     (acc: any) => {
       const n = periodsToDisplay.length
@@ -2410,6 +2412,8 @@ export default function App() {
         acc.conta.startsWith('3') ||
         acc.conta.startsWith('4') ||
         acc.conta.startsWith('5')
+      let acVal = 0
+      let acInd = ''
       if (isResult && !isAccumulated) {
         let sumDeb = 0
         let sumCred = 0
@@ -2420,19 +2424,17 @@ export default function App() {
             sumCred += getRawNumber(s.credito)
           }
         })
-        const net = Math.abs(sumDeb - sumCred)
-        return { val: net / n, ind: net > 0 ? (sumDeb > sumCred ? 'D' : 'C') : '' }
-      }
-      let sum = 0
-      let lastInd = ''
-      periodsToDisplay.forEach((p: string) => {
-        const s = acc.saldos[p]
+        acVal = Math.abs(sumDeb - sumCred)
+        acInd = acVal > 0 ? (sumDeb > sumCred ? 'D' : 'C') : ''
+      } else {
+        const last = periodsToDisplay[n - 1]
+        const s = acc.saldos[last]
         if (s) {
-          sum += Math.abs(getRawNumber(s.sldFin))
-          lastInd = s.indDcFin
+          acVal = Math.abs(getRawNumber(s.sldFin))
+          acInd = s.indDcFin
         }
-      })
-      return { val: sum / n, ind: lastInd }
+      }
+      return { val: acVal / n, ind: acInd }
     },
     [isAccumulated, periodsToDisplay],
   )
@@ -2500,13 +2502,20 @@ export default function App() {
     }
   }
 
-  // Memória da Média: valores de cada mês ÷ quantidade de períodos
+  // Memória da Média: Acumulado ÷ quantidade de períodos filtrados
   const getMediaMemo = (acc: any) => {
     const n = periodsToDisplay.length || 1
     const m = getBalanceteMedia(acc)
+    const acVal = m.val * n
     return {
-      lines: periodLines(acc),
-      formula: `Soma dos ${n} período(s) ÷ ${n}`,
+      lines: [
+        {
+          label: `Acumulado (${n} período(s)):`,
+          value: `${fmtBRL(acVal)}${m.ind ? ' ' + m.ind : ''}`,
+        },
+        { label: 'Qtd. de períodos:', value: String(n) },
+      ],
+      formula: `${fmtBRL(acVal)} ÷ ${n}`,
       resultado: `${fmtBRL(m.val)}${m.ind ? ' ' + m.ind : ''}`,
     }
   }
