@@ -367,9 +367,15 @@ export default function RazaoAvancado({
         (p) => p.account_id !== line.account_id && p.indicator !== line.indicator,
       )
       if (outras.length === 0) return '—'
-      const codes = Array.from(new Set(outras.map((p) => p.code)))
-      if (codes.length === 1) return codes[0]
-      return `${codes[0]} (+${codes.length - 1})`
+      const seen = new Set<string>()
+      const itens: string[] = []
+      outras.forEach((p) => {
+        if (seen.has(p.code)) return
+        seen.add(p.code)
+        itens.push(`${p.code} — ${p.name}`)
+      })
+      if (itens.length === 1) return itens[0]
+      return `${itens[0]} (+${itens.length - 1})`
     },
     [contraMap],
   )
@@ -419,7 +425,7 @@ export default function RazaoAvancado({
             (r: any) => `<tr>
             <td class="mono">${esc(r.dt ? String(r.dt).split('-').reverse().join('/') : '')}</td>
             <td>${esc(r.history)}</td>
-            <td class="mono">${esc(contrapartidaDe(r))}</td>
+            <td>${esc(contrapartidaDe(r))}</td>
             <td class="num">${r.indicator === 'D' ? fmtBRL(Number(r.amount)) : ''}</td>
             <td class="num">${r.indicator === 'C' ? fmtBRL(Number(r.amount)) : ''}</td>
             <td class="num">${fmtBRL(Math.abs(r.saldoCorrente))} ${r.saldoCorrente >= 0 ? 'D' : 'C'}</td>
@@ -755,7 +761,10 @@ export default function RazaoAvancado({
                                     </td>
                                     <td className="py-1.5 px-3 text-slate-700">{r.history}</td>
                                     {mostrarContrapartida && (
-                                      <td className="py-1.5 px-3 font-mono text-[11px] text-indigo-600">
+                                      <td
+                                        className="py-1.5 px-3 text-[11px] text-indigo-700 max-w-[220px] truncate"
+                                        title={contrapartidaDe(r)}
+                                      >
                                         {contrapartidaDe(r)}
                                       </td>
                                     )}
