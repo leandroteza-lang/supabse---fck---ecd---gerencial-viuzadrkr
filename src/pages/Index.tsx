@@ -716,26 +716,29 @@ interface AnalysisProfile {
   ahAlertThreshold?: number | null
   avAlertThreshold?: number | null
   // Alerta por intervalo (De–Até) + modo (dentro/fora). Substituem os limites únicos acima.
-  avAlertMin?: number | null
-  avAlertMax?: number | null
+  // Aceitam string (campo digitável) ou número.
+  avAlertMin?: number | string | null
+  avAlertMax?: number | string | null
   avAlertMode?: 'dentro' | 'fora'
-  ahAlertMin?: number | null
-  ahAlertMax?: number | null
+  ahAlertMin?: number | string | null
+  ahAlertMax?: number | string | null
   ahAlertMode?: 'dentro' | 'fora'
 }
 
+// Converte um valor digitável (string/número, com vírgula ou negativo) para número.
+// Retorna o fallback quando vazio/inválido/parcial (ex.: "-").
+const parseLimite = (v: any, fallback: number) => {
+  if (v == null) return fallback
+  const s = String(v).trim().replace(',', '.')
+  if (s === '' || s === '-' || s === '.' || s === '-.') return fallback
+  const n = Number(s)
+  return isNaN(n) ? fallback : n
+}
 // Dispara o alerta se o valor estiver dentro/fora do intervalo informado.
-const alertaDispara = (
-  value: number,
-  min?: number | null,
-  max?: number | null,
-  mode?: string,
-) => {
-  const hasMin = min != null && !isNaN(min as number)
-  const hasMax = max != null && !isNaN(max as number)
-  if (!hasMin && !hasMax) return false
-  const lo = hasMin ? (min as number) : -Infinity
-  const hi = hasMax ? (max as number) : Infinity
+const alertaDispara = (value: number, min?: any, max?: any, mode?: string) => {
+  const lo = parseLimite(min, -Infinity)
+  const hi = parseLimite(max, Infinity)
+  if (lo === -Infinity && hi === Infinity) return false
   const inside = value >= lo && value <= hi
   return mode === 'fora' ? !inside : inside
 }
@@ -11123,15 +11126,15 @@ export default function App() {
                             <div className="flex items-center gap-1.5">
                               <div className="relative flex-1">
                                 <Input
-                                  type="number"
+                                  type="text"
+                                  inputMode="decimal"
                                   value={cfg.minDefault}
-                                  onChange={(e) =>
-                                    updateProfile({
-                                      [`${cfg.k}AlertMin`]:
-                                        e.target.value !== '' ? Number(e.target.value) : null,
-                                    } as any)
-                                  }
-                                  placeholder="De"
+                                  onChange={(e) => {
+                                    const v = e.target.value
+                                    if (v !== '' && !/^-?[\d.,]*$/.test(v)) return
+                                    updateProfile({ [`${cfg.k}AlertMin`]: v === '' ? null : v } as any)
+                                  }}
+                                  placeholder="De (ex.: -4)"
                                   className="h-9 pr-6 text-sm"
                                 />
                                 <Percent className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -11139,15 +11142,15 @@ export default function App() {
                               <span className="text-slate-400 text-xs">a</span>
                               <div className="relative flex-1">
                                 <Input
-                                  type="number"
+                                  type="text"
+                                  inputMode="decimal"
                                   value={cfg.maxDefault}
-                                  onChange={(e) =>
-                                    updateProfile({
-                                      [`${cfg.k}AlertMax`]:
-                                        e.target.value !== '' ? Number(e.target.value) : null,
-                                    } as any)
-                                  }
-                                  placeholder="Até"
+                                  onChange={(e) => {
+                                    const v = e.target.value
+                                    if (v !== '' && !/^-?[\d.,]*$/.test(v)) return
+                                    updateProfile({ [`${cfg.k}AlertMax`]: v === '' ? null : v } as any)
+                                  }}
+                                  placeholder="Até (ex.: 10)"
                                   className="h-9 pr-6 text-sm"
                                 />
                                 <Percent className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
