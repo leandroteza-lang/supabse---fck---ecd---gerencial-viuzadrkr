@@ -8990,6 +8990,21 @@ export default function App() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {(() => {
+                      // Envolve o conteúdo de uma célula de índice (AV%/AH%) deixando o
+                      // alerta (⚠) num slot de largura fixa, como uma coluna, p/ os
+                      // valores alinharem mesmo quando há/não há divergência.
+                      const wrapIdxCell = (content: any, alertNode: any, justify: string) => (
+                        <div className="flex items-center w-full gap-1">
+                          {!ocultarAlertas && (
+                            <span className="w-4 shrink-0 flex items-center justify-center">
+                              {alertNode}
+                            </span>
+                          )}
+                          <div className={`flex-1 flex items-center relative group/av ${justify}`}>
+                            {content}
+                          </div>
+                        </div>
+                      )
                       const renderAvCell = (
                         acc: any,
                         period: string,
@@ -9000,18 +9015,18 @@ export default function App() {
                         alignJustify = 'justify-end',
                       ) => {
                         if (!profile || rawVal <= 0) {
-                          return (
-                            <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>
-                              -
-                            </span>
+                          return wrapIdxCell(
+                            <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>-</span>,
+                            null,
+                            alignJustify,
                           )
                         }
                         // Só divergências: mascara o mês que não bateu nenhum alerta
                         if (!periodoDiverge(acc, period)) {
-                          return (
-                            <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>
-                              •••
-                            </span>
+                          return wrapIdxCell(
+                            <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>•••</span>,
+                            null,
+                            alignJustify,
                           )
                         }
                         const baseDetails = getBaseDetailsForAccount(acc, period, profile)
@@ -9021,33 +9036,32 @@ export default function App() {
                             ? baseDetails.accounts[0]
                             : null
                         if (!base || base <= 0) {
-                          return (
-                            <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>
-                              -
-                            </span>
+                          return wrapIdxCell(
+                            <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>-</span>,
+                            null,
+                            alignJustify,
                           )
                         }
                         const avPct = (rawVal / base) * 100
                         const avCond = effCond(profile, 'av')
                         const hasAlert = condDispara(avPct, avCond)
 
-                        return (
-                          <div
-                            className={`flex items-center gap-1.5 group/av relative ${alignJustify}`}
-                          >
-                            {hasAlert && !ocultarAlertas && (
-                              <UITooltip delayDuration={0}>
-                                <TooltipTrigger asChild>
-                                  <AlertCircle
-                                    className={`w-3.5 h-3.5 cursor-help shrink-0 ${isDarkBg ? 'text-amber-400' : 'text-amber-500'}`}
-                                  />
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-[260px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
-                                  Atenção: o peso de {avPct.toFixed(2)}% está {condTexto(avCond)} —
-                                  faixa de alerta configurada no perfil.
-                                </TooltipContent>
-                              </UITooltip>
-                            )}
+                        const avAlertNode = hasAlert ? (
+                          <UITooltip delayDuration={0}>
+                            <TooltipTrigger asChild>
+                              <AlertCircle
+                                className={`w-3.5 h-3.5 cursor-help shrink-0 ${isDarkBg ? 'text-amber-400' : 'text-amber-500'}`}
+                              />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[260px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
+                              Atenção: o peso de {avPct.toFixed(2)}% está {condTexto(avCond)} — faixa
+                              de alerta configurada no perfil.
+                            </TooltipContent>
+                          </UITooltip>
+                        ) : null
+
+                        return wrapIdxCell(
+                          <>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
@@ -9155,7 +9169,9 @@ export default function App() {
                                 </div>
                               </PopoverContent>
                             </Popover>
-                          </div>
+                          </>,
+                          avAlertNode,
+                          alignJustify,
                         )
                       }
 
@@ -9369,7 +9385,10 @@ export default function App() {
                               const mesOculto = !periodoDiverge(acc, period)
 
                               // Análise Horizontal
-                              let ahLabel = null
+                              let ahContent: any = null
+                              let ahAlertNode: any = null
+                              const ahJustify =
+                                BC_ALIGN_JUSTIFY[getColAlign(`${period}_ah`, 'right')]
                               let prevVal = 0
                               let prevPeriodLabel = ''
                               let hasValidPrev = false
@@ -9459,26 +9478,23 @@ export default function App() {
 
                                   const ahCond = effCond(activeProfile, 'ah')
                                   const hasAlert = condDispara(ahPct, ahCond)
-                                  const ahJustify =
-                                    BC_ALIGN_JUSTIFY[getColAlign(`${period}_ah`, 'right')]
 
-                                  ahLabel = (
-                                    <div className={`flex items-center gap-1.5 ${ahJustify}`}>
-                                      {hasAlert && !ocultarAlertas && (
-                                        <UITooltip delayDuration={0}>
-                                          <TooltipTrigger asChild>
-                                            <AlertCircle
-                                              className={`w-3.5 h-3.5 cursor-help shrink-0 ${isDarkBg ? 'text-amber-400' : 'text-amber-500'}`}
-                                            />
-                                          </TooltipTrigger>
-                                          <TooltipContent className="max-w-[260px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
-                                            Atenção: a variação de {ahPct.toFixed(2)}% está{' '}
-                                            {condTexto(ahCond)} — faixa de alerta configurada no
-                                            perfil.
-                                          </TooltipContent>
-                                        </UITooltip>
-                                      )}
-                                      <Popover>
+                                  ahAlertNode = hasAlert ? (
+                                    <UITooltip delayDuration={0}>
+                                      <TooltipTrigger asChild>
+                                        <AlertCircle
+                                          className={`w-3.5 h-3.5 cursor-help shrink-0 ${isDarkBg ? 'text-amber-400' : 'text-amber-500'}`}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-[260px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
+                                        Atenção: a variação de {ahPct.toFixed(2)}% está{' '}
+                                        {condTexto(ahCond)} — faixa de alerta configurada no perfil.
+                                      </TooltipContent>
+                                    </UITooltip>
+                                  ) : null
+
+                                  ahContent = (
+                                    <Popover>
                                         <PopoverTrigger asChild>
                                           <span
                                             onClick={(e) => e.stopPropagation()}
@@ -9547,36 +9563,33 @@ export default function App() {
                                           </div>
                                         </PopoverContent>
                                       </Popover>
-                                    </div>
                                   )
                                 } else if (rawVal > 0 && prevVal === 0) {
-                                  ahLabel = (
-                                    <div
-                                      className={`flex items-center gap-1.5 ${BC_ALIGN_JUSTIFY[getColAlign(`${period}_ah`, 'right')]}`}
+                                  ahContent = (
+                                    <span
+                                      className={`text-[11px] font-mono ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
+                                      title="Análise Horizontal (vs Mês Anterior)"
                                     >
-                                      <span
-                                        className={`text-[11px] font-mono ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
-                                        title="Análise Horizontal (vs Mês Anterior)"
-                                      >
-                                        N/A (Novo)
-                                      </span>
-                                    </div>
+                                      N/A (Novo)
+                                    </span>
                                   )
                                 }
                               }
 
                               // Só divergências: mês sem alerta fica mascarado também no AH%
                               if (mesOculto) {
-                                ahLabel = (
-                                  <div
-                                    className={`flex items-center ${BC_ALIGN_JUSTIFY[getColAlign(`${period}_ah`, 'right')]}`}
-                                  >
-                                    <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>
-                                      •••
-                                    </span>
-                                  </div>
+                                ahContent = (
+                                  <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>
+                                    •••
+                                  </span>
                                 )
+                                ahAlertNode = null
                               }
+
+                              const ahLabel =
+                                ahContent !== null
+                                  ? wrapIdxCell(ahContent, ahAlertNode, ahJustify)
+                                  : null
 
                               return (
                                 <React.Fragment key={period}>
@@ -9652,15 +9665,18 @@ export default function App() {
                                     <td
                                       className={`py-1.5 px-2 whitespace-nowrap border-l border-white/10 ${BC_ALIGN_TEXT[getColAlign(`${period}_ah`, 'right')]} ${isDarkBg ? 'bg-black/10 text-white/80' : 'bg-black/[0.02] text-blue-900/70'}`}
                                     >
-                                      {ahLabel || (
-                                        <span
-                                          className={
-                                            isDarkBg ? 'text-white/30' : 'text-blue-900/30'
-                                          }
-                                        >
-                                          -
-                                        </span>
-                                      )}
+                                      {ahLabel ||
+                                        wrapIdxCell(
+                                          <span
+                                            className={
+                                              isDarkBg ? 'text-white/30' : 'text-blue-900/30'
+                                            }
+                                          >
+                                            -
+                                          </span>,
+                                          null,
+                                          ahJustify,
+                                        )}
                                     </td>
                                   )}
                                 </React.Fragment>
