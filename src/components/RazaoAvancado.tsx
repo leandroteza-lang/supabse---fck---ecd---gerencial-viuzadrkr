@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
-import { Loader2, Search, ExternalLink, Play } from 'lucide-react'
+import { Loader2, Search, ExternalLink, Play, ChevronRight, ChevronDown } from 'lucide-react'
 
 const fmtBRL = (n: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n || 0)
@@ -75,6 +75,7 @@ export default function RazaoAvancado({
   // Seleção de contas
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [accSearch, setAccSearch] = useState('')
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const [codeFrom, setCodeFrom] = useState('')
   const [codeTo, setCodeTo] = useState('')
 
@@ -187,12 +188,49 @@ export default function RazaoAvancado({
     })
   }
 
-  const filteredAccList = useMemo(() => {
+  const roots = useMemo(
+    () =>
+      accounts
+        .filter((a) => !accountParentMap[a.conta])
+        .sort((a, b) => byCodeNum(a.conta, b.conta)),
+    [accounts, accountParentMap],
+  )
+
+  const toggleExpand = (code: string) =>
+    setExpandedNodes((prev) => {
+      const n = new Set(prev)
+      if (n.has(code)) n.delete(code)
+      else n.add(code)
+      return n
+    })
+  const expandAll = () =>
+    setExpandedNodes(new Set(accounts.filter((a) => a.tipo === 'S').map((a) => a.conta)))
+  const collapseAll = () => setExpandedNodes(new Set())
+
+  // Lista visível: árvore (raiz → filhos só quando expandido) ou plana na busca
+  const visibleTree = useMemo(() => {
     const lower = accSearch.toLowerCase()
-    return accounts
-      .filter((a) => !lower || a.conta.toLowerCase().includes(lower) || a.nome.toLowerCase().includes(lower))
-      .sort((a, b) => byCodeNum(a.conta, b.conta))
-  }, [accounts, accSearch])
+    if (lower) {
+      return accounts
+        .filter((a) => a.conta.toLowerCase().includes(lower) || a.nome.toLowerCase().includes(lower))
+        .sort((a, b) => byCodeNum(a.conta, b.conta))
+        .map((a) => ({
+          acc: a,
+          level: parseInt(a.nivel) || 1,
+          hasChildren: (childrenMap[a.conta] || []).length > 0,
+        }))
+    }
+    const out: { acc: AccountRow; level: number; hasChildren: boolean }[] = []
+    const walk = (code: string) => {
+      const acc = accountsByCode[code]
+      if (!acc) return
+      const kids = (childrenMap[code] || []).slice().sort(byCodeNum)
+      out.push({ acc, level: parseInt(acc.nivel) || 1, hasChildren: kids.length > 0 })
+      if (kids.length && expandedNodes.has(code)) kids.forEach(walk)
+    }
+    roots.forEach((r) => walk(r.conta))
+    return out
+  }, [accSearch, accounts, roots, childrenMap, accountsByCode, expandedNodes])
 
   // Saldo anterior (de balances/saldos do período inicial selecionado)
   const computeOpening = useCallback(
@@ -498,12 +536,18 @@ export default function RazaoAvancado({
                   className="pl-8 h-9 text-sm"
                 />
               </div>
-              <div className="flex items-center justify-between mt-1.5 text-xs">
+              <div className="flex items-center justify-between mt-1.5 text-xs gap-1.5 flex-wrap">
                 <button
                   className="font-bold text-indigo-600 hover:text-indigo-800"
                   onClick={() => setSelected(new Set(accounts.map((a) => a.conta)))}
                 >
                   Selecionar todas
+                </button>
+                <button className="font-bold text-slate-500 hover:text-slate-800" onClick={expandAll}>
+                  Expandir
+                </button>
+                <button className="font-bold text-slate-500 hover:text-slate-800" onClick={collapseAll}>
+                  Recolher
                 </button>
                 <span className="text-slate-400">{selected.size} selec.</span>
                 <button
@@ -514,25 +558,41 @@ export default function RazaoAvancado({
                 </button>
               </div>
               <div className="mt-2 max-h-[260px] overflow-y-auto custom-scrollbar border border-slate-200 rounded-lg p-1 bg-slate-50/50">
-                {filteredAccList.map((a) => {
-                  const lvl = parseInt(a.nivel) || 1
-                  return (
-                    <label
-                      key={a.conta}
-                      className="flex items-center gap-2 py-1 px-1.5 rounded hover:bg-white cursor-pointer text-xs"
-                      style={{ paddingLeft: `${(lvl - 1) * 12 + 6}px` }}
-                    >
+                {visibleTree.map(({ acc: a, level: lvl, hasChildren }) => (
+                  <div
+                    key={a.conta}
+                    className="flex items-center gap-1 py-1 pr-1.5 rounded hover:bg-white text-xs"
+                    style={{ paddingLeft: `${(lvl - 1) * 14 + 2}px` }}
+                  >
+                    {hasChildren ? (
+                      <button
+                        onClick={() => toggleExpand(a.conta)}
+                        className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-slate-700 shrink-0"
+                        title={expandedNodes.has(a.conta) ? 'Recolher' : 'Expandir'}
+                      >
+                        {expandedNodes.has(a.conta) || !!accSearch ? (
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        ) : (
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    ) : (
+                      <span className="w-4 shrink-0" />
+                    )}
+                    <label className="flex items-center gap-2 cursor-pointer min-w-0 flex-1">
                       <Checkbox
                         checked={selected.has(a.conta)}
                         onCheckedChange={(c) => toggleCode(a.conta, !!c)}
                       />
-                      <span className="font-mono text-slate-500">{a.conta}</span>
-                      <span className={`truncate ${a.tipo === 'S' ? 'font-bold text-slate-700' : 'text-slate-600'}`}>
+                      <span className="font-mono text-slate-500 shrink-0">{a.conta}</span>
+                      <span
+                        className={`truncate ${a.tipo === 'S' ? 'font-bold text-slate-700' : 'text-slate-600'}`}
+                      >
                         {a.nome}
                       </span>
                     </label>
-                  )
-                })}
+                  </div>
+                ))}
               </div>
               <div className="flex items-end gap-2 mt-2">
                 <div className="flex-1">
