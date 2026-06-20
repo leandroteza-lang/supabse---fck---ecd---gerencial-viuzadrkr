@@ -713,6 +713,49 @@ interface AnalysisProfile {
   customAvBases: Record<string, string | string[]>
   ahAlertThreshold?: number | null
   avAlertThreshold?: number | null
+  // Alerta por intervalo (De–Até) + modo (dentro/fora). Substituem os limites únicos acima.
+  avAlertMin?: number | null
+  avAlertMax?: number | null
+  avAlertMode?: 'dentro' | 'fora'
+  ahAlertMin?: number | null
+  ahAlertMax?: number | null
+  ahAlertMode?: 'dentro' | 'fora'
+}
+
+// Dispara o alerta se o valor estiver dentro/fora do intervalo informado.
+const alertaDispara = (
+  value: number,
+  min?: number | null,
+  max?: number | null,
+  mode?: string,
+) => {
+  const hasMin = min != null && !isNaN(min as number)
+  const hasMax = max != null && !isNaN(max as number)
+  if (!hasMin && !hasMax) return false
+  const lo = hasMin ? (min as number) : -Infinity
+  const hi = hasMax ? (max as number) : Infinity
+  const inside = value >= lo && value <= hi
+  return mode === 'fora' ? !inside : inside
+}
+// Intervalo efetivo do alerta AV% (compatível com o limite único antigo: > limite)
+const effAvAlert = (profile: any) => {
+  if (profile?.avAlertMin != null || profile?.avAlertMax != null || profile?.avAlertMode) {
+    return { min: profile.avAlertMin, max: profile.avAlertMax, mode: profile.avAlertMode || 'dentro' }
+  }
+  if (profile?.avAlertThreshold != null) {
+    return { min: profile.avAlertThreshold, max: null, mode: 'dentro' as const }
+  }
+  return { min: null, max: null, mode: 'dentro' as const }
+}
+// Intervalo efetivo do alerta AH% (compatível com o antigo: |AH%| > limite → fora de [-l, +l])
+const effAhAlert = (profile: any) => {
+  if (profile?.ahAlertMin != null || profile?.ahAlertMax != null || profile?.ahAlertMode) {
+    return { min: profile.ahAlertMin, max: profile.ahAlertMax, mode: profile.ahAlertMode || 'fora' }
+  }
+  if (profile?.ahAlertThreshold != null) {
+    return { min: -profile.ahAlertThreshold, max: profile.ahAlertThreshold, mode: 'fora' as const }
+  }
+  return { min: null, max: null, mode: 'fora' as const }
 }
 
 const EditableTitle = ({
@@ -8689,8 +8732,8 @@ export default function App() {
                           )
                         }
                         const avPct = (rawVal / base) * 100
-                        const hasAlert =
-                          profile?.avAlertThreshold != null && avPct > profile.avAlertThreshold
+                        const avA = effAvAlert(profile)
+                        const hasAlert = alertaDispara(avPct, avA.min, avA.max, avA.mode)
 
                         return (
                           <div className="flex items-center justify-end gap-1.5 group/av relative">
@@ -8701,9 +8744,11 @@ export default function App() {
                                     className={`w-3.5 h-3.5 cursor-help shrink-0 ${isDarkBg ? 'text-amber-400' : 'text-amber-500'}`}
                                   />
                                 </TooltipTrigger>
-                                <TooltipContent className="max-w-[250px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
-                                  Atenção: O peso de {avPct.toFixed(2)}% ultrapassa o limite de
-                                  alerta de {profile?.avAlertThreshold}% configurado no perfil.
+                                <TooltipContent className="max-w-[260px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
+                                  Atenção: o peso de {avPct.toFixed(2)}% está{' '}
+                                  {avA.mode === 'fora' ? 'fora' : 'dentro'} da faixa de alerta
+                                  {avA.min != null ? ` de ${avA.min}%` : ''}
+                                  {avA.max != null ? ` até ${avA.max}%` : ''} configurada no perfil.
                                 </TooltipContent>
                               </UITooltip>
                             )}
@@ -9113,9 +9158,8 @@ export default function App() {
                                           ? 'text-white/50'
                                           : 'text-blue-800/50'
 
-                                  const hasAlert =
-                                    activeProfile.ahAlertThreshold != null &&
-                                    Math.abs(ahPct) > activeProfile.ahAlertThreshold
+                                  const ahA = effAhAlert(activeProfile)
+                                  const hasAlert = alertaDispara(ahPct, ahA.min, ahA.max, ahA.mode)
 
                                   ahLabel = (
                                     <div className="flex items-center justify-end gap-1.5">
@@ -9126,10 +9170,13 @@ export default function App() {
                                               className={`w-3.5 h-3.5 cursor-help shrink-0 ${isDarkBg ? 'text-amber-400' : 'text-amber-500'}`}
                                             />
                                           </TooltipTrigger>
-                                          <TooltipContent className="max-w-[250px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
-                                            Atenção: A variação de {ahPct.toFixed(2)}% ultrapassa o
-                                            limite de alerta de ±{activeProfile.ahAlertThreshold}%
-                                            configurado no perfil.
+                                          <TooltipContent className="max-w-[260px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
+                                            Atenção: a variação de {ahPct.toFixed(2)}% está{' '}
+                                            {ahA.mode === 'fora' ? 'fora' : 'dentro'} da faixa de
+                                            alerta
+                                            {ahA.min != null ? ` de ${ahA.min}%` : ''}
+                                            {ahA.max != null ? ` até ${ahA.max}%` : ''} configurada no
+                                            perfil.
                                           </TooltipContent>
                                         </UITooltip>
                                       )}
@@ -10936,44 +10983,91 @@ export default function App() {
                       )}
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                            Alerta de Desvio (AV%)
-                          </label>
-                          <div className="relative">
-                            <Input
-                              type="number"
-                              value={profile.avAlertThreshold ?? ''}
-                              onChange={(e) =>
-                                updateProfile({
-                                  avAlertThreshold: e.target.value ? Number(e.target.value) : null,
-                                })
-                              }
-                              placeholder="Ex: 5 (para > 5%)"
-                              className="h-9 pr-8"
-                            />
-                            <Percent className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        {(
+                          [
+                            {
+                              k: 'av' as const,
+                              titulo: 'Alerta de Desvio (AV%)',
+                              minDefault: profile.avAlertMin ?? profile.avAlertThreshold ?? '',
+                              maxDefault: profile.avAlertMax ?? '',
+                              mode:
+                                profile.avAlertMode ||
+                                (profile.avAlertThreshold != null ? 'dentro' : 'dentro'),
+                            },
+                            {
+                              k: 'ah' as const,
+                              titulo: 'Alerta de Desvio (AH%)',
+                              minDefault:
+                                profile.ahAlertMin ??
+                                (profile.ahAlertThreshold != null ? -profile.ahAlertThreshold : ''),
+                              maxDefault: profile.ahAlertMax ?? profile.ahAlertThreshold ?? '',
+                              mode:
+                                profile.ahAlertMode ||
+                                (profile.ahAlertThreshold != null ? 'fora' : 'fora'),
+                            },
+                          ] as const
+                        ).map((cfg) => (
+                          <div key={cfg.k}>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                              {cfg.titulo}
+                            </label>
+                            <div className="flex items-center gap-1.5">
+                              <div className="relative flex-1">
+                                <Input
+                                  type="number"
+                                  value={cfg.minDefault}
+                                  onChange={(e) =>
+                                    updateProfile({
+                                      [`${cfg.k}AlertMin`]:
+                                        e.target.value !== '' ? Number(e.target.value) : null,
+                                    } as any)
+                                  }
+                                  placeholder="De"
+                                  className="h-9 pr-6 text-sm"
+                                />
+                                <Percent className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                              </div>
+                              <span className="text-slate-400 text-xs">a</span>
+                              <div className="relative flex-1">
+                                <Input
+                                  type="number"
+                                  value={cfg.maxDefault}
+                                  onChange={(e) =>
+                                    updateProfile({
+                                      [`${cfg.k}AlertMax`]:
+                                        e.target.value !== '' ? Number(e.target.value) : null,
+                                    } as any)
+                                  }
+                                  placeholder="Até"
+                                  className="h-9 pr-6 text-sm"
+                                />
+                                <Percent className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                              </div>
+                            </div>
+                            <div className="flex gap-1 mt-1.5">
+                              {(['dentro', 'fora'] as const).map((mode) => (
+                                <button
+                                  key={mode}
+                                  onClick={() =>
+                                    updateProfile({ [`${cfg.k}AlertMode`]: mode } as any)
+                                  }
+                                  className={`flex-1 text-[11px] font-bold py-1 rounded border transition-colors ${
+                                    cfg.mode === mode
+                                      ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                      : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                                  }`}
+                                  title={
+                                    mode === 'dentro'
+                                      ? 'Alerta quando o valor está dentro do intervalo'
+                                      : 'Alerta quando o valor está fora do intervalo'
+                                  }
+                                >
+                                  {mode === 'dentro' ? 'Dentro' : 'Fora'}
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                            Alerta de Desvio (AH%)
-                          </label>
-                          <div className="relative">
-                            <Input
-                              type="number"
-                              value={profile.ahAlertThreshold ?? ''}
-                              onChange={(e) =>
-                                updateProfile({
-                                  ahAlertThreshold: e.target.value ? Number(e.target.value) : null,
-                                })
-                              }
-                              placeholder="Ex: 10 (para > ±10%)"
-                              className="h-9 pr-8"
-                            />
-                            <Percent className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                          </div>
-                        </div>
+                        ))}
                       </div>
 
                       {Object.keys(profile.customAvBases || {}).length > 0 && (
