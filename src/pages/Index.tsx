@@ -9599,21 +9599,19 @@ export default function App() {
                                     >
                                       <div className="flex items-center w-full gap-1">
                                         <span
-                                          className={`flex-1 ${BC_ALIGN_TEXT[getColAlign(period, 'right')]} ${displayVal === '0,00' || mesOculto ? (isDarkBg ? 'text-white/30' : 'text-blue-900/30') : ''}`}
+                                          className={`flex-1 ${BC_ALIGN_TEXT[getColAlign(period, 'right')]} ${displayVal === '0,00' ? (isDarkBg ? 'text-white/30' : 'text-blue-900/30') : ''}`}
                                         >
-                                          {mesOculto
-                                            ? '•••'
-                                            : displayVal !== '0,00'
-                                              ? ocultarValores
-                                                ? '•••'
-                                                : displayVal
-                                              : '-'}
+                                          {displayVal !== '0,00'
+                                            ? ocultarValores
+                                              ? '•••'
+                                              : displayVal
+                                            : '-'}
                                         </span>
                                         {!ocultarDC && (
                                           <span
                                             className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${displayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : displayInd === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
                                           >
-                                            {mesOculto ? '' : displayInd}
+                                            {displayInd}
                                           </span>
                                         )}
                                         <span className="w-4 shrink-0 flex items-center justify-center">
