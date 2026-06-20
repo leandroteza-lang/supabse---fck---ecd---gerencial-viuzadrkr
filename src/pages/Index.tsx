@@ -745,6 +745,19 @@ export default function App() {
     })
   const getColAlign = (key: string, fallback: 'left' | 'center' | 'right') =>
     (balancetePrefs.alignments?.[key] as 'left' | 'center' | 'right') || fallback
+  // Alinhamento geral: aplica a todas as colunas da tabela de uma vez
+  const setAllColAlign = (val: 'left' | 'center' | 'right') => {
+    const a: Record<string, 'left' | 'center' | 'right'> = {
+      ...(balancetePrefs.alignments || {}),
+      conta: val,
+      descricao: val,
+      acumulado: val,
+    }
+    periodsToDisplay.forEach((p: string) => {
+      a[p] = val
+    })
+    updateBalancetePrefs({ alignments: a })
+  }
 
   // Ordenação por grupo (cada conta sintética pode ordenar seus filhos por uma coluna)
   const [balanceteSortConfigs, setBalanceteSortConfigs] = useState<
@@ -8126,6 +8139,7 @@ export default function App() {
                       <TableSettingsControls
                         prefs={balancetePrefs}
                         updatePrefs={updateBalancetePrefs}
+                        onAlignAll={setAllColAlign}
                         className="border-0 shadow-none bg-transparent h-7 w-7"
                       />
                     </div>

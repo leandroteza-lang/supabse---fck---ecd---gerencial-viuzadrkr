@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Settings2 } from 'lucide-react'
+import { Settings2, AlignLeft, AlignCenter, AlignRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TablePrefs } from '@/hooks/use-table-preferences'
 
@@ -12,9 +12,10 @@ interface Props {
   prefs: TablePrefs
   updatePrefs: (p: Partial<TablePrefs>) => void
   className?: string
+  onAlignAll?: (val: 'left' | 'center' | 'right') => void
 }
 
-export function TableSettingsControls({ prefs, updatePrefs, className }: Props) {
+export function TableSettingsControls({ prefs, updatePrefs, className, onAlignAll }: Props) {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -106,6 +107,30 @@ export function TableSettingsControls({ prefs, updatePrefs, className }: Props) 
             </div>
           </RadioGroup>
         </div>
+        {onAlignAll && (
+          <div className="space-y-2 pt-4 border-t border-slate-100">
+            <Label className="text-sm font-medium block">Alinhamento geral</Label>
+            <p className="text-xs text-slate-500">Aplica a todas as colunas de uma vez.</p>
+            <div className="flex gap-1.5">
+              {(['left', 'center', 'right'] as const).map((a) => (
+                <button
+                  key={a}
+                  onClick={() => onAlignAll(a)}
+                  className="flex-1 flex items-center justify-center py-2 rounded-md border border-slate-200 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-colors"
+                  title={a === 'left' ? 'Tudo à esquerda' : a === 'center' ? 'Tudo ao centro' : 'Tudo à direita'}
+                >
+                  {a === 'left' ? (
+                    <AlignLeft className="w-4 h-4" />
+                  ) : a === 'center' ? (
+                    <AlignCenter className="w-4 h-4" />
+                  ) : (
+                    <AlignRight className="w-4 h-4" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   )
