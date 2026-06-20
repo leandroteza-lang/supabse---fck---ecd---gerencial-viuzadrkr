@@ -8,14 +8,23 @@ import { Settings2, AlignLeft, AlignCenter, AlignRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TablePrefs } from '@/hooks/use-table-preferences'
 
+interface ToggleOption {
+  id: string
+  label: string
+  checked: boolean
+  onChange: (v: boolean) => void
+  hint?: string
+}
+
 interface Props {
   prefs: TablePrefs
   updatePrefs: (p: Partial<TablePrefs>) => void
   className?: string
   onAlignAll?: (val: 'left' | 'center' | 'right') => void
+  options?: ToggleOption[]
 }
 
-export function TableSettingsControls({ prefs, updatePrefs, className, onAlignAll }: Props) {
+export function TableSettingsControls({ prefs, updatePrefs, className, onAlignAll, options }: Props) {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -107,6 +116,23 @@ export function TableSettingsControls({ prefs, updatePrefs, className, onAlignAl
             </div>
           </RadioGroup>
         </div>
+        {options && options.length > 0 && (
+          <div className="space-y-3 pt-4 border-t border-slate-100">
+            <Label className="text-sm font-medium block">Conteúdo das células</Label>
+            {options.map((o) => (
+              <div key={o.id} className="flex items-center justify-between gap-2">
+                <Label
+                  htmlFor={o.id}
+                  className="text-sm font-normal cursor-pointer leading-snug"
+                  title={o.hint}
+                >
+                  {o.label}
+                </Label>
+                <Switch id={o.id} checked={o.checked} onCheckedChange={o.onChange} />
+              </div>
+            ))}
+          </div>
+        )}
         {onAlignAll && (
           <div className="space-y-2 pt-4 border-t border-slate-100">
             <Label className="text-sm font-medium block">Alinhamento geral</Label>

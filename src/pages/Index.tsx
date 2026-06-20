@@ -953,6 +953,8 @@ export default function App() {
   const [showAH, setShowAH] = useState(false)
   const [ocultarValores, setOcultarValores] = useState(false)
   const [soDivergencias, setSoDivergencias] = useState(false)
+  const [ocultarDC, setOcultarDC] = useState(false)
+  const [ocultarAlertas, setOcultarAlertas] = useState(false)
   // Com AV%/AH% visível, oculta as colunas de valor (Saldo, Acumulado, Média),
   // deixando literalmente só os índices. Sem índice, apenas mascara os valores.
   const soIndices = ocultarValores && (showAV || showAH)
@@ -8754,6 +8756,22 @@ export default function App() {
                         updatePrefs={updateBalancetePrefs}
                         onAlignAll={setAllColAlign}
                         className="border-0 shadow-none bg-transparent h-7 w-7"
+                        options={[
+                          {
+                            id: 'ocultar-dc',
+                            label: 'Ocultar D / C',
+                            checked: ocultarDC,
+                            onChange: setOcultarDC,
+                            hint: 'Esconde os indicadores Débito/Crédito ao lado dos valores',
+                          },
+                          {
+                            id: 'ocultar-alertas',
+                            label: 'Ocultar alertas de divergência',
+                            checked: ocultarAlertas,
+                            onChange: setOcultarAlertas,
+                            hint: 'Esconde os ícones de aviso (⚠) de desvio nas colunas AV%/AH%',
+                          },
+                        ]}
                       />
                     </div>
                   </div>
@@ -9017,7 +9035,7 @@ export default function App() {
                           <div
                             className={`flex items-center gap-1.5 group/av relative ${alignJustify}`}
                           >
-                            {hasAlert && (
+                            {hasAlert && !ocultarAlertas && (
                               <UITooltip delayDuration={0}>
                                 <TooltipTrigger asChild>
                                   <AlertCircle
@@ -9446,7 +9464,7 @@ export default function App() {
 
                                   ahLabel = (
                                     <div className={`flex items-center gap-1.5 ${ahJustify}`}>
-                                      {hasAlert && (
+                                      {hasAlert && !ocultarAlertas && (
                                         <UITooltip delayDuration={0}>
                                           <TooltipTrigger asChild>
                                             <AlertCircle
@@ -9578,11 +9596,13 @@ export default function App() {
                                                 : displayVal
                                               : '-'}
                                         </span>
-                                        <span
-                                          className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${displayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : displayInd === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
-                                        >
-                                          {mesOculto ? '' : displayInd}
-                                        </span>
+                                        {!ocultarDC && (
+                                          <span
+                                            className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${displayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : displayInd === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
+                                          >
+                                            {mesOculto ? '' : displayInd}
+                                          </span>
+                                        )}
                                         <span className="w-4 shrink-0 flex items-center justify-center">
                                           {isSintetica && (
                                             <SortBtn
@@ -9726,11 +9746,13 @@ export default function App() {
                                             -
                                           </span>
                                         )}
-                                    <span
-                                      className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${accDisplayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : accDisplayInd === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
-                                    >
-                                      {accDisplayInd}
-                                    </span>
+                                    {!ocultarDC && (
+                                      <span
+                                        className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${accDisplayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : accDisplayInd === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
+                                      >
+                                        {accDisplayInd}
+                                      </span>
+                                    )}
                                     <span className="w-4 shrink-0 flex items-center justify-center">
                                       {isSintetica && (
                                         <SortBtn
@@ -9790,11 +9812,13 @@ export default function App() {
                                             -
                                           </span>
                                         )}
-                                    <span
-                                      className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${m.ind === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : m.ind === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
-                                    >
-                                      {m.ind}
-                                    </span>
+                                    {!ocultarDC && (
+                                      <span
+                                        className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${m.ind === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : m.ind === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
+                                      >
+                                        {m.ind}
+                                      </span>
+                                    )}
                                     <span className="w-4 shrink-0 flex items-center justify-center">
                                       {isSintetica && (
                                         <SortBtn
