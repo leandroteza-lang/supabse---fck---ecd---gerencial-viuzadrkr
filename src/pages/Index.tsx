@@ -723,6 +723,13 @@ interface AnalysisProfile {
   ahAlertMin?: number | string | null
   ahAlertMax?: number | string | null
   ahAlertMode?: 'dentro' | 'fora'
+  // Forma atual: operador (>, <, entre, fora de) + valores.
+  avAlertOp?: 'none' | 'gt' | 'lt' | 'between' | 'outside'
+  avAlertV1?: number | string | null
+  avAlertV2?: number | string | null
+  ahAlertOp?: 'none' | 'gt' | 'lt' | 'between' | 'outside'
+  ahAlertV1?: number | string | null
+  ahAlertV2?: number | string | null
 }
 
 // Converte um valor digitável (string/número, com vírgula ou negativo) para número.
@@ -734,33 +741,59 @@ const parseLimite = (v: any, fallback: number) => {
   const n = Number(s)
   return isNaN(n) ? fallback : n
 }
-// Dispara o alerta se o valor estiver dentro/fora do intervalo informado.
-const alertaDispara = (value: number, min?: any, max?: any, mode?: string) => {
-  const lo = parseLimite(min, -Infinity)
-  const hi = parseLimite(max, Infinity)
-  if (lo === -Infinity && hi === Infinity) return false
-  const inside = value >= lo && value <= hi
-  return mode === 'fora' ? !inside : inside
+// Avalia a condição de alerta: operador + valores (auto-normaliza o intervalo).
+const condDispara = (value: number, c: any) => {
+  if (!c || !c.op || c.op === 'none') return false
+  const a = parseLimite(c.v1, NaN)
+  const b = parseLimite(c.v2, NaN)
+  switch (c.op) {
+    case 'gt':
+      return !isNaN(a) && value > a
+    case 'lt':
+      return !isNaN(a) && value < a
+    case 'between':
+      return !isNaN(a) && !isNaN(b) && value >= Math.min(a, b) && value <= Math.max(a, b)
+    case 'outside':
+      return !isNaN(a) && !isNaN(b) && (value < Math.min(a, b) || value > Math.max(a, b))
+    default:
+      return false
+  }
 }
-// Intervalo efetivo do alerta AV% (compatível com o limite único antigo: > limite)
-const effAvAlert = (profile: any) => {
-  if (profile?.avAlertMin != null || profile?.avAlertMax != null || profile?.avAlertMode) {
-    return { min: profile.avAlertMin, max: profile.avAlertMax, mode: profile.avAlertMode || 'dentro' }
+// Texto humano da condição (para o tooltip)
+const condTexto = (c: any) => {
+  if (!c || !c.op || c.op === 'none') return ''
+  switch (c.op) {
+    case 'gt':
+      return `acima de ${c.v1}%`
+    case 'lt':
+      return `abaixo de ${c.v1}%`
+    case 'between':
+      return `entre ${c.v1}% e ${c.v2}%`
+    case 'outside':
+      return `fora da faixa ${c.v1}% a ${c.v2}%`
+    default:
+      return ''
   }
-  if (profile?.avAlertThreshold != null) {
-    return { min: profile.avAlertThreshold, max: null, mode: 'dentro' as const }
-  }
-  return { min: null, max: null, mode: 'dentro' as const }
 }
-// Intervalo efetivo do alerta AH% (compatível com o antigo: |AH%| > limite → fora de [-l, +l])
-const effAhAlert = (profile: any) => {
-  if (profile?.ahAlertMin != null || profile?.ahAlertMax != null || profile?.ahAlertMode) {
-    return { min: profile.ahAlertMin, max: profile.ahAlertMax, mode: profile.ahAlertMode || 'fora' }
+// Condição efetiva (compatível com configurações antigas: intervalo De–Até e limite único)
+const effCond = (profile: any, kind: 'av' | 'ah') => {
+  const op = profile?.[`${kind}AlertOp`]
+  if (op && op !== 'none') {
+    return { op, v1: profile[`${kind}AlertV1`], v2: profile[`${kind}AlertV2`] }
   }
-  if (profile?.ahAlertThreshold != null) {
-    return { min: -profile.ahAlertThreshold, max: profile.ahAlertThreshold, mode: 'fora' as const }
+  const min = profile?.[`${kind}AlertMin`]
+  const max = profile?.[`${kind}AlertMax`]
+  const mode = profile?.[`${kind}AlertMode`]
+  const hasMin = !isNaN(parseLimite(min, NaN))
+  const hasMax = !isNaN(parseLimite(max, NaN))
+  if (hasMin && hasMax) return { op: mode === 'fora' ? 'outside' : 'between', v1: min, v2: max }
+  if (hasMin) return { op: mode === 'fora' ? 'lt' : 'gt', v1: min }
+  if (hasMax) return { op: mode === 'fora' ? 'gt' : 'lt', v1: max }
+  const t = profile?.[`${kind}AlertThreshold`]
+  if (t != null) {
+    return kind === 'av' ? { op: 'gt', v1: t } : { op: 'outside', v1: -t, v2: t }
   }
-  return { min: null, max: null, mode: 'fora' as const }
+  return { op: 'none' }
 }
 
 const EditableTitle = ({
@@ -8820,8 +8853,8 @@ export default function App() {
                           )
                         }
                         const avPct = (rawVal / base) * 100
-                        const avA = effAvAlert(profile)
-                        const hasAlert = alertaDispara(avPct, avA.min, avA.max, avA.mode)
+                        const avCond = effCond(profile, 'av')
+                        const hasAlert = condDispara(avPct, avCond)
 
                         return (
                           <div
@@ -8835,10 +8868,8 @@ export default function App() {
                                   />
                                 </TooltipTrigger>
                                 <TooltipContent className="max-w-[260px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
-                                  Atenção: o peso de {avPct.toFixed(2)}% está{' '}
-                                  {avA.mode === 'fora' ? 'fora' : 'dentro'} da faixa de alerta
-                                  {avA.min != null ? ` de ${avA.min}%` : ''}
-                                  {avA.max != null ? ` até ${avA.max}%` : ''} configurada no perfil.
+                                  Atenção: o peso de {avPct.toFixed(2)}% está {condTexto(avCond)} —
+                                  faixa de alerta configurada no perfil.
                                 </TooltipContent>
                               </UITooltip>
                             )}
@@ -9248,8 +9279,8 @@ export default function App() {
                                           ? 'text-white/50'
                                           : 'text-blue-800/50'
 
-                                  const ahA = effAhAlert(activeProfile)
-                                  const hasAlert = alertaDispara(ahPct, ahA.min, ahA.max, ahA.mode)
+                                  const ahCond = effCond(activeProfile, 'ah')
+                                  const hasAlert = condDispara(ahPct, ahCond)
                                   const ahJustify =
                                     BC_ALIGN_JUSTIFY[getColAlign(`${period}_ah`, 'right')]
 
@@ -9264,10 +9295,7 @@ export default function App() {
                                           </TooltipTrigger>
                                           <TooltipContent className="max-w-[260px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
                                             Atenção: a variação de {ahPct.toFixed(2)}% está{' '}
-                                            {ahA.mode === 'fora' ? 'fora' : 'dentro'} da faixa de
-                                            alerta
-                                            {ahA.min != null ? ` de ${ahA.min}%` : ''}
-                                            {ahA.max != null ? ` até ${ahA.max}%` : ''} configurada no
+                                            {condTexto(ahCond)} — faixa de alerta configurada no
                                             perfil.
                                           </TooltipContent>
                                         </UITooltip>
@@ -11097,89 +11125,87 @@ export default function App() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
                         {(
                           [
-                            {
-                              k: 'av' as const,
-                              titulo: 'Alerta de Desvio (AV%)',
-                              minDefault: profile.avAlertMin ?? profile.avAlertThreshold ?? '',
-                              maxDefault: profile.avAlertMax ?? '',
-                              mode:
-                                profile.avAlertMode ||
-                                (profile.avAlertThreshold != null ? 'dentro' : 'dentro'),
-                            },
-                            {
-                              k: 'ah' as const,
-                              titulo: 'Alerta de Desvio (AH%)',
-                              minDefault:
-                                profile.ahAlertMin ??
-                                (profile.ahAlertThreshold != null ? -profile.ahAlertThreshold : ''),
-                              maxDefault: profile.ahAlertMax ?? profile.ahAlertThreshold ?? '',
-                              mode:
-                                profile.ahAlertMode ||
-                                (profile.ahAlertThreshold != null ? 'fora' : 'fora'),
-                            },
+                            { k: 'av' as const, titulo: 'Alerta de Desvio (AV%)' },
+                            { k: 'ah' as const, titulo: 'Alerta de Desvio (AH%)' },
                           ] as const
-                        ).map((cfg) => (
-                          <div key={cfg.k}>
-                            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                              {cfg.titulo}
-                            </label>
-                            <div className="flex items-center gap-1.5">
-                              <div className="relative flex-1">
-                                <Input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={cfg.minDefault}
-                                  onChange={(e) => {
-                                    const v = e.target.value
-                                    if (v !== '' && !/^-?[\d.,]*$/.test(v)) return
-                                    updateProfile({ [`${cfg.k}AlertMin`]: v === '' ? null : v } as any)
-                                  }}
-                                  placeholder="De (ex.: -4)"
-                                  className="h-9 pr-6 text-sm"
-                                />
-                                <Percent className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
-                              </div>
-                              <span className="text-slate-400 text-xs">a</span>
-                              <div className="relative flex-1">
-                                <Input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={cfg.maxDefault}
-                                  onChange={(e) => {
-                                    const v = e.target.value
-                                    if (v !== '' && !/^-?[\d.,]*$/.test(v)) return
-                                    updateProfile({ [`${cfg.k}AlertMax`]: v === '' ? null : v } as any)
-                                  }}
-                                  placeholder="Até (ex.: 10)"
-                                  className="h-9 pr-6 text-sm"
-                                />
-                                <Percent className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
-                              </div>
+                        ).map((cfg) => {
+                          const c = effCond(profile, cfg.k) as any
+                          const op = c.op || 'none'
+                          const v1 = (profile as any)[`${cfg.k}AlertV1`] ?? c.v1 ?? ''
+                          const v2 = (profile as any)[`${cfg.k}AlertV2`] ?? c.v2 ?? ''
+                          const onV = (field: 'V1' | 'V2', e: any) => {
+                            const x = e.target.value
+                            if (x !== '' && !/^-?[\d.,]*$/.test(x)) return
+                            updateProfile({ [`${cfg.k}Alert${field}`]: x === '' ? null : x } as any)
+                          }
+                          const setOp = (newOp: string) =>
+                            updateProfile({
+                              [`${cfg.k}AlertOp`]: newOp,
+                              [`${cfg.k}AlertV1`]: c.v1 ?? null,
+                              [`${cfg.k}AlertV2`]: c.v2 ?? null,
+                            } as any)
+                          const oneVal = op === 'gt' || op === 'lt'
+                          const twoVal = op === 'between' || op === 'outside'
+                          return (
+                            <div key={cfg.k}>
+                              <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                                {cfg.titulo}
+                              </label>
+                              <Select value={op} onValueChange={setOp}>
+                                <SelectTrigger className="h-9 bg-white text-sm">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Sem alerta</SelectItem>
+                                  <SelectItem value="gt">Maior que</SelectItem>
+                                  <SelectItem value="lt">Menor que</SelectItem>
+                                  <SelectItem value="between">Entre (dentro da faixa)</SelectItem>
+                                  <SelectItem value="outside">Fora da faixa</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {oneVal && (
+                                <div className="relative mt-1.5">
+                                  <Input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={v1}
+                                    onChange={(e) => onV('V1', e)}
+                                    placeholder={op === 'gt' ? 'ex.: 10' : 'ex.: -5'}
+                                    className="h-9 pr-6 text-sm"
+                                  />
+                                  <Percent className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                                </div>
+                              )}
+                              {twoVal && (
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                  <div className="relative flex-1">
+                                    <Input
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={v1}
+                                      onChange={(e) => onV('V1', e)}
+                                      placeholder="De"
+                                      className="h-9 pr-6 text-sm"
+                                    />
+                                    <Percent className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                                  </div>
+                                  <span className="text-slate-400 text-xs">a</span>
+                                  <div className="relative flex-1">
+                                    <Input
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={v2}
+                                      onChange={(e) => onV('V2', e)}
+                                      placeholder="Até"
+                                      className="h-9 pr-6 text-sm"
+                                    />
+                                    <Percent className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            <div className="flex gap-1 mt-1.5">
-                              {(['dentro', 'fora'] as const).map((mode) => (
-                                <button
-                                  key={mode}
-                                  onClick={() =>
-                                    updateProfile({ [`${cfg.k}AlertMode`]: mode } as any)
-                                  }
-                                  className={`flex-1 text-[11px] font-bold py-1 rounded border transition-colors ${
-                                    cfg.mode === mode
-                                      ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                                      : 'border-slate-200 text-slate-500 hover:bg-slate-50'
-                                  }`}
-                                  title={
-                                    mode === 'dentro'
-                                      ? 'Alerta quando o valor está dentro do intervalo'
-                                      : 'Alerta quando o valor está fora do intervalo'
-                                  }
-                                >
-                                  {mode === 'dentro' ? 'Dentro' : 'Fora'}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
 
                       {Object.keys(profile.customAvBases || {}).length > 0 && (
