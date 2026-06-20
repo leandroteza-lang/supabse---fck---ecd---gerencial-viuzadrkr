@@ -4699,17 +4699,20 @@ export default function App() {
     if (!soDivergencias) return orderedBalanceteRows
     const avC = effCond(activeProfile, 'av') as any
     const ahC = effCond(activeProfile, 'ah') as any
-    if (avC.op === 'none' && ahC.op === 'none') return orderedBalanceteRows
+    // Só considera os alertas das colunas visíveis (espelha os ⚠️ que aparecem na tela)
+    const avActive = showAV && avC.op !== 'none'
+    const ahActive = showAH && ahC.op !== 'none'
+    if (!avActive && !ahActive) return orderedBalanceteRows
     const allP = monthlyData.periods
 
     const diverge = (acc: any) => {
       for (const p of periodsToDisplay) {
         const rawVal = getBalanceteRawVal(acc, p)
-        if (avC.op !== 'none' && rawVal > 0) {
+        if (avActive && rawVal > 0) {
           const base = getBaseValueForAccountWithProfile(acc, p, activeProfile)
           if (base > 0 && condDispara((rawVal / base) * 100, avC)) return true
         }
-        if (ahC.op !== 'none') {
+        if (ahActive) {
           let prevVal = 0
           if (activeProfile.globalAhMode === 'base_period' && activeProfile.basePeriodForAh) {
             prevVal = getBalanceteRawVal(acc, activeProfile.basePeriodForAh)
@@ -4739,6 +4742,8 @@ export default function App() {
   }, [
     orderedBalanceteRows,
     soDivergencias,
+    showAV,
+    showAH,
     activeProfileId,
     analysisProfiles,
     periodsToDisplay,
