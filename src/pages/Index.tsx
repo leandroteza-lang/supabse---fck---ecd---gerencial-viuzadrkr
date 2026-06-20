@@ -8774,10 +8774,10 @@ export default function App() {
                           },
                           {
                             id: 'ah-delta',
-                            label: 'Variação em R$ (sob o AH%)',
+                            label: 'Coluna de variação em R$ (Δ R$)',
                             checked: showAhDelta,
                             onChange: setShowAhDelta,
-                            hint: 'Mostra, abaixo do AH%, a diferença em R$ entre o mês e o anterior',
+                            hint: 'Adiciona, após o AH%, uma coluna com a diferença em R$ entre o mês e o anterior',
                           },
                         ]}
                       />
@@ -8935,6 +8935,30 @@ export default function App() {
                                 <ColAlignMenu
                                   colKey={`${period}_ah`}
                                   current={getColAlign(`${period}_ah`, 'right')}
+                                  onChange={setColAlign}
+                                />
+                              </div>
+                            </th>
+                          )}
+                          {showAhDelta && (
+                            <th
+                              className={`py-2 px-2 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm w-24 ${BC_ALIGN_TEXT[getColAlign(`${period}_ahd`, 'right')]}`}
+                            >
+                              <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5 opacity-0">
+                                Δ
+                              </div>
+                              <div
+                                className={`flex items-center gap-0.5 ${BC_ALIGN_JUSTIFY[getColAlign(`${period}_ahd`, 'right')]}`}
+                              >
+                                <span
+                                  className="font-bold text-slate-500 text-[10px]"
+                                  title="Variação em R$ vs período anterior"
+                                >
+                                  Δ R$
+                                </span>
+                                <ColAlignMenu
+                                  colKey={`${period}_ahd`}
+                                  current={getColAlign(`${period}_ahd`, 'right')}
                                   onChange={setColAlign}
                                 />
                               </div>
@@ -9395,14 +9419,8 @@ export default function App() {
                               // Análise Horizontal
                               let ahContent: any = null
                               let ahAlertNode: any = null
-                              const ahAlignKey = getColAlign(`${period}_ah`, 'right')
-                              const ahJustify = BC_ALIGN_JUSTIFY[ahAlignKey]
-                              const ahItems =
-                                ahAlignKey === 'left'
-                                  ? 'items-start'
-                                  : ahAlignKey === 'center'
-                                    ? 'items-center'
-                                    : 'items-end'
+                              const ahJustify =
+                                BC_ALIGN_JUSTIFY[getColAlign(`${period}_ah`, 'right')]
                               let prevVal = 0
                               let prevPeriodLabel = ''
                               let hasValidPrev = false
@@ -9508,8 +9526,7 @@ export default function App() {
                                   ) : null
 
                                   ahContent = (
-                                    <div className={`flex flex-col ${ahItems} leading-tight`}>
-                                      <Popover>
+                                    <Popover>
                                         <PopoverTrigger asChild>
                                           <span
                                             onClick={(e) => e.stopPropagation()}
@@ -9578,35 +9595,15 @@ export default function App() {
                                           </div>
                                         </PopoverContent>
                                       </Popover>
-                                      {showAhDelta && (
-                                        <span
-                                          className={`text-[10px] font-mono opacity-80 ${colorClass}`}
-                                          title="Diferença em R$ vs período anterior"
-                                        >
-                                          {rawVal - prevVal > 0 ? '+' : ''}
-                                          {fmtBRL(rawVal - prevVal)}
-                                        </span>
-                                      )}
-                                    </div>
                                   )
                                 } else if (rawVal > 0 && prevVal === 0) {
                                   ahContent = (
-                                    <div className={`flex flex-col ${ahItems} leading-tight`}>
-                                      <span
-                                        className={`text-[11px] font-mono ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
-                                        title="Análise Horizontal (vs Mês Anterior)"
-                                      >
-                                        N/A (Novo)
-                                      </span>
-                                      {showAhDelta && (
-                                        <span
-                                          className={`text-[10px] font-mono opacity-80 ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
-                                          title="Diferença em R$ vs período anterior"
-                                        >
-                                          +{fmtBRL(rawVal)}
-                                        </span>
-                                      )}
-                                    </div>
+                                    <span
+                                      className={`text-[11px] font-mono ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
+                                      title="Análise Horizontal (vs Mês Anterior)"
+                                    >
+                                      N/A (Novo)
+                                    </span>
                                   )
                                 }
                               }
@@ -9625,6 +9622,55 @@ export default function App() {
                                 ahContent !== null
                                   ? wrapIdxCell(ahContent, ahAlertNode, ahJustify)
                                   : null
+
+                              // Coluna Δ R$: diferença de valor vs período anterior
+                              let deltaLabel: any = null
+                              if (showAhDelta) {
+                                if (hasValidPrev) {
+                                  const dval = rawVal - prevVal
+                                  const isDespesaD =
+                                    acc.conta.startsWith('4') ||
+                                    acc.conta.startsWith('5') ||
+                                    (acc.natureza === '04' &&
+                                      !acc.nome.toUpperCase().includes('RECEITA'))
+                                  const dColor =
+                                    dval > 0
+                                      ? isDespesaD
+                                        ? isDarkBg
+                                          ? 'text-rose-300'
+                                          : 'text-rose-600'
+                                        : isDarkBg
+                                          ? 'text-emerald-300'
+                                          : 'text-emerald-600'
+                                      : dval < 0
+                                        ? isDespesaD
+                                          ? isDarkBg
+                                            ? 'text-emerald-300'
+                                            : 'text-emerald-600'
+                                          : isDarkBg
+                                            ? 'text-rose-300'
+                                            : 'text-rose-600'
+                                        : isDarkBg
+                                          ? 'text-white/40'
+                                          : 'text-slate-400'
+                                  deltaLabel = (
+                                    <span
+                                      className={`text-[11px] font-mono ${dColor}`}
+                                      title="Variação em R$ vs período anterior"
+                                    >
+                                      {ocultarValores
+                                        ? '•••'
+                                        : `${dval > 0 ? '+' : ''}${fmtBRL(dval)}`}
+                                    </span>
+                                  )
+                                } else {
+                                  deltaLabel = (
+                                    <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>
+                                      -
+                                    </span>
+                                  )
+                                }
+                              }
 
                               return (
                                 <React.Fragment key={period}>
@@ -9710,6 +9756,13 @@ export default function App() {
                                           null,
                                           ahJustify,
                                         )}
+                                    </td>
+                                  )}
+                                  {showAhDelta && (
+                                    <td
+                                      className={`py-1.5 px-2 whitespace-nowrap border-l border-white/10 ${BC_ALIGN_TEXT[getColAlign(`${period}_ahd`, 'right')]} ${isDarkBg ? 'bg-black/10 text-white/80' : 'bg-black/[0.02] text-blue-900/70'}`}
+                                    >
+                                      {deltaLabel}
                                     </td>
                                   )}
                                 </React.Fragment>
@@ -9894,7 +9947,8 @@ export default function App() {
                             periodsToDisplay.length *
                               ((soIndices ? 0 : 1) +
                                 (showAV ? (isComparingProfiles ? 2 : 1) : 0) +
-                                (showAH ? 1 : 0)) +
+                                (showAH ? 1 : 0) +
+                                (showAhDelta ? 1 : 0)) +
                             (soIndices ? 3 : 5)
                           }
                           className="p-12 text-center text-slate-500"
