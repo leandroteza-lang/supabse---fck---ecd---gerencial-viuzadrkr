@@ -1844,14 +1844,25 @@ export default function App() {
       })
 
       if (isSamePeriod && spedDiff.j100Changes.length === 0 && spedDiff.j150Changes.length === 0) {
-        toast({
-          title: 'Importação Ignorada',
-          description:
-            'O arquivo contém exatamente os mesmos dados (Período J005 e registros J100/J150) que já estão no sistema.',
-        })
-        setLoading(false)
-        if (e.target) e.target.value = ''
-        return
+        // Os blocos de DRE (J005/J100/J150) batem, mas isso NÃO garante que os
+        // lançamentos (I250) no banco estejam corretos/únicos. Em vez de pular
+        // automaticamente, deixa o usuário decidir reimportar (reprocessa os
+        // lançamentos do período e corrige eventuais duplicatas).
+        const forcar = window.confirm(
+          'Este arquivo parece conter os mesmos dados de DRE (J005/J100/J150) que já estão no sistema.\n\n' +
+            'Deseja REIMPORTAR mesmo assim?\n\n' +
+            'Isso reprocessa todos os lançamentos do período (útil para corrigir duplicatas) ' +
+            'e atualiza a contrapartida.',
+        )
+        if (!forcar) {
+          toast({
+            title: 'Importação ignorada',
+            description: 'Você optou por não reimportar. Nada foi alterado.',
+          })
+          setLoading(false)
+          if (e.target) e.target.value = ''
+          return
+        }
       }
     }
 
