@@ -908,6 +908,7 @@ export default function App() {
       a[`${p}_av`] = val
       a[`${p}_avp2`] = val
       a[`${p}_ah`] = val
+      a[`${p}_ahd`] = val
     })
     updateBalancetePrefs({ alignments: a })
   }
