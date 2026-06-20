@@ -866,6 +866,9 @@ export default function App() {
     }
     periodsToDisplay.forEach((p: string) => {
       a[p] = val
+      a[`${p}_av`] = val
+      a[`${p}_avp2`] = val
+      a[`${p}_ah`] = val
     })
     updateBalancetePrefs({ alignments: a })
   }
@@ -8613,46 +8616,79 @@ export default function App() {
                           </th>
                           {showAV && (
                             <>
-                              <th className="py-2 px-2 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm w-20">
+                              <th
+                                className={`py-2 px-2 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm w-20 ${BC_ALIGN_TEXT[getColAlign(`${period}_av`, 'right')]}`}
+                              >
                                 <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5 opacity-0">
                                   AV
                                 </div>
-                                <span
-                                  className="font-bold text-slate-500 text-[10px]"
-                                  title="Análise Vertical"
+                                <div
+                                  className={`flex items-center gap-0.5 ${BC_ALIGN_JUSTIFY[getColAlign(`${period}_av`, 'right')]}`}
                                 >
-                                  AV%{' '}
-                                  {isComparingProfiles && (
-                                    <span className="text-indigo-500 ml-1">P1</span>
-                                  )}
-                                </span>
+                                  <span
+                                    className="font-bold text-slate-500 text-[10px]"
+                                    title="Análise Vertical"
+                                  >
+                                    AV%{' '}
+                                    {isComparingProfiles && (
+                                      <span className="text-indigo-500 ml-1">P1</span>
+                                    )}
+                                  </span>
+                                  <ColAlignMenu
+                                    colKey={`${period}_av`}
+                                    current={getColAlign(`${period}_av`, 'right')}
+                                    onChange={setColAlign}
+                                  />
+                                </div>
                               </th>
                               {isComparingProfiles && (
-                                <th className="py-2 px-2 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-indigo-50/50 z-20 shadow-sm w-20">
+                                <th
+                                  className={`py-2 px-2 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-indigo-50/50 z-20 shadow-sm w-20 ${BC_ALIGN_TEXT[getColAlign(`${period}_avp2`, 'right')]}`}
+                                >
                                   <div className="text-[10px] text-indigo-500 uppercase font-bold tracking-widest mb-0.5 opacity-0">
                                     AV
                                   </div>
-                                  <span
-                                    className="font-bold text-indigo-600 text-[10px]"
-                                    title={`Análise Vertical (${analysisProfiles.find((p) => p.id === compareProfileId)?.name})`}
+                                  <div
+                                    className={`flex items-center gap-0.5 ${BC_ALIGN_JUSTIFY[getColAlign(`${period}_avp2`, 'right')]}`}
                                   >
-                                    AV% P2
-                                  </span>
+                                    <span
+                                      className="font-bold text-indigo-600 text-[10px]"
+                                      title={`Análise Vertical (${analysisProfiles.find((p) => p.id === compareProfileId)?.name})`}
+                                    >
+                                      AV% P2
+                                    </span>
+                                    <ColAlignMenu
+                                      colKey={`${period}_avp2`}
+                                      current={getColAlign(`${period}_avp2`, 'right')}
+                                      onChange={setColAlign}
+                                    />
+                                  </div>
                                 </th>
                               )}
                             </>
                           )}
                           {showAH && (
-                            <th className="py-2 px-2 whitespace-nowrap text-right border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm w-16">
+                            <th
+                              className={`py-2 px-2 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm w-16 ${BC_ALIGN_TEXT[getColAlign(`${period}_ah`, 'right')]}`}
+                            >
                               <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5 opacity-0">
                                 AH
                               </div>
-                              <span
-                                className="font-bold text-slate-500 text-[10px]"
-                                title="Análise Horizontal"
+                              <div
+                                className={`flex items-center gap-0.5 ${BC_ALIGN_JUSTIFY[getColAlign(`${period}_ah`, 'right')]}`}
                               >
-                                AH%
-                              </span>
+                                <span
+                                  className="font-bold text-slate-500 text-[10px]"
+                                  title="Análise Horizontal"
+                                >
+                                  AH%
+                                </span>
+                                <ColAlignMenu
+                                  colKey={`${period}_ah`}
+                                  current={getColAlign(`${period}_ah`, 'right')}
+                                  onChange={setColAlign}
+                                />
+                              </div>
                             </th>
                           )}
                         </React.Fragment>
@@ -8710,6 +8746,7 @@ export default function App() {
                         rawVal: number,
                         isDarkBg: boolean,
                         isP2 = false,
+                        alignJustify = 'justify-end',
                       ) => {
                         if (!profile || rawVal <= 0) {
                           return (
@@ -8736,7 +8773,9 @@ export default function App() {
                         const hasAlert = alertaDispara(avPct, avA.min, avA.max, avA.mode)
 
                         return (
-                          <div className="flex items-center justify-end gap-1.5 group/av relative">
+                          <div
+                            className={`flex items-center gap-1.5 group/av relative ${alignJustify}`}
+                          >
                             {hasAlert && (
                               <UITooltip delayDuration={0}>
                                 <TooltipTrigger asChild>
@@ -9160,9 +9199,11 @@ export default function App() {
 
                                   const ahA = effAhAlert(activeProfile)
                                   const hasAlert = alertaDispara(ahPct, ahA.min, ahA.max, ahA.mode)
+                                  const ahJustify =
+                                    BC_ALIGN_JUSTIFY[getColAlign(`${period}_ah`, 'right')]
 
                                   ahLabel = (
-                                    <div className="flex items-center justify-end gap-1.5">
+                                    <div className={`flex items-center gap-1.5 ${ahJustify}`}>
                                       {hasAlert && (
                                         <UITooltip delayDuration={0}>
                                           <TooltipTrigger asChild>
@@ -9253,7 +9294,9 @@ export default function App() {
                                   )
                                 } else if (rawVal > 0 && prevVal === 0) {
                                   ahLabel = (
-                                    <div className="flex items-center justify-end gap-1.5">
+                                    <div
+                                      className={`flex items-center gap-1.5 ${BC_ALIGN_JUSTIFY[getColAlign(`${period}_ah`, 'right')]}`}
+                                    >
                                       <span
                                         className={`text-[11px] font-mono ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
                                         title="Análise Horizontal (vs Mês Anterior)"
@@ -9296,13 +9339,21 @@ export default function App() {
                                   {showAV && (
                                     <>
                                       <td
-                                        className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-black/10 text-white/80' : 'bg-black/[0.02] text-blue-900/70'}`}
+                                        className={`py-1.5 px-2 whitespace-nowrap border-l border-white/10 ${BC_ALIGN_TEXT[getColAlign(`${period}_av`, 'right')]} ${isDarkBg ? 'bg-black/10 text-white/80' : 'bg-black/[0.02] text-blue-900/70'}`}
                                       >
-                                        {renderAvCell(acc, period, activeProfile, rawVal, isDarkBg)}
+                                        {renderAvCell(
+                                          acc,
+                                          period,
+                                          activeProfile,
+                                          rawVal,
+                                          isDarkBg,
+                                          false,
+                                          BC_ALIGN_JUSTIFY[getColAlign(`${period}_av`, 'right')],
+                                        )}
                                       </td>
                                       {isComparingProfiles && (
                                         <td
-                                          className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-indigo-900/30 text-white/80' : 'bg-indigo-50/30 text-blue-900/70'}`}
+                                          className={`py-1.5 px-2 whitespace-nowrap border-l border-white/10 ${BC_ALIGN_TEXT[getColAlign(`${period}_avp2`, 'right')]} ${isDarkBg ? 'bg-indigo-900/30 text-white/80' : 'bg-indigo-50/30 text-blue-900/70'}`}
                                         >
                                           {renderAvCell(
                                             acc,
@@ -9311,6 +9362,7 @@ export default function App() {
                                             rawVal,
                                             isDarkBg,
                                             true,
+                                            BC_ALIGN_JUSTIFY[getColAlign(`${period}_avp2`, 'right')],
                                           )}
                                         </td>
                                       )}
@@ -9318,7 +9370,7 @@ export default function App() {
                                   )}
                                   {showAH && (
                                     <td
-                                      className={`py-1.5 px-2 text-right whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'bg-black/10 text-white/80' : 'bg-black/[0.02] text-blue-900/70'}`}
+                                      className={`py-1.5 px-2 whitespace-nowrap border-l border-white/10 ${BC_ALIGN_TEXT[getColAlign(`${period}_ah`, 'right')]} ${isDarkBg ? 'bg-black/10 text-white/80' : 'bg-black/[0.02] text-blue-900/70'}`}
                                     >
                                       {ahLabel || (
                                         <span
