@@ -4797,6 +4797,33 @@ export default function App() {
     isAccumulated,
   ])
 
+  // Opção "Só divergências": diz se o MÊS (acc x período) divergiu de algum
+  // alerta visível (AV%/AH%). Usado p/ mascarar os meses que não bateram.
+  const periodoDiverge = (acc: any, p: string) => {
+    if (!soDivergencias) return true
+    const avC = effCond(activeProfile, 'av') as any
+    const ahC = effCond(activeProfile, 'ah') as any
+    const avActive = showAV && avC.op !== 'none'
+    const ahActive = showAH && ahC.op !== 'none'
+    if (!avActive && !ahActive) return true
+    const rawVal = getBalanceteRawVal(acc, p)
+    if (avActive && rawVal > 0) {
+      const base = getBaseValueForAccountWithProfile(acc, p, activeProfile)
+      if (base > 0 && condDispara((rawVal / base) * 100, avC)) return true
+    }
+    if (ahActive) {
+      let prevVal = 0
+      if (activeProfile.globalAhMode === 'base_period' && activeProfile.basePeriodForAh) {
+        prevVal = getBalanceteRawVal(acc, activeProfile.basePeriodForAh)
+      } else {
+        const idx = monthlyData.periods.indexOf(p)
+        if (idx > 0) prevVal = getBalanceteRawVal(acc, monthlyData.periods[idx - 1])
+      }
+      if (prevVal > 0 && condDispara((rawVal / prevVal - 1) * 100, ahC)) return true
+    }
+    return false
+  }
+
   const ToggleAccumulated = () => (
     <div className="flex items-center gap-1.5 mr-2 shrink-0">
       <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
@@ -8961,6 +8988,14 @@ export default function App() {
                             </span>
                           )
                         }
+                        // Só divergências: mascara o mês que não bateu nenhum alerta
+                        if (!periodoDiverge(acc, period)) {
+                          return (
+                            <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>
+                              •••
+                            </span>
+                          )
+                        }
                         const baseDetails = getBaseDetailsForAccount(acc, period, profile)
                         const base = baseDetails.totalValue
                         const baseAcc =
@@ -9312,6 +9347,9 @@ export default function App() {
                                 }
                               }
 
+                              // Só divergências (Opção 3): mascara os meses que não bateram alerta
+                              const mesOculto = !periodoDiverge(acc, period)
+
                               // Análise Horizontal
                               let ahLabel = null
                               let prevVal = 0
@@ -9509,6 +9547,19 @@ export default function App() {
                                 }
                               }
 
+                              // Só divergências: mês sem alerta fica mascarado também no AH%
+                              if (mesOculto) {
+                                ahLabel = (
+                                  <div
+                                    className={`flex items-center ${BC_ALIGN_JUSTIFY[getColAlign(`${period}_ah`, 'right')]}`}
+                                  >
+                                    <span className={isDarkBg ? 'text-white/30' : 'text-blue-900/30'}>
+                                      •••
+                                    </span>
+                                  </div>
+                                )
+                              }
+
                               return (
                                 <React.Fragment key={period}>
                                   {!soIndices && (
@@ -9517,18 +9568,20 @@ export default function App() {
                                     >
                                       <div className="flex items-center w-full gap-1">
                                         <span
-                                          className={`flex-1 ${BC_ALIGN_TEXT[getColAlign(period, 'right')]} ${displayVal === '0,00' ? (isDarkBg ? 'text-white/30' : 'text-blue-900/30') : ''}`}
+                                          className={`flex-1 ${BC_ALIGN_TEXT[getColAlign(period, 'right')]} ${displayVal === '0,00' || mesOculto ? (isDarkBg ? 'text-white/30' : 'text-blue-900/30') : ''}`}
                                         >
-                                          {displayVal !== '0,00'
-                                            ? ocultarValores
-                                              ? '•••'
-                                              : displayVal
-                                            : '-'}
+                                          {mesOculto
+                                            ? '•••'
+                                            : displayVal !== '0,00'
+                                              ? ocultarValores
+                                                ? '•••'
+                                                : displayVal
+                                              : '-'}
                                         </span>
                                         <span
                                           className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${displayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : displayInd === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
                                         >
-                                          {displayInd}
+                                          {mesOculto ? '' : displayInd}
                                         </span>
                                         <span className="w-4 shrink-0 flex items-center justify-center">
                                           {isSintetica && (
