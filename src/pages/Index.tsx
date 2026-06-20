@@ -77,6 +77,8 @@ import {
   BookOpen,
   ExternalLink,
   FileSpreadsheet,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import localforage from 'localforage'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -912,6 +914,7 @@ export default function App() {
   const [isAccumulated, setIsAccumulated] = useState(true)
   const [showAV, setShowAV] = useState(false)
   const [showAH, setShowAH] = useState(false)
+  const [ocultarValores, setOcultarValores] = useState(false)
 
   const [selectedMonthlyPeriods, setSelectedMonthlyPeriods] = useState<string[]>([])
   const [isPeriodDropdownOpen, setIsPeriodDropdownOpen] = useState(false)
@@ -8501,6 +8504,24 @@ export default function App() {
                         />
                         <span>AH%</span>
                       </label>
+                      <div className="w-px h-4 bg-slate-200"></div>
+                      <label
+                        className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600"
+                        title="Ocultar os valores em R$ (mantém D/C e os índices AV%/AH%)"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={ocultarValores}
+                          onChange={() => setOcultarValores(!ocultarValores)}
+                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        {ocultarValores ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                        <span className="whitespace-nowrap">Ocultar valores</span>
+                      </label>
                     </div>
 
                     {Object.keys(balanceteSortConfigs).length > 0 && (
@@ -9317,7 +9338,11 @@ export default function App() {
                                       <span
                                         className={`flex-1 ${BC_ALIGN_TEXT[getColAlign(period, 'right')]} ${displayVal === '0,00' ? (isDarkBg ? 'text-white/30' : 'text-blue-900/30') : ''}`}
                                       >
-                                        {displayVal !== '0,00' ? displayVal : '-'}
+                                        {displayVal !== '0,00'
+                                          ? ocultarValores
+                                            ? '•••'
+                                            : displayVal
+                                          : '-'}
                                       </span>
                                       <span
                                         className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${displayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : displayInd === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
@@ -9453,7 +9478,7 @@ export default function App() {
                                                 onClick={(e) => e.stopPropagation()}
                                                 className={`flex-1 cursor-pointer border-b border-dotted border-current hover:opacity-80 ${BC_ALIGN_TEXT[getColAlign('acumulado', 'right')]}`}
                                               >
-                                                {accDisplayVal}
+                                                {ocultarValores ? '•••' : accDisplayVal}
                                               </span>
                                             </CalcMemoPopover>
                                           )
@@ -9516,7 +9541,7 @@ export default function App() {
                                                 onClick={(e) => e.stopPropagation()}
                                                 className={`flex-1 cursor-pointer border-b border-dotted border-current hover:opacity-80 ${BC_ALIGN_TEXT[mAlign]}`}
                                               >
-                                                {mStr}
+                                                {ocultarValores ? '•••' : mStr}
                                               </span>
                                             </CalcMemoPopover>
                                           )
