@@ -2091,25 +2091,24 @@ export default function App() {
           const minDate = dates[0]
           const maxDate = dates[dates.length - 1]
 
-          let hasMoreToDelete = true
+          // Limpa o período antes de reinserir, em lotes via RPC (confiável mesmo
+          // com a tabela enorme — usa o índice (company_id, date)). Evita a
+          // duplicação que ocorria quando o DELETE por intervalo expirava.
           let safetyCounter = 0
           let totalDeleted = 0
-
-          while (hasMoreToDelete && safetyCounter < 50) {
+          while (safetyCounter < 500) {
             safetyCounter++
-            const { data: delData, error: delError } = await supabase
-              .from('transactions')
-              .delete()
-              .eq('company_id', companyId)
-              .gte('date', minDate)
-              .lte('date', maxDate)
-              .select('id')
-
-            if (delError || !delData || delData.length === 0) {
-              hasMoreToDelete = false
-            } else if (delData) {
-              totalDeleted += delData.length
+            const { data: removed, error: delError } = await supabase.rpc(
+              'purge_transactions_range',
+              { p_company_id: companyId, p_date_from: minDate, p_date_to: maxDate, p_limit: 200000 },
+            )
+            if (delError) {
+              audit.errors.push(`Erro ao limpar lançamentos do período: ${delError.message}`)
+              break
             }
+            const n = removed || 0
+            totalDeleted += n
+            if (n === 0) break
           }
 
           audit.transactions.deleted = totalDeleted
