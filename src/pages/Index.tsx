@@ -882,6 +882,7 @@ export default function App() {
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [showAdminUsers, setShowAdminUsers] = useState(false)
   const [showRazaoAvancado, setShowRazaoAvancado] = useState(false)
+  const [razaoAvancadoInitial, setRazaoAvancadoInitial] = useState<any>(null)
   // Preferências de visualização da tabela do Balancete Comparativo
   const { prefs: balancetePrefs, updatePrefs: updateBalancetePrefs } =
     useTablePreferences('balancete_comparativo')
@@ -1404,6 +1405,49 @@ export default function App() {
   }, [filteredRazaoTransactions])
 
   // Abre o razão atual (já filtrado/ordenado) como uma página HTML autônoma em nova aba
+  // Envia o razão simplificado (conta + filtros atuais) para o Razão Avançado
+  const enviarParaRazaoAvancado = () => {
+    const acc = selectedAccountForRazao
+    if (!acc) return
+    let df = razaoDateFrom
+    let dt = razaoDateTo
+    if (!df || !dt) {
+      let minMs = Infinity
+      let maxMs = -Infinity
+      let minDate = ''
+      let maxDate = ''
+      selectedMonthlyPeriods.forEach((p: string) => {
+        const parts = p.split(' a ')
+        if (parts.length === 2) {
+          const [d1, m1, y1] = parts[0].split('/')
+          const [d2, m2, y2] = parts[1].split('/')
+          const ms1 = new Date(parseInt(y1), parseInt(m1) - 1, parseInt(d1)).getTime()
+          const ms2 = new Date(parseInt(y2), parseInt(m2) - 1, parseInt(d2)).getTime()
+          if (ms1 < minMs) {
+            minMs = ms1
+            minDate = `${y1}-${m1}-${d1}`
+          }
+          if (ms2 > maxMs) {
+            maxMs = ms2
+            maxDate = `${y2}-${m2}-${d2}`
+          }
+        }
+      })
+      if (!df) df = minDate
+      if (!dt) dt = maxDate
+    }
+    setRazaoAvancadoInitial({
+      contas: [acc.conta],
+      dateFrom: df || '',
+      dateTo: dt || '',
+      valMin: razaoValueMin || '',
+      valMax: razaoValueMax || '',
+      indDc: razaoIndDc || 'ALL',
+    })
+    setSelectedAccountForRazao(null)
+    setShowRazaoAvancado(true)
+  }
+
   const openRazaoAsPage = () => {
     const acc = selectedAccountForRazao
     if (!acc) return
@@ -8504,7 +8548,10 @@ export default function App() {
                       Filtro de Contas
                     </button>
                     <button
-                      onClick={() => setShowRazaoAvancado(true)}
+                      onClick={() => {
+                        setRazaoAvancadoInitial(null)
+                        setShowRazaoAvancado(true)
+                      }}
                       className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm w-full sm:w-auto"
                       title="Razão contábil avançado (várias contas, contrapartida, totais)"
                     >
@@ -10209,6 +10256,13 @@ export default function App() {
               >
                 <ExternalLink className="w-4 h-4" />
               </button>
+              <button
+                onClick={enviarParaRazaoAvancado}
+                className="px-3 py-2.5 border rounded-lg transition-colors flex items-center justify-center gap-2 shrink-0 bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700 text-sm font-bold whitespace-nowrap"
+                title="Abrir esta conta no Razão Avançado, já com os filtros atuais"
+              >
+                <ListOrdered className="w-4 h-4" /> Razão Avançado
+              </button>
             </div>
 
             {showRazaoFilters && (
@@ -11609,6 +11663,7 @@ export default function App() {
         periods={monthlyData.periods}
         companyName={companyInfo?.nome}
         companyCnpj={companyInfo?.cnpj}
+        initial={razaoAvancadoInitial}
       />
     </div>
   )

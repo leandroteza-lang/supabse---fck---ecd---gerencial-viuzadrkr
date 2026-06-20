@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, Fragment } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -45,6 +45,15 @@ interface AccountRow {
   saldos: Record<string, any>
 }
 
+interface RazaoInitial {
+  contas?: string[]
+  dateFrom?: string
+  dateTo?: string
+  valMin?: string
+  valMax?: string
+  indDc?: string
+}
+
 interface Props {
   open: boolean
   onOpenChange: (o: boolean) => void
@@ -53,6 +62,7 @@ interface Props {
   periods: string[]
   companyName?: string
   companyCnpj?: string
+  initial?: RazaoInitial | null
 }
 
 const PAGE = 500
@@ -65,6 +75,7 @@ export default function RazaoAvancado({
   periods,
   companyName,
   companyCnpj,
+  initial,
 }: Props) {
   const { toast } = useToast()
 
@@ -333,6 +344,34 @@ export default function RazaoAvancado({
       setLoading(false)
     }
   }
+
+  // Pré-carrega conta/filtros vindos do razão simplificado e gera automaticamente
+  const appliedRef = useRef(false)
+  const pendingGenRef = useRef(false)
+  useEffect(() => {
+    if (!open) {
+      appliedRef.current = false
+      return
+    }
+    if (initial && !appliedRef.current) {
+      appliedRef.current = true
+      if (initial.contas) setSelected(new Set(initial.contas))
+      if (initial.dateFrom != null) setDateFrom(initial.dateFrom)
+      if (initial.dateTo != null) setDateTo(initial.dateTo)
+      if (initial.valMin != null) setValMin(initial.valMin)
+      if (initial.valMax != null) setValMax(initial.valMax)
+      if (initial.indDc) setIndDc(initial.indDc)
+      pendingGenRef.current = true
+    }
+  }, [open, initial])
+
+  useEffect(() => {
+    if (open && pendingGenRef.current && companyId && resolvedAccountIds.length > 0) {
+      pendingGenRef.current = false
+      gerar()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, companyId, codeToId, resolvedAccountIds])
 
   const carregarMais = async () => {
     if (!companyId) return
