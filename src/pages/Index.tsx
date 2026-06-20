@@ -915,6 +915,9 @@ export default function App() {
   const [showAV, setShowAV] = useState(false)
   const [showAH, setShowAH] = useState(false)
   const [ocultarValores, setOcultarValores] = useState(false)
+  // Com AV%/AH% visível, oculta as colunas de valor (Saldo, Acumulado, Média),
+  // deixando literalmente só os índices. Sem índice, apenas mascara os valores.
+  const soIndices = ocultarValores && (showAV || showAH)
 
   const [selectedMonthlyPeriods, setSelectedMonthlyPeriods] = useState<string[]>([])
   const [isPeriodDropdownOpen, setIsPeriodDropdownOpen] = useState(false)
@@ -8618,31 +8621,39 @@ export default function App() {
                       </th>
                       {periodsToDisplay.map((period: string) => (
                         <React.Fragment key={period}>
-                          <th
-                            className={`py-2 px-4 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm ${BC_ALIGN_TEXT[getColAlign(period, 'right')]}`}
-                          >
-                            <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">
-                              {period.split(' a ')[0].substring(3)}
-                            </div>
-                            <div
-                              className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign(period, 'right')]}`}
+                          {!soIndices && (
+                            <th
+                              className={`py-2 px-4 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm ${BC_ALIGN_TEXT[getColAlign(period, 'right')]}`}
                             >
-                              <span className="font-bold text-slate-700 text-xs">Saldo</span>
-                              <ColAlignMenu
-                                colKey={period}
-                                current={getColAlign(period, 'right')}
-                                onChange={setColAlign}
-                              />
-                            </div>
-                          </th>
+                              <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">
+                                {period.split(' a ')[0].substring(3)}
+                              </div>
+                              <div
+                                className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign(period, 'right')]}`}
+                              >
+                                <span className="font-bold text-slate-700 text-xs">Saldo</span>
+                                <ColAlignMenu
+                                  colKey={period}
+                                  current={getColAlign(period, 'right')}
+                                  onChange={setColAlign}
+                                />
+                              </div>
+                            </th>
+                          )}
                           {showAV && (
                             <>
                               <th
                                 className={`py-2 px-2 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm w-20 ${BC_ALIGN_TEXT[getColAlign(`${period}_av`, 'right')]}`}
                               >
-                                <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5 opacity-0">
-                                  AV
-                                </div>
+                                {soIndices ? (
+                                  <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">
+                                    {period.split(' a ')[0].substring(3)}
+                                  </div>
+                                ) : (
+                                  <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5 opacity-0">
+                                    AV
+                                  </div>
+                                )}
                                 <div
                                   className={`flex items-center gap-0.5 ${BC_ALIGN_JUSTIFY[getColAlign(`${period}_av`, 'right')]}`}
                                 >
@@ -8692,9 +8703,15 @@ export default function App() {
                             <th
                               className={`py-2 px-2 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-slate-50 z-20 shadow-sm w-16 ${BC_ALIGN_TEXT[getColAlign(`${period}_ah`, 'right')]}`}
                             >
-                              <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5 opacity-0">
-                                AH
-                              </div>
+                              {soIndices && !showAV ? (
+                                <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">
+                                  {period.split(' a ')[0].substring(3)}
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5 opacity-0">
+                                  AH
+                                </div>
+                              )}
                               <div
                                 className={`flex items-center gap-0.5 ${BC_ALIGN_JUSTIFY[getColAlign(`${period}_ah`, 'right')]}`}
                               >
@@ -8714,48 +8731,53 @@ export default function App() {
                           )}
                         </React.Fragment>
                       ))}
-                      <th
-                        className={`py-2 px-4 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-indigo-50 z-20 shadow-sm ${BC_ALIGN_TEXT[getColAlign('acumulado', 'right')]}`}
-                      >
-                        <div className="text-[10px] text-indigo-500 uppercase font-bold tracking-widest mb-0.5 flex items-center justify-end gap-1">
-                          Acumulado {periodsToDisplay.length > 0 && `(${periodsToDisplay.length})`}
-                          <IndicatorTooltip
-                            text="Total acumulado nos períodos selecionados."
-                            example="Soma a movimentação das contas de resultado (no modo isolado) ou exibe o saldo final do último período selecionado."
-                          />
-                        </div>
-                        <div
-                          className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign('acumulado', 'right')]}`}
-                        >
-                          <span className="font-bold text-indigo-700 text-xs">Saldo Total</span>
-                          <ColAlignMenu
-                            colKey="acumulado"
-                            current={getColAlign('acumulado', 'right')}
-                            onChange={setColAlign}
-                          />
-                        </div>
-                      </th>
-                      <th
-                        className={`py-2 px-4 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-violet-50 z-20 shadow-sm ${BC_ALIGN_TEXT[getColAlign('media', 'right')]}`}
-                      >
-                        <div className="text-[10px] text-violet-500 uppercase font-bold tracking-widest mb-0.5 flex items-center justify-end gap-1">
-                          Média {periodsToDisplay.length > 0 && `(${periodsToDisplay.length})`}
-                          <IndicatorTooltip
-                            text="Média dos saldos no período."
-                            example="Soma os valores exibidos nos períodos selecionados e divide pela quantidade de períodos."
-                          />
-                        </div>
-                        <div
-                          className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign('media', 'right')]}`}
-                        >
-                          <span className="font-bold text-violet-700 text-xs">Saldo Médio</span>
-                          <ColAlignMenu
-                            colKey="media"
-                            current={getColAlign('media', 'right')}
-                            onChange={setColAlign}
-                          />
-                        </div>
-                      </th>
+                      {!soIndices && (
+                        <>
+                          <th
+                            className={`py-2 px-4 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-indigo-50 z-20 shadow-sm ${BC_ALIGN_TEXT[getColAlign('acumulado', 'right')]}`}
+                          >
+                            <div className="text-[10px] text-indigo-500 uppercase font-bold tracking-widest mb-0.5 flex items-center justify-end gap-1">
+                              Acumulado{' '}
+                              {periodsToDisplay.length > 0 && `(${periodsToDisplay.length})`}
+                              <IndicatorTooltip
+                                text="Total acumulado nos períodos selecionados."
+                                example="Soma a movimentação das contas de resultado (no modo isolado) ou exibe o saldo final do último período selecionado."
+                              />
+                            </div>
+                            <div
+                              className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign('acumulado', 'right')]}`}
+                            >
+                              <span className="font-bold text-indigo-700 text-xs">Saldo Total</span>
+                              <ColAlignMenu
+                                colKey="acumulado"
+                                current={getColAlign('acumulado', 'right')}
+                                onChange={setColAlign}
+                              />
+                            </div>
+                          </th>
+                          <th
+                            className={`py-2 px-4 whitespace-nowrap border-l border-b border-slate-200 sticky top-0 bg-violet-50 z-20 shadow-sm ${BC_ALIGN_TEXT[getColAlign('media', 'right')]}`}
+                          >
+                            <div className="text-[10px] text-violet-500 uppercase font-bold tracking-widest mb-0.5 flex items-center justify-end gap-1">
+                              Média {periodsToDisplay.length > 0 && `(${periodsToDisplay.length})`}
+                              <IndicatorTooltip
+                                text="Média dos saldos no período."
+                                example="Soma os valores exibidos nos períodos selecionados e divide pela quantidade de períodos."
+                              />
+                            </div>
+                            <div
+                              className={`flex items-center gap-1 ${BC_ALIGN_JUSTIFY[getColAlign('media', 'right')]}`}
+                            >
+                              <span className="font-bold text-violet-700 text-xs">Saldo Médio</span>
+                              <ColAlignMenu
+                                colKey="media"
+                                current={getColAlign('media', 'right')}
+                                onChange={setColAlign}
+                              />
+                            </div>
+                          </th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -9331,36 +9353,38 @@ export default function App() {
 
                               return (
                                 <React.Fragment key={period}>
-                                  <td
-                                    className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'text-white' : isLevel5 ? 'text-black' : 'text-blue-950'}`}
-                                  >
-                                    <div className="flex items-center w-full gap-1">
-                                      <span
-                                        className={`flex-1 ${BC_ALIGN_TEXT[getColAlign(period, 'right')]} ${displayVal === '0,00' ? (isDarkBg ? 'text-white/30' : 'text-blue-900/30') : ''}`}
-                                      >
-                                        {displayVal !== '0,00'
-                                          ? ocultarValores
-                                            ? '•••'
-                                            : displayVal
-                                          : '-'}
-                                      </span>
-                                      <span
-                                        className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${displayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : displayInd === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
-                                      >
-                                        {displayInd}
-                                      </span>
-                                      <span className="w-4 shrink-0 flex items-center justify-center">
-                                        {isSintetica && (
-                                          <SortBtn
-                                            active={balanceteSortConfigs[acc.conta]?.key === period}
-                                            direction={balanceteSortConfigs[acc.conta]?.direction}
-                                            onClick={() => handleBalanceteSort(acc.conta, period)}
-                                            dark={isDarkBg}
-                                          />
-                                        )}
-                                      </span>
-                                    </div>
-                                  </td>
+                                  {!soIndices && (
+                                    <td
+                                      className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'text-white' : isLevel5 ? 'text-black' : 'text-blue-950'}`}
+                                    >
+                                      <div className="flex items-center w-full gap-1">
+                                        <span
+                                          className={`flex-1 ${BC_ALIGN_TEXT[getColAlign(period, 'right')]} ${displayVal === '0,00' ? (isDarkBg ? 'text-white/30' : 'text-blue-900/30') : ''}`}
+                                        >
+                                          {displayVal !== '0,00'
+                                            ? ocultarValores
+                                              ? '•••'
+                                              : displayVal
+                                            : '-'}
+                                        </span>
+                                        <span
+                                          className={`w-5 shrink-0 pl-1 text-center text-[10px] border-l ${isDarkBg ? 'border-white/15' : 'border-slate-200'} ${displayInd === 'D' ? (isDarkBg ? 'text-blue-200' : 'text-blue-600') : displayInd === 'C' ? (isDarkBg ? 'text-red-200' : 'text-red-600') : ''}`}
+                                        >
+                                          {displayInd}
+                                        </span>
+                                        <span className="w-4 shrink-0 flex items-center justify-center">
+                                          {isSintetica && (
+                                            <SortBtn
+                                              active={balanceteSortConfigs[acc.conta]?.key === period}
+                                              direction={balanceteSortConfigs[acc.conta]?.direction}
+                                              onClick={() => handleBalanceteSort(acc.conta, period)}
+                                              dark={isDarkBg}
+                                            />
+                                          )}
+                                        </span>
+                                      </div>
+                                    </td>
+                                  )}
                                   {showAV && (
                                     <>
                                       <td
@@ -9411,9 +9435,10 @@ export default function App() {
                                 </React.Fragment>
                               )
                             })}
-                            {(() => {
-                              let accDisplayVal = '0,00'
-                              let accDisplayInd = ''
+                            {!soIndices &&
+                              (() => {
+                                let accDisplayVal = '0,00'
+                                let accDisplayInd = ''
 
                               const isResult =
                                 acc.natureza === '04' ||
@@ -9509,9 +9534,10 @@ export default function App() {
                                 </td>
                               )
                             })()}
-                            {(() => {
-                              const m = getBalanceteMedia(acc)
-                              const mAlign = getColAlign('media', 'right')
+                            {!soIndices &&
+                              (() => {
+                                const m = getBalanceteMedia(acc)
+                                const mAlign = getColAlign('media', 'right')
                               const mStr =
                                 m.val > 0
                                   ? m.val.toLocaleString('pt-BR', {
@@ -9581,10 +9607,10 @@ export default function App() {
                         <td
                           colSpan={
                             periodsToDisplay.length *
-                              (1 +
+                              ((soIndices ? 0 : 1) +
                                 (showAV ? (isComparingProfiles ? 2 : 1) : 0) +
                                 (showAH ? 1 : 0)) +
-                            4
+                            (soIndices ? 2 : 4)
                           }
                           className="p-12 text-center text-slate-500"
                         >
