@@ -961,6 +961,7 @@ export default function App() {
   const [soAusencias, setSoAusencias] = useState(false)
   const [showRecorrenciaConfig, setShowRecorrenciaConfig] = useState(false)
   const [recorrenciaSearch, setRecorrenciaSearch] = useState('')
+  const [ausenciaDetalheConta, setAusenciaDetalheConta] = useState<string | null>(null)
   // Com AV%/AH% visível, oculta as colunas de valor (Saldo, Acumulado, Média),
   // deixando literalmente só os índices. Sem índice, apenas mascara os valores.
   const soIndices = ocultarValores && (showAV || showAH)
@@ -1598,6 +1599,105 @@ export default function App() {
         title: 'Pop-up bloqueado',
         description: 'Permita pop-ups deste site para abrir o razão como página.',
       })
+      return
+    }
+    w.document.open()
+    w.document.write(html)
+    w.document.close()
+  }
+
+  const openAusenciasAsPage = (items: any[]) => {
+    const esc = (s: any) =>
+      String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+
+    const rowsHtml = items
+      .map((item) => {
+        const mesLabels = item.meses.map((m: string) => periodLabel(m)).join(', ')
+        return `
+          <tr>
+            <td class="mono">${esc(item.conta)}</td>
+            <td>${esc(item.nome)}</td>
+            <td class="num bad">${item.meses.length}</td>
+            <td class="meses">${esc(mesLabels)}</td>
+          </tr>`
+      })
+      .join('')
+
+    const html = `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8" />
+<title>Ausências de Movimentação — BoardECD</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f1f5f9;color:#0f172a}
+  .wrap{max-width:1100px;margin:0 auto;padding:24px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+  .brand{font-weight:900;font-size:20px;letter-spacing:-.02em}
+  .brand span{color:#e11d48}
+  .btn{background:#0f172a;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 8px 30px rgba(0,0,0,.04)}
+  h1{font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+  .sub{color:#64748b;font-size:14px;margin:4px 0}
+  .badge{display:inline-block;background:#fff1f2;color:#e11d48;border:1px solid #fecdd3;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:800}
+  .summary{display:flex;gap:16px;margin:20px 0}
+  .sum-card{flex:1;border:1px solid #fecdd3;background:#fff1f2;border-radius:12px;padding:14px}
+  .sum-card .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#be123c;font-weight:800}
+  .sum-card .val{font-size:22px;font-weight:900;color:#e11d48;margin-top:4px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+  thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;border-bottom:2px solid #e2e8f0;padding:10px 8px;font-weight:800}
+  thead th.num{text-align:right}
+  tbody td{padding:10px 8px;border-bottom:1px solid #f1f5f9}
+  tbody tr:nth-child(even){background:#fef2f2}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;color:#475569;font-size:12px}
+  .num{text-align:right;font-weight:700}
+  .bad{color:#e11d48}
+  .meses{color:#475569;font-size:12px}
+  @media print{body{background:#fff}.btn{display:none}.card{box-shadow:none;border:0}.wrap{max-width:none;padding:0}}
+</style></head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">Board<span>ECD</span> — Ausências de Recorrência</div>
+      <button class="btn" onclick="window.print()">Imprimir / Salvar PDF</button>
+    </div>
+    <div class="card">
+      <h1>⚠ Ausências de Movimentação</h1>
+      <p class="sub">${esc(companyInfo?.nome || 'Empresa')}${companyInfo?.cnpj ? ' • CNPJ ' + esc(companyInfo.cnpj) : ''}</p>
+      <p class="sub">Gerado em: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+      <div class="summary">
+        <div class="sum-card">
+          <div class="lbl">Contas recorrentes</div>
+          <div class="val">${recorrentes.length}</div>
+        </div>
+        <div class="sum-card">
+          <div class="lbl">Contas com ausências</div>
+          <div class="val">${items.length}</div>
+        </div>
+        <div class="sum-card">
+          <div class="lbl">Total de meses ausentes</div>
+          <div class="val">${items.reduce((s: number, i: any) => s + i.meses.length, 0)}</div>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Conta</th>
+            <th>Descrição</th>
+            <th class="num">Meses ausentes</th>
+            <th>Períodos</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  </div>
+</body></html>`
+
+    const w = window.open('', '_blank')
+    if (!w) {
+      toast({ variant: 'destructive', title: 'Pop-up bloqueado', description: 'Permita pop-ups deste site para abrir o relatório.' })
       return
     }
     w.document.open()
@@ -8903,28 +9003,55 @@ export default function App() {
 
               {ausenciasResumo.length > 0 && (
                 <div className="mx-6 md:mx-8 mt-4 mb-0 p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex flex-col gap-2">
-                  <div className="flex items-center gap-2 text-rose-700 font-semibold text-sm">
-                    <CalendarOff className="w-4 h-4 shrink-0" />
-                    <span>
-                      Ausências detectadas em {ausenciasResumo.length} conta
-                      {ausenciasResumo.length !== 1 ? 's' : ''} recorrente
-                      {ausenciasResumo.length !== 1 ? 's' : ''}
-                    </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-rose-700 font-semibold text-sm">
+                      <CalendarOff className="w-4 h-4 shrink-0" />
+                      <span>
+                        Ausências detectadas em {ausenciasResumo.length} conta
+                        {ausenciasResumo.length !== 1 ? 's' : ''} recorrente
+                        {ausenciasResumo.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => openAusenciasAsPage(ausenciasResumo)}
+                      className="flex items-center gap-1.5 text-xs font-bold text-rose-700 hover:text-rose-900 bg-white border border-rose-200 hover:bg-rose-100 rounded-lg px-2.5 py-1.5 transition-colors shrink-0"
+                      title="Abrir relatório completo em nova aba"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Relatório
+                    </button>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {ausenciasResumo.map((item: any) => (
-                      <div
+                      <Popover
                         key={item.conta}
-                        className="flex items-center gap-1 bg-white border border-rose-200 rounded-lg px-2.5 py-1 text-xs text-rose-800"
+                        open={ausenciaDetalheConta === item.conta}
+                        onOpenChange={(open) => setAusenciaDetalheConta(open ? item.conta : null)}
                       >
-                        <span className="font-mono font-bold">{item.conta}</span>
-                        <span className="text-rose-400 mx-0.5">·</span>
-                        <span>{item.nome}</span>
-                        <span className="text-rose-400 mx-0.5">·</span>
-                        <span className="font-semibold text-rose-600">
-                          {item.meses.length} {item.meses.length === 1 ? 'mês' : 'meses'} sem movimento
-                        </span>
-                      </div>
+                        <PopoverTrigger asChild>
+                          <button className="flex items-center gap-1 bg-white border border-rose-200 hover:border-rose-400 hover:bg-rose-50 rounded-lg px-2.5 py-1 text-xs text-rose-800 cursor-pointer transition-colors">
+                            <span className="font-mono font-bold">{item.conta}</span>
+                            <span className="text-rose-400 mx-0.5">·</span>
+                            <span>{item.nome}</span>
+                            <span className="text-rose-400 mx-0.5">·</span>
+                            <span className="font-semibold text-rose-600">
+                              {item.meses.length} {item.meses.length === 1 ? 'mês' : 'meses'} sem movimento
+                            </span>
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="w-64 p-3 space-y-2 z-50">
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Meses sem movimento</p>
+                          <p className="font-bold text-slate-800 text-sm">{item.conta} — {item.nome}</p>
+                          <div className="flex flex-col gap-1 pt-1 border-t border-slate-100">
+                            {item.meses.map((m: string) => (
+                              <div key={m} className="flex items-center gap-2 py-1">
+                                <CalendarOff className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                <span className="text-sm text-slate-700 font-medium">{periodLabel(m)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     ))}
                   </div>
                 </div>
