@@ -27,6 +27,8 @@ import {
   Search,
   Download,
   AlertCircle,
+  CalendarOff,
+  CalendarClock,
   Loader2,
   ChevronLeft,
   ChevronRight,
@@ -956,6 +958,9 @@ export default function App() {
   const [ocultarDC, setOcultarDC] = useState(true)
   const [ocultarAlertas, setOcultarAlertas] = useState(false)
   const [showAhDelta, setShowAhDelta] = useState(false)
+  const [soAusencias, setSoAusencias] = useState(false)
+  const [showRecorrenciaConfig, setShowRecorrenciaConfig] = useState(false)
+  const [recorrenciaSearch, setRecorrenciaSearch] = useState('')
   // Com AV%/AH% visível, oculta as colunas de valor (Saldo, Acumulado, Média),
   // deixando literalmente só os índices. Sem índice, apenas mascara os valores.
   const soIndices = ocultarValores && (showAV || showAH)
@@ -1074,6 +1079,7 @@ export default function App() {
               if (conf.expenseAccountToGroup) setExpenseAccountToGroup(conf.expenseAccountToGroup)
               if (conf.expenseRange) setExpenseRange(conf.expenseRange)
               if (conf.viewPresets) setViewPresets(conf.viewPresets)
+              if (conf.recorrentes) setRecorrentes(conf.recorrentes)
             }
           }
         }
@@ -1120,6 +1126,14 @@ export default function App() {
   const [detailsTab, setDetailsTab] = useState('monthly')
 
   const [viewPresets, setViewPresets] = useState<any[]>(() => getSavedState('viewPresets', []))
+
+  // Contas marcadas como "recorrência mensal" (devem ter movimento todo mês).
+  const [recorrentes, setRecorrentes] = useState<string[]>(() => getSavedState('recorrentes', []))
+  const recorrentesSet = useMemo(() => new Set(recorrentes), [recorrentes])
+  const toggleRecorrente = (conta: string) =>
+    setRecorrentes((prev: string[]) =>
+      prev.includes(conta) ? prev.filter((c) => c !== conta) : [...prev, conta],
+    )
 
   const [analysisProfiles, setAnalysisProfiles] = useState<AnalysisProfile[]>(() =>
     getSavedState('analysisProfiles', [
@@ -1579,6 +1593,7 @@ export default function App() {
       viewPresets,
       analysisProfiles,
       activeProfileId,
+      recorrentes,
     }
     localStorage.setItem('boardecd_config', JSON.stringify(configData))
 
@@ -1651,6 +1666,7 @@ export default function App() {
     viewPresets,
     analysisProfiles,
     activeProfileId,
+    recorrentes,
     user,
     companyInfo,
   ])
@@ -4743,14 +4759,24 @@ export default function App() {
   // Linhas a renderizar no Balancete: aplica o filtro "Só divergências" (mostra
   // apenas contas que disparam algum alerta AV%/AH% do perfil ativo + seus pais).
   const rowsToRender = useMemo(() => {
-    if (!soDivergencias) return orderedBalanceteRows
     const avC = effCond(activeProfile, 'av') as any
     const ahC = effCond(activeProfile, 'ah') as any
     // Só considera os alertas das colunas visíveis (espelha os ⚠️ que aparecem na tela)
     const avActive = showAV && avC.op !== 'none'
     const ahActive = showAH && ahC.op !== 'none'
-    if (!avActive && !ahActive) return orderedBalanceteRows
+    const filtroDiv = soDivergencias && (avActive || ahActive)
+    const filtroAus = soAusencias && recorrentesSet.size > 0
+    if (!filtroDiv && !filtroAus) return orderedBalanceteRows
     const allP = monthlyData.periods
+
+    const temAus = (acc: any) => {
+      if (!recorrentesSet.has(acc.conta)) return false
+      return periodsToDisplay.some((p: string) => {
+        const sld = acc.saldos?.[p]
+        if (!sld) return true
+        return getRawNumber(sld.debito) === 0 && getRawNumber(sld.credito) === 0
+      })
+    }
 
     const diverge = (acc: any) => {
       for (const p of periodsToDisplay) {
@@ -4775,7 +4801,7 @@ export default function App() {
 
     const keep = new Set<string>()
     orderedBalanceteRows.forEach((acc: any) => {
-      if (diverge(acc)) {
+      if ((filtroDiv && diverge(acc)) || (filtroAus && temAus(acc))) {
         keep.add(acc.conta)
         let par = accountParentMap[acc.conta]
         while (par) {
@@ -4789,6 +4815,8 @@ export default function App() {
   }, [
     orderedBalanceteRows,
     soDivergencias,
+    soAusencias,
+    recorrentesSet,
     showAV,
     showAH,
     activeProfileId,
@@ -4826,6 +4854,33 @@ export default function App() {
     }
     return false
   }
+
+  // Recorrência mensal: o mês não teve NENHUM lançamento (débito e crédito zerados).
+  const semMovimento = (acc: any, p: string) => {
+    const sld = acc.saldos?.[p]
+    if (!sld) return true
+    return getRawNumber(sld.debito) === 0 && getRawNumber(sld.credito) === 0
+  }
+  // Conta marcada como recorrente que ficou sem movimento em algum mês exibido.
+  const temAusencia = (acc: any) =>
+    recorrentesSet.has(acc.conta) && periodsToDisplay.some((p: string) => semMovimento(acc, p))
+
+  // Resumo das ausências (para o painel acima da tabela).
+  const ausenciasResumo = useMemo(() => {
+    if (recorrentes.length === 0) return [] as any[]
+    const out: any[] = []
+    monthlyData.allAccounts.forEach((acc: any) => {
+      if (!recorrentesSet.has(acc.conta)) return
+      const meses = periodsToDisplay.filter((p: string) => {
+        const sld = acc.saldos?.[p]
+        if (!sld) return true
+        return getRawNumber(sld.debito) === 0 && getRawNumber(sld.credito) === 0
+      })
+      if (meses.length > 0) out.push({ conta: acc.conta, nome: acc.nome, meses })
+    })
+    return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recorrentes, recorrentesSet, monthlyData.allAccounts, periodsToDisplay])
 
   const ToggleAccumulated = () => (
     <div className="flex items-center gap-1.5 mr-2 shrink-0">
@@ -8588,6 +8643,19 @@ export default function App() {
                       <ListOrdered className="w-4 h-4 text-indigo-600" />
                       Razão Avançado
                     </button>
+                    <button
+                      onClick={() => setShowRecorrenciaConfig(true)}
+                      className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm w-full sm:w-auto"
+                      title="Marcar contas que devem ter movimento todo mês (recorrência mensal)"
+                    >
+                      <CalendarClock className="w-4 h-4 text-rose-600" />
+                      Recorrência mensal
+                      {recorrentes.length > 0 && (
+                        <span className="ml-0.5 text-[11px] font-bold bg-rose-100 text-rose-700 rounded-full px-1.5 py-0.5">
+                          {recorrentes.length}
+                        </span>
+                      )}
+                    </button>
                   </div>
 
                   <div className="flex flex-wrap xl:flex-nowrap items-center gap-3 xl:border-l xl:border-slate-200 xl:pl-4">
@@ -8713,6 +8781,20 @@ export default function App() {
                         <AlertCircle className="w-4 h-4 text-amber-500" />
                         <span className="whitespace-nowrap">Só divergências</span>
                       </label>
+                      <div className="w-px h-4 bg-slate-200"></div>
+                      <label
+                        className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600"
+                        title="Mostra apenas as contas marcadas como recorrência mensal que ficaram sem movimento em algum mês"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={soAusencias}
+                          onChange={() => setSoAusencias(!soAusencias)}
+                          className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 cursor-pointer"
+                        />
+                        <CalendarOff className="w-4 h-4 text-rose-500" />
+                        <span className="whitespace-nowrap">Só ausências</span>
+                      </label>
                     </div>
 
                     {Object.keys(balanceteSortConfigs).length > 0 && (
@@ -8785,6 +8867,35 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {ausenciasResumo.length > 0 && (
+                <div className="mx-6 md:mx-8 mt-4 mb-0 p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex flex-col gap-2">
+                  <div className="flex items-center gap-2 text-rose-700 font-semibold text-sm">
+                    <CalendarOff className="w-4 h-4 shrink-0" />
+                    <span>
+                      Ausências detectadas em {ausenciasResumo.length} conta
+                      {ausenciasResumo.length !== 1 ? 's' : ''} recorrente
+                      {ausenciasResumo.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ausenciasResumo.map((item: any) => (
+                      <div
+                        key={item.conta}
+                        className="flex items-center gap-1 bg-white border border-rose-200 rounded-lg px-2.5 py-1 text-xs text-rose-800"
+                      >
+                        <span className="font-mono font-bold">{item.conta}</span>
+                        <span className="text-rose-400 mx-0.5">·</span>
+                        <span>{item.nome}</span>
+                        <span className="text-rose-400 mx-0.5">·</span>
+                        <span className="font-semibold text-rose-600">
+                          {item.meses.length} {item.meses.length === 1 ? 'mês' : 'meses'} sem movimento
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div
                 className="overflow-x-auto overflow-y-auto custom-scrollbar rounded-xl border border-slate-200 m-6 md:m-8 mt-2 md:mt-2"
@@ -9377,6 +9488,18 @@ export default function App() {
                                   >
                                     <RotateCcw className="w-4 h-4 mr-2" /> Restaurar Padrão
                                   </ContextMenuItem>
+                                  <ContextMenuSeparator />
+                                  <ContextMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      toggleRecorrente(acc.conta)
+                                    }}
+                                  >
+                                    <CalendarClock className="w-4 h-4 mr-2 text-rose-600" />
+                                    {recorrentesSet.has(acc.conta)
+                                      ? 'Remover recorrência mensal'
+                                      : 'Marcar como recorrência mensal'}
+                                  </ContextMenuItem>
                                 </ContextMenuContent>
                               </ContextMenu>
                             </td>
@@ -9415,6 +9538,9 @@ export default function App() {
 
                               // Só divergências (Opção 3): mascara os meses que não bateram alerta
                               const mesOculto = !periodoDiverge(acc, period)
+                              // Recorrência mensal: conta marcada e mês sem movimento
+                              const isAusente =
+                                recorrentesSet.has(acc.conta) && semMovimento(acc, period)
 
                               // Análise Horizontal
                               let ahContent: any = null
@@ -9676,9 +9802,23 @@ export default function App() {
                                 <React.Fragment key={period}>
                                   {!soIndices && (
                                     <td
-                                      className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${isDarkBg ? 'text-white' : isLevel5 ? 'text-black' : 'text-blue-950'}`}
+                                      className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${isAusente ? (isDarkBg ? 'bg-rose-500/20' : 'bg-rose-50') : ''} ${isDarkBg ? 'text-white' : isLevel5 ? 'text-black' : 'text-blue-950'}`}
                                     >
                                       <div className="flex items-center w-full gap-1">
+                                        {isAusente && (
+                                          <UITooltip delayDuration={0}>
+                                            <TooltipTrigger asChild>
+                                              <CalendarOff
+                                                className={`w-3.5 h-3.5 cursor-help shrink-0 ${isDarkBg ? 'text-rose-300' : 'text-rose-600'}`}
+                                              />
+                                            </TooltipTrigger>
+                                            <TooltipContent className="max-w-[260px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
+                                              Sem movimento neste mês — conta marcada como{' '}
+                                              <strong>recorrência mensal</strong> (deveria ter
+                                              lançamentos todo mês).
+                                            </TooltipContent>
+                                          </UITooltip>
+                                        )}
                                         <span
                                           className={`flex-1 ${BC_ALIGN_TEXT[getColAlign(period, 'right')]} ${displayVal === '0,00' ? (isDarkBg ? 'text-white/30' : 'text-blue-900/30') : ''}`}
                                         >
@@ -9955,7 +10095,9 @@ export default function App() {
                         >
                           {soDivergencias
                             ? 'Nenhuma divergência encontrada para os limites de alerta do perfil.'
-                            : 'Nenhuma conta encontrada ou selecionada no filtro.'}
+                            : soAusencias
+                              ? 'Nenhuma ausência detectada nas contas marcadas como recorrentes.'
+                              : 'Nenhuma conta encontrada ou selecionada no filtro.'}
                         </td>
                       </tr>
                     )}
@@ -10907,6 +11049,100 @@ export default function App() {
                 )}
               </TabsContent>
             </Tabs>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* --- SHEET: RECORRÊNCIA MENSAL (marcar contas que devem ter movimento todo mês) --- */}
+      <Sheet open={showRecorrenciaConfig} onOpenChange={setShowRecorrenciaConfig}>
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-md md:max-w-lg p-0 flex flex-col bg-slate-50"
+        >
+          <div className="p-6 border-b border-slate-200 bg-white">
+            <SheetTitle className="text-xl font-black text-slate-800 flex items-center gap-2">
+              <CalendarClock className="w-5 h-5 text-rose-600" /> Recorrência Mensal
+            </SheetTitle>
+            <SheetDescription>
+              Marque as contas que <strong>devem ter movimento todo mês</strong> (ex.: energia,
+              água, aluguel). Quando um mês ficar sem lançamento, o balancete sinaliza como possível
+              ausência.
+            </SheetDescription>
+          </div>
+
+          <div className="p-4 bg-white border-b border-slate-200 flex flex-col gap-3">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar conta..."
+                value={recorrenciaSearch}
+                onChange={(e) => setRecorrenciaSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-rose-500 outline-none"
+              />
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-slate-500">
+                {recorrentes.length} conta(s) marcada(s)
+              </span>
+              {recorrentes.length > 0 && (
+                <button
+                  onClick={() => setRecorrentes([])}
+                  className="text-xs font-bold text-rose-600 hover:text-rose-800"
+                >
+                  Limpar marcações
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-2 custom-scrollbar bg-white">
+            {monthlyData.allAccounts
+              .filter((a: any) => isAccountVisibleInTree(a.conta))
+              .filter(
+                (a: any) =>
+                  !recorrenciaSearch ||
+                  a.conta.toLowerCase().includes(recorrenciaSearch.toLowerCase()) ||
+                  a.nome.toLowerCase().includes(recorrenciaSearch.toLowerCase()),
+              )
+              .map((acc: any) => {
+                const isChecked = recorrentesSet.has(acc.conta)
+                const isSintetica = acc.tipo === 'S'
+                const isExpanded = expandedAccounts.has(acc.conta)
+                const indent = (parseInt(acc.nivel) - 1) * 16
+                return (
+                  <div
+                    key={acc.conta}
+                    className="flex items-center gap-2 py-1.5 px-2 hover:bg-slate-50 rounded-lg group"
+                    style={{ paddingLeft: `${indent + 8}px` }}
+                  >
+                    {isSintetica ? (
+                      <button
+                        onClick={() => toggleAccountExpand(acc.conta)}
+                        className="w-5 h-5 flex items-center justify-center text-slate-400 hover:bg-slate-200 rounded"
+                      >
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
+                        />
+                      </button>
+                    ) : (
+                      <span className="w-5" />
+                    )}
+                    <Checkbox
+                      checked={isChecked}
+                      onCheckedChange={() => toggleRecorrente(acc.conta)}
+                      className="data-[state=checked]:bg-rose-600 border-slate-300"
+                    />
+                    <span
+                      className={`text-sm truncate cursor-pointer select-none ${isSintetica ? 'font-bold text-slate-800' : 'text-slate-600'}`}
+                      onClick={() => toggleRecorrente(acc.conta)}
+                    >
+                      <span className="font-mono text-xs mr-2">{acc.conta}</span>
+                      {acc.nome}
+                    </span>
+                  </div>
+                )
+              })}
           </div>
         </SheetContent>
       </Sheet>
