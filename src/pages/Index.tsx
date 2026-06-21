@@ -1151,7 +1151,6 @@ export default function App() {
     setRecorrenciaPresets((prev) => [...prev, novoPreset])
     setPresetName('')
     setShowSavePresetModal(false)
-    setSavedState('recorrenciaPresets', [...recorrenciaPresets, novoPreset])
   }
 
   const loadRecorrenciaPreset = (id: string) => {
@@ -1164,7 +1163,6 @@ export default function App() {
   const deleteRecorrenciaPreset = (id: string) => {
     const updated = recorrenciaPresets.filter((p) => p.id !== id)
     setRecorrenciaPresets(updated)
-    setSavedState('recorrenciaPresets', updated)
   }
 
   const [analysisProfiles, setAnalysisProfiles] = useState<AnalysisProfile[]>(() =>
