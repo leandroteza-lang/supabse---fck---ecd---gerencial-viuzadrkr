@@ -1080,6 +1080,7 @@ export default function App() {
               if (conf.expenseRange) setExpenseRange(conf.expenseRange)
               if (conf.viewPresets) setViewPresets(conf.viewPresets)
               if (conf.recorrentes) setRecorrentes(conf.recorrentes)
+              if (conf.recorrenciaPresets) setRecorrenciaPresets(conf.recorrenciaPresets)
             }
           }
         }
@@ -1134,6 +1135,36 @@ export default function App() {
     setRecorrentes((prev: string[]) =>
       prev.includes(conta) ? prev.filter((c) => c !== conta) : [...prev, conta],
     )
+
+  const [recorrenciaPresets, setRecorrenciaPresets] = useState<
+    Array<{ id: string; nome: string; contas: string[] }>
+  >(() => getSavedState('recorrenciaPresets', []))
+  const [showSavePresetModal, setShowSavePresetModal] = useState(false)
+  const [presetName, setPresetName] = useState('')
+  const [recorrenciaTabAtivo, setRecorrenciaTabAtivo] = useState<'editar' | 'presets'>('editar')
+
+  const saveRecorrenciaPreset = (nome: string) => {
+    if (!nome.trim()) return
+    const id = crypto.randomUUID()
+    const novoPreset = { id, nome: nome.trim(), contas: [...recorrentes] }
+    setRecorrenciaPresets((prev) => [...prev, novoPreset])
+    setPresetName('')
+    setShowSavePresetModal(false)
+    setSavedState('recorrenciaPresets', [...recorrenciaPresets, novoPreset])
+  }
+
+  const loadRecorrenciaPreset = (id: string) => {
+    const preset = recorrenciaPresets.find((p) => p.id === id)
+    if (preset) {
+      setRecorrentes(preset.contas)
+    }
+  }
+
+  const deleteRecorrenciaPreset = (id: string) => {
+    const updated = recorrenciaPresets.filter((p) => p.id !== id)
+    setRecorrenciaPresets(updated)
+    setSavedState('recorrenciaPresets', updated)
+  }
 
   const [analysisProfiles, setAnalysisProfiles] = useState<AnalysisProfile[]>(() =>
     getSavedState('analysisProfiles', [
@@ -1594,6 +1625,7 @@ export default function App() {
       analysisProfiles,
       activeProfileId,
       recorrentes,
+      recorrenciaPresets,
     }
     localStorage.setItem('boardecd_config', JSON.stringify(configData))
 
@@ -1667,6 +1699,7 @@ export default function App() {
     analysisProfiles,
     activeProfileId,
     recorrentes,
+    recorrenciaPresets,
     user,
     companyInfo,
   ])
@@ -11070,82 +11103,188 @@ export default function App() {
             </SheetDescription>
           </div>
 
-          <div className="p-4 bg-white border-b border-slate-200 flex flex-col gap-3">
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Buscar conta..."
-                value={recorrenciaSearch}
-                onChange={(e) => setRecorrenciaSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-rose-500 outline-none"
-              />
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-slate-500">
-                {recorrentes.length} conta(s) marcada(s)
-              </span>
-              {recorrentes.length > 0 && (
-                <button
-                  onClick={() => setRecorrentes([])}
-                  className="text-xs font-bold text-rose-600 hover:text-rose-800"
-                >
-                  Limpar marcações
-                </button>
-              )}
-            </div>
+          <div className="border-b border-slate-200 bg-white flex gap-0">
+            <button
+              onClick={() => setRecorrenciaTabAtivo('editar')}
+              className={`flex-1 px-4 py-3 text-sm font-bold transition-colors border-b-2 ${recorrenciaTabAtivo === 'editar' ? 'text-rose-700 border-rose-600 bg-rose-50' : 'text-slate-600 border-transparent hover:bg-slate-50'}`}
+            >
+              Editar
+            </button>
+            <button
+              onClick={() => setRecorrenciaTabAtivo('presets')}
+              className={`flex-1 px-4 py-3 text-sm font-bold transition-colors border-b-2 ${recorrenciaTabAtivo === 'presets' ? 'text-rose-700 border-rose-600 bg-rose-50' : 'text-slate-600 border-transparent hover:bg-slate-50'}`}
+            >
+              Preferências Salvas ({recorrenciaPresets.length})
+            </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2 custom-scrollbar bg-white">
-            {monthlyData.allAccounts
-              .filter((a: any) => isAccountVisibleInTree(a.conta))
-              .filter(
-                (a: any) =>
-                  !recorrenciaSearch ||
-                  a.conta.toLowerCase().includes(recorrenciaSearch.toLowerCase()) ||
-                  a.nome.toLowerCase().includes(recorrenciaSearch.toLowerCase()),
-              )
-              .map((acc: any) => {
-                const isChecked = recorrentesSet.has(acc.conta)
-                const isSintetica = acc.tipo === 'S'
-                const isExpanded = expandedAccounts.has(acc.conta)
-                const indent = (parseInt(acc.nivel) - 1) * 16
-                return (
-                  <div
-                    key={acc.conta}
-                    className="flex items-center gap-2 py-1.5 px-2 hover:bg-slate-50 rounded-lg group"
-                    style={{ paddingLeft: `${indent + 8}px` }}
-                  >
-                    {isSintetica ? (
-                      <button
-                        onClick={() => toggleAccountExpand(acc.conta)}
-                        className="w-5 h-5 flex items-center justify-center text-slate-400 hover:bg-slate-200 rounded"
-                      >
-                        <ChevronDown
-                          className={`w-3.5 h-3.5 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
-                        />
-                      </button>
-                    ) : (
-                      <span className="w-5" />
+          {recorrenciaTabAtivo === 'editar' ? (
+            <>
+              <div className="p-4 bg-white border-b border-slate-200 flex flex-col gap-3">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar conta..."
+                    value={recorrenciaSearch}
+                    onChange={(e) => setRecorrenciaSearch(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-rose-500 outline-none"
+                  />
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-500">
+                    {recorrentes.length} conta(s) marcada(s)
+                  </span>
+                  <div className="flex gap-2">
+                    {recorrentes.length > 0 && (
+                      <>
+                        <button
+                          onClick={() => setShowSavePresetModal(true)}
+                          className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
+                        >
+                          Salvar como preferência
+                        </button>
+                        <button
+                          onClick={() => setRecorrentes([])}
+                          className="text-xs font-bold text-rose-600 hover:text-rose-800"
+                        >
+                          Limpar marcações
+                        </button>
+                      </>
                     )}
-                    <Checkbox
-                      checked={isChecked}
-                      onCheckedChange={() => toggleRecorrente(acc.conta)}
-                      className="data-[state=checked]:bg-rose-600 border-slate-300"
-                    />
-                    <span
-                      className={`text-sm truncate cursor-pointer select-none ${isSintetica ? 'font-bold text-slate-800' : 'text-slate-600'}`}
-                      onClick={() => toggleRecorrente(acc.conta)}
-                    >
-                      <span className="font-mono text-xs mr-2">{acc.conta}</span>
-                      {acc.nome}
-                    </span>
                   </div>
-                )
-              })}
-          </div>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-2 custom-scrollbar bg-white">
+                {monthlyData.allAccounts
+                  .filter((a: any) => isAccountVisibleInTree(a.conta))
+                  .filter(
+                    (a: any) =>
+                      !recorrenciaSearch ||
+                      a.conta.toLowerCase().includes(recorrenciaSearch.toLowerCase()) ||
+                      a.nome.toLowerCase().includes(recorrenciaSearch.toLowerCase()),
+                  )
+                  .map((acc: any) => {
+                    const isChecked = recorrentesSet.has(acc.conta)
+                    const isSintetica = acc.tipo === 'S'
+                    const isExpanded = expandedAccounts.has(acc.conta)
+                    const indent = (parseInt(acc.nivel) - 1) * 16
+                    return (
+                      <div
+                        key={acc.conta}
+                        className="flex items-center gap-2 py-1.5 px-2 hover:bg-slate-50 rounded-lg group"
+                        style={{ paddingLeft: `${indent + 8}px` }}
+                      >
+                        {isSintetica ? (
+                          <button
+                            onClick={() => toggleAccountExpand(acc.conta)}
+                            className="w-5 h-5 flex items-center justify-center text-slate-400 hover:bg-slate-200 rounded"
+                          >
+                            <ChevronDown
+                              className={`w-3.5 h-3.5 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
+                            />
+                          </button>
+                        ) : (
+                          <span className="w-5" />
+                        )}
+                        <Checkbox
+                          checked={isChecked}
+                          onCheckedChange={() => toggleRecorrente(acc.conta)}
+                          className="data-[state=checked]:bg-rose-600 border-slate-300"
+                        />
+                        <span
+                          className={`text-sm truncate cursor-pointer select-none ${isSintetica ? 'font-bold text-slate-800' : 'text-slate-600'}`}
+                          onClick={() => toggleRecorrente(acc.conta)}
+                        >
+                          <span className="font-mono text-xs mr-2">{acc.conta}</span>
+                          {acc.nome}
+                        </span>
+                      </div>
+                    )
+                  })}
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50 flex flex-col gap-3">
+              {recorrenciaPresets.length > 0 ? (
+                recorrenciaPresets.map((preset: any) => (
+                  <div key={preset.id} className="bg-white p-4 rounded-lg border border-slate-200 hover:border-rose-300 transition-colors group">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex-1">
+                        <p className="font-bold text-slate-800 text-sm">{preset.nome}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{preset.contas.length} conta(s)</p>
+                      </div>
+                      <button
+                        onClick={() => deleteRecorrenciaPreset(preset.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                        title="Deletar preferência"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => loadRecorrenciaPreset(preset.id)}
+                        className="flex-1 px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-xs rounded-lg transition-colors"
+                      >
+                        Carregar
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-center">
+                  <div>
+                    <Layers className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm text-slate-500">Nenhuma preferência salva ainda.</p>
+                    <p className="text-xs text-slate-400 mt-2">Marque contas e clique em "Salvar como preferência"</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </SheetContent>
       </Sheet>
+
+      {/* --- MODAL: SALVAR PREFERÊNCIA DE RECORRÊNCIA --- */}
+      <Dialog open={showSavePresetModal} onOpenChange={setShowSavePresetModal}>
+        <DialogContent className="sm:max-w-sm bg-white">
+          <DialogHeader>
+            <DialogTitle>Salvar como Preferência</DialogTitle>
+            <DialogDescription>
+              Dê um nome a este conjunto de contas para reutilizá-lo depois.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <input
+              type="text"
+              placeholder="Ex: Contas de Utilidades, Aluguel..."
+              value={presetName}
+              onChange={(e) => setPresetName(e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveRecorrenciaPreset(presetName)
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <button
+              onClick={() => setShowSavePresetModal(false)}
+              className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => saveRecorrenciaPreset(presetName)}
+              disabled={!presetName.trim()}
+              className="px-4 py-2 bg-rose-600 text-white text-sm font-bold rounded-lg hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Salvar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* --- MODAL DE STAGING (PREVIEW IMPORTAÇÃO) --- */}
       <Dialog
