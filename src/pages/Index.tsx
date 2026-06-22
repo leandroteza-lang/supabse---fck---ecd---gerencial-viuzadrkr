@@ -1707,128 +1707,236 @@ export default function App() {
 
   const openMapaMovimentoAsPage = () => {
     const esc = (s: any) =>
-      String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;')
 
     const periods = periodsToDisplay
-    const contas = (monthlyData.allAccounts || []).filter((a: any) => a.tipo !== 'S')
+    const allContas = (monthlyData.allAccounts || [])
 
-    const theadCols = periods.map((p: string) =>
-      `<th class="per">${esc(periodLabel(p))}</th>`
-    ).join('')
-
-    const rowsHtml = contas.map((acc: any) => {
-      let totalAus = 0
-      const cells = periods.map((p: string) => {
+    // Pré-calcula movimento por conta/período
+    const contaInfo = allContas.map((acc: any) => {
+      const isSin = acc.tipo === 'S'
+      const nivel = parseInt(acc.nivel) || 1
+      const periodos = periods.map((p: string) => {
+        if (isSin) return null
         const sld = acc.saldos?.[p]
-        const semMov = !sld || (getRawNumber(sld.debito) === 0 && getRawNumber(sld.credito) === 0)
-        if (semMov) totalAus++
-        return semMov
-          ? `<td class="cel aus">✗</td>`
-          : `<td class="cel ok">✓</td>`
-      }).join('')
-      const rowClass = totalAus > 0 ? 'tr-aus' : ''
-      return `<tr class="${rowClass}">
-        <td class="mono">${esc(acc.conta)}</td>
+        return !sld || (getRawNumber(sld.debito) === 0 && getRawNumber(sld.credito) === 0) ? 'aus' : 'ok'
+      })
+      const lacunas = periodos.filter((x: any) => x === 'aus').length
+      return { ...acc, nivel, isSin, periodos, lacunas }
+    })
+
+    // Calcula lacunas por grupo (sintéticas) a partir das analíticas
+    const lacunasPorGrupo: Record<string, number> = {}
+    const analiticas = contaInfo.filter((a: any) => !a.isSin && a.lacunas > 0)
+    allContas.forEach((acc: any) => {
+      if (acc.tipo !== 'S') return
+      const filhas = analiticas.filter((a: any) => {
+        let p = accountParentMap[a.conta]
+        while (p) { if (p === acc.conta) return true; p = accountParentMap[p] }
+        return false
+      })
+      lacunasPorGrupo[acc.conta] = filhas.length
+    })
+
+    const totalAnaliticas = contaInfo.filter((a: any) => !a.isSin).length
+    const comAus = contaInfo.filter((a: any) => !a.isSin && a.lacunas > 0).length
+    const maxNivel = Math.max(...contaInfo.map((a: any) => a.nivel), 1)
+
+    const theadCols = periods.map((p: string) => `<th class="per">${esc(periodLabel(p))}</th>`).join('')
+
+    const rowsHtml = contaInfo.map((acc: any) => {
+      const indent = (acc.nivel - 1) * 18
+      const contaEsc = esc(acc.conta)
+      const pai = esc(accountParentMap[acc.conta] || '')
+
+      let cells = ''
+      if (acc.isSin) {
+        const nLac = lacunasPorGrupo[acc.conta] || 0
+        cells = periods.map(() => `<td class="cel sin-cel">—</td>`).join('')
+        const lacBadge = nLac > 0
+          ? `<span class="lac-badge">${nLac} com lacuna</span>`
+          : ''
+        return `<tr class="tr-sin" data-id="${contaEsc}" data-pai="${pai}" data-nivel="${acc.nivel}">
+          <td class="mono sin-td" style="padding-left:${indent + 4}px">
+            <span class="chev" onclick="toggleGrupo('${contaEsc}')">▼</span>${contaEsc}
+          </td>
+          <td class="nome sin-nome">${esc(acc.nome)} ${lacBadge}</td>
+          ${cells}
+          <td class="num grc">${nLac > 0 ? nLac : '—'}</td>
+        </tr>`
+      }
+
+      cells = acc.periodos.map((st: any) =>
+        st === 'aus' ? `<td class="cel aus">✗</td>` : `<td class="cel ok">✓</td>`
+      ).join('')
+      const rowClass = acc.lacunas > 0 ? 'tr-aus' : ''
+      return `<tr class="${rowClass}" data-id="${contaEsc}" data-pai="${pai}" data-nivel="${acc.nivel}">
+        <td class="mono" style="padding-left:${indent + 22}px">${contaEsc}</td>
         <td class="nome">${esc(acc.nome)}</td>
         ${cells}
-        <td class="num ${totalAus > 0 ? 'bad' : 'good'}">${totalAus > 0 ? totalAus : '—'}</td>
+        <td class="num ${acc.lacunas > 0 ? 'bad' : 'good'}">${acc.lacunas > 0 ? acc.lacunas : '—'}</td>
       </tr>`
     }).join('')
 
-    const totalContas = contas.length
-    const contasComAus = contas.filter((acc: any) =>
-      periods.some((p: string) => {
-        const sld = acc.saldos?.[p]
-        return !sld || (getRawNumber(sld.debito) === 0 && getRawNumber(sld.credito) === 0)
-      })
-    ).length
+    const levelBtns = Array.from({ length: maxNivel }, (_, i) => i + 1)
+      .map((n) => `<button class="lbtn" onclick="expandNivel(${n})">N${n}</button>`)
+      .join('')
 
     const html = `<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8" />
+<html lang="pt-BR"><head><meta charset="utf-8"/>
 <title>Mapa de Movimentação — BoardECD</title>
 <style>
   *{box-sizing:border-box}
   body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f1f5f9;color:#0f172a}
-  .wrap{max-width:100%;margin:0 auto;padding:24px}
-  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
-  .brand{font-weight:900;font-size:20px;letter-spacing:-.02em}
+  .wrap{max-width:100%;margin:0 auto;padding:20px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+  .brand{font-weight:900;font-size:18px;letter-spacing:-.02em}
   .brand span{color:#f59e0b}
-  .btn{background:#0f172a;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px}
-  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 8px 30px rgba(0,0,0,.04)}
-  h1{font-size:22px;margin:0 0 4px}
-  .sub{color:#64748b;font-size:14px;margin:4px 0}
-  .summary{display:flex;gap:16px;margin:20px 0;flex-wrap:wrap}
-  .sum-card{flex:1;min-width:140px;border:1px solid #e2e8f0;border-radius:12px;padding:14px}
+  .btn{background:#0f172a;color:#fff;border:0;padding:8px 14px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,.04)}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:#64748b;font-size:13px;margin:3px 0}
+  .summary{display:flex;gap:12px;margin:16px 0;flex-wrap:wrap}
+  .sum-card{flex:1;min-width:120px;border:1px solid #e2e8f0;border-radius:10px;padding:12px}
   .sum-card.warn{border-color:#fde68a;background:#fffbeb}
-  .sum-card .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:800}
-  .sum-card .val{font-size:22px;font-weight:900;margin-top:4px}
+  .sum-card .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:800}
+  .sum-card .val{font-size:20px;font-weight:900;margin-top:4px}
   .sum-card.warn .val{color:#d97706}
-  .legend{display:flex;gap:16px;margin-bottom:12px;font-size:12px}
-  .legend span{display:flex;align-items:center;gap:6px}
-  .dot-ok{width:10px;height:10px;border-radius:2px;background:#dcfce7;border:1px solid #86efac}
-  .dot-aus{width:10px;height:10px;border-radius:2px;background:#fef3c7;border:1px solid #fcd34d}
-  .tbl-wrap{overflow-x:auto}
+  .controls{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .controls label{font-size:12px;font-weight:700;color:#475569;margin-right:4px}
+  .lbtn{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;color:#475569}
+  .lbtn:hover{background:#e2e8f0}
+  .abtn{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;color:#4f46e5}
+  .abtn:hover{background:#eef2ff}
+  .legend{display:flex;gap:16px;margin-bottom:8px;font-size:11px;align-items:center}
+  .dot{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:4px}
+  .dot-ok{background:#dcfce7;border:1px solid #86efac}
+  .dot-aus{background:#fef3c7;border:1px solid #fcd34d}
+  .dot-sin{background:#e0e7ff;border:1px solid #a5b4fc}
+  .tbl-wrap{overflow-x:auto;max-height:calc(100vh - 280px);overflow-y:auto}
   table{width:100%;border-collapse:collapse;font-size:12px}
-  thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;border-bottom:2px solid #e2e8f0;padding:8px 6px;font-weight:800;position:sticky;top:0;background:#fff}
-  thead th.per{text-align:center;min-width:56px}
-  thead th.num{text-align:right}
-  tbody td{padding:7px 6px;border-bottom:1px solid #f1f5f9}
+  thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;border-bottom:2px solid #e2e8f0;padding:8px 6px;font-weight:800;position:sticky;top:0;background:#fff;z-index:1}
+  thead th.per{text-align:center;min-width:54px}
+  thead th.num{text-align:right;white-space:nowrap}
+  tbody td{padding:6px 6px;border-bottom:1px solid #f1f5f9}
+  .tr-sin{background:#f8f9ff;cursor:pointer}
+  .tr-sin:hover{background:#eef2ff}
   .tr-aus{background:#fffbeb}
   .tr-aus:hover{background:#fef3c7}
-  tbody tr:not(.tr-aus):hover{background:#f8fafc}
+  tbody tr:not(.tr-aus):not(.tr-sin):hover{background:#f8fafc}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace;color:#475569;font-size:11px;white-space:nowrap}
-  .nome{color:#334155;max-width:260px}
-  .cel{text-align:center;font-weight:700;font-size:13px}
+  .nome{color:#334155}
+  .sin-td{color:#3730a3;font-weight:800}
+  .sin-nome{font-weight:700;color:#3730a3}
+  .chev{display:inline-block;width:18px;text-align:center;cursor:pointer;color:#6366f1;font-size:10px;user-select:none}
+  .cel{text-align:center;font-weight:700;font-size:12px}
+  .sin-cel{text-align:center;color:#94a3b8;font-size:11px}
   .ok{color:#16a34a;background:#f0fdf4}
   .aus{color:#d97706;background:#fffbeb}
   .num{text-align:right;font-weight:700}
+  .grc{text-align:right;font-weight:700;color:#6366f1}
   .bad{color:#d97706}
   .good{color:#94a3b8}
-  @media print{body{background:#fff}.btn{display:none}.card{box-shadow:none;border:0}.wrap{padding:0}thead th{position:static}}
+  .lac-badge{font-size:10px;font-weight:700;background:#fef3c7;color:#d97706;border:1px solid #fde68a;border-radius:99px;padding:1px 7px;margin-left:6px}
+  @media print{
+    body{background:#fff}.btn,.controls{display:none}
+    .card{box-shadow:none;border:0}.wrap{padding:0}
+    thead th{position:static}
+    .tbl-wrap{max-height:none;overflow:visible}
+  }
 </style></head>
 <body>
-  <div class="wrap">
-    <div class="topbar">
-      <div class="brand">Board<span>ECD</span> — Mapa de Movimentação</div>
-      <button class="btn" onclick="window.print()">Imprimir / Salvar PDF</button>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">Board<span>ECD</span> — Mapa de Movimentação</div>
+    <button class="btn" onclick="window.print()">Imprimir / Salvar PDF</button>
+  </div>
+  <div class="card">
+    <h1>Mapa de Movimentação por Conta</h1>
+    <p class="sub">${esc(companyInfo?.nome || 'Empresa')}${companyInfo?.cnpj ? ' • CNPJ ' + esc(companyInfo.cnpj) : ''}</p>
+    <p class="sub">Período: ${periods.map((p: string) => periodLabel(p)).join(', ')} • Gerado em ${new Date().toLocaleDateString('pt-BR')}</p>
+    <div class="summary">
+      <div class="sum-card"><div class="lbl">Contas analíticas</div><div class="val">${totalAnaliticas}</div></div>
+      <div class="sum-card warn"><div class="lbl">Com alguma lacuna</div><div class="val">${comAus}</div></div>
+      <div class="sum-card"><div class="lbl">Sem nenhuma lacuna</div><div class="val">${totalAnaliticas - comAus}</div></div>
     </div>
-    <div class="card">
-      <h1>Mapa de Movimentação por Conta</h1>
-      <p class="sub">${esc(companyInfo?.nome || 'Empresa')}${companyInfo?.cnpj ? ' • CNPJ ' + esc(companyInfo.cnpj) : ''}</p>
-      <p class="sub">Período: ${periods.map((p: string) => periodLabel(p)).join(', ')} • Gerado em ${new Date().toLocaleDateString('pt-BR')}</p>
-      <div class="summary">
-        <div class="sum-card">
-          <div class="lbl">Contas analíticas</div>
-          <div class="val">${totalContas}</div>
-        </div>
-        <div class="sum-card warn">
-          <div class="lbl">Com alguma lacuna</div>
-          <div class="val">${contasComAus}</div>
-        </div>
-        <div class="sum-card">
-          <div class="lbl">Sem nenhuma lacuna</div>
-          <div class="val">${totalContas - contasComAus}</div>
-        </div>
-      </div>
-      <div class="legend">
-        <span><div class="dot-ok"></div> Com movimento</span>
-        <span><div class="dot-aus"></div> Sem movimento (lacuna)</span>
-      </div>
-      <div class="tbl-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Conta</th>
-              <th>Descrição</th>
-              ${theadCols}
-              <th class="num">Lacunas</th>
-            </tr>
-          </thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-      </div>
+    <div class="controls">
+      <label>Nível:</label>${levelBtns}
+      <button class="abtn" onclick="expandTudo()">Expandir tudo</button>
+      <button class="abtn" onclick="recolherTudo()">Recolher tudo</button>
+    </div>
+    <div class="legend">
+      <span><span class="dot dot-ok"></span>Com movimento</span>
+      <span><span class="dot dot-aus"></span>Sem movimento (lacuna)</span>
+      <span><span class="dot dot-sin"></span>Grupo/Subgrupo</span>
+    </div>
+    <div class="tbl-wrap">
+      <table id="tbl">
+        <thead><tr>
+          <th>Conta</th><th>Descrição</th>${theadCols}<th class="num">Lacunas</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
     </div>
   </div>
+</div>
+<script>
+  // Mapa de filhos diretos
+  var filhos = {}
+  document.querySelectorAll('tbody tr[data-pai]').forEach(function(r){
+    var p = r.dataset.pai
+    if(!p) return
+    if(!filhos[p]) filhos[p]=[]
+    filhos[p].push(r.dataset.id)
+  })
+
+  function setVisible(id, vis, recursive){
+    var rows = document.querySelectorAll('tbody tr[data-pai="'+id+'"]')
+    rows.forEach(function(r){
+      r.style.display = vis ? '' : 'none'
+      if(!vis) setVisible(r.dataset.id, false, true)
+      else if(!recursive && r.dataset.id && filhos[r.dataset.id]){
+        // ao expandir só mostra filhos diretos; mantém sub-grupos fechados se já estavam
+      }
+    })
+    var chev = document.querySelector('.chev[onclick*="\\'' + id + '\\'"]')
+    if(chev) chev.textContent = vis ? '▼' : '▶'
+  }
+
+  function toggleGrupo(id){
+    var filhosDiretos = document.querySelectorAll('tbody tr[data-pai="'+id+'"]')
+    if(!filhosDiretos.length) return
+    var aberto = filhosDiretos[0].style.display !== 'none'
+    setVisible(id, !aberto, false)
+  }
+
+  function expandNivel(n){
+    document.querySelectorAll('tbody tr').forEach(function(r){
+      var niv = parseInt(r.dataset.nivel||1)
+      r.style.display = niv <= n ? '' : 'none'
+    })
+    document.querySelectorAll('.chev').forEach(function(c){
+      var id = c.getAttribute('onclick').match(/'([^']+)'/)[1]
+      var temFilhoVis = document.querySelectorAll('tbody tr[data-pai="'+id+'"]')[0]
+      if(temFilhoVis) c.textContent = temFilhoVis.style.display!=='none' ? '▼' : '▶'
+    })
+  }
+
+  function expandTudo(){
+    document.querySelectorAll('tbody tr').forEach(function(r){ r.style.display = '' })
+    document.querySelectorAll('.chev').forEach(function(c){ c.textContent = '▼' })
+  }
+
+  function recolherTudo(){
+    document.querySelectorAll('tbody tr').forEach(function(r){
+      if(parseInt(r.dataset.nivel||1) > 1) r.style.display = 'none'
+    })
+    document.querySelectorAll('.chev').forEach(function(c){ c.textContent = '▶' })
+  }
+
+  // Inicializa expandido até nível 2
+  expandNivel(2)
+</script>
 </body></html>`
 
     const w = window.open('', '_blank')
