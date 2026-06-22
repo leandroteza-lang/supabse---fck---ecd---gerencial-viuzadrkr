@@ -81,6 +81,8 @@ import {
   FileSpreadsheet,
   Eye,
   EyeOff,
+  GripHorizontal,
+  Pin,
 } from 'lucide-react'
 import localforage from 'localforage'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -964,6 +966,10 @@ export default function App() {
   const [showRecorrenciaConfig, setShowRecorrenciaConfig] = useState(false)
   const [recorrenciaSearch, setRecorrenciaSearch] = useState('')
   const [ausenciaDetalheConta, setAusenciaDetalheConta] = useState<string | null>(null)
+  const [ausenciasPanelOculto, setAusenciasPanelOculto] = useState(false)
+  const [ausenciasPanelPos, setAusenciasPanelPos] = useState<{ x: number; y: number } | null>(null)
+  const ausenciasPanelRef = useRef<HTMLDivElement>(null)
+  const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   // Com AV%/AH% visível, oculta as colunas de valor (Saldo, Acumulado, Média),
   // deixando literalmente só os índices. Sem índice, apenas mascara os valores.
   const soIndices = ocultarValores && (showAV || showAH)
@@ -1627,72 +1633,66 @@ export default function App() {
       .join('')
 
     const html = `<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8" />
-<title>Ausências de Movimentação — BoardECD</title>
+<html lang="pt-BR"><head><meta charset="utf-8"/>
+<title>Ausências de Recorrência — BoardECD</title>
 <style>
-  *{box-sizing:border-box}
-  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f1f5f9;color:#0f172a}
-  .wrap{max-width:1100px;margin:0 auto;padding:24px}
-  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
-  .brand{font-weight:900;font-size:20px;letter-spacing:-.02em}
-  .brand span{color:#e11d48}
-  .btn{background:#0f172a;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px}
-  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 8px 30px rgba(0,0,0,.04)}
-  h1{font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
-  .sub{color:#64748b;font-size:14px;margin:4px 0}
-  .badge{display:inline-block;background:#fff1f2;color:#e11d48;border:1px solid #fecdd3;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:800}
-  .summary{display:flex;gap:16px;margin:20px 0}
-  .sum-card{flex:1;border:1px solid #fecdd3;background:#fff1f2;border-radius:12px;padding:14px}
-  .sum-card .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#be123c;font-weight:800}
-  .sum-card .val{font-size:22px;font-weight:900;color:#e11d48;margin-top:4px}
-  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
-  thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;border-bottom:2px solid #e2e8f0;padding:10px 8px;font-weight:800}
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;--text:#e6edf3;--text2:#8b949e;--rose:#f87171;--rose-bg:rgba(248,113,113,.12);--rose-border:rgba(248,113,113,.3);--amber:#d29922;--amber-bg:rgba(210,153,34,.1);--amber-border:rgba(210,153,34,.3)}
+  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+  .wrap{max-width:1000px;margin:0 auto;padding:24px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px;border-bottom:1px solid var(--border);padding-bottom:16px;flex-wrap:wrap}
+  .brand{font-weight:900;font-size:20px;letter-spacing:-.03em}
+  .brand em{color:var(--rose);font-style:normal}
+  .brand small{font-size:12px;font-weight:500;color:var(--text2);margin-left:8px;letter-spacing:.05em;text-transform:uppercase}
+  .print-btn{background:var(--bg3);color:var(--text);border:1px solid var(--border);padding:8px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px}
+  .print-btn:hover{border-color:var(--rose)}
+  .meta{margin-bottom:20px}
+  .meta h1{font-size:22px;font-weight:800;margin-bottom:4px}
+  .meta p{font-size:13px;color:var(--text2);margin-top:3px}
+  .summary{display:flex;gap:12px;margin:20px 0;flex-wrap:wrap}
+  .sum-card{flex:1;min-width:130px;border:1px solid var(--rose-border);border-radius:12px;padding:14px 16px;background:var(--rose-bg)}
+  .sum-card .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text2);font-weight:700}
+  .sum-card .val{font-size:26px;font-weight:900;color:var(--rose);margin-top:6px}
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);border-bottom:1px solid var(--border);padding:10px 10px;font-weight:700;background:var(--bg2);position:sticky;top:0}
   thead th.num{text-align:right}
-  tbody td{padding:10px 8px;border-bottom:1px solid #f1f5f9}
-  tbody tr:nth-child(even){background:#fef2f2}
-  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;color:#475569;font-size:12px}
+  tbody tr{border-bottom:1px solid var(--border)}
+  tbody tr:hover{background:var(--bg3)}
+  tbody td{padding:10px 10px;color:var(--text)}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--text2);font-size:12px}
   .num{text-align:right;font-weight:700}
-  .bad{color:#e11d48}
-  .meses{color:#475569;font-size:12px}
-  @media print{body{background:#fff}.btn{display:none}.card{box-shadow:none;border:0}.wrap{max-width:none;padding:0}}
+  .bad{color:var(--rose);font-weight:800}
+  .meses{color:var(--amber);font-size:12px}
+  @media print{
+    :root{--bg:#fff;--bg2:#f8fafc;--bg3:#f1f5f9;--border:#e2e8f0;--text:#0f172a;--text2:#64748b;--rose:#e11d48;--rose-bg:#fff1f2;--rose-border:#fecdd3;--amber:#d97706}
+    .print-btn{display:none}.wrap{max-width:none;padding:0}.tbl-wrap{border:none}
+    thead th{position:static}
+  }
 </style></head>
 <body>
-  <div class="wrap">
-    <div class="topbar">
-      <div class="brand">Board<span>ECD</span> — Ausências de Recorrência</div>
-      <button class="btn" onclick="window.print()">Imprimir / Salvar PDF</button>
-    </div>
-    <div class="card">
-      <h1>⚠ Ausências de Movimentação</h1>
-      <p class="sub">${esc(companyInfo?.nome || 'Empresa')}${companyInfo?.cnpj ? ' • CNPJ ' + esc(companyInfo.cnpj) : ''}</p>
-      <p class="sub">Gerado em: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
-      <div class="summary">
-        <div class="sum-card">
-          <div class="lbl">Contas recorrentes</div>
-          <div class="val">${recorrentes.length}</div>
-        </div>
-        <div class="sum-card">
-          <div class="lbl">Contas com ausências</div>
-          <div class="val">${items.length}</div>
-        </div>
-        <div class="sum-card">
-          <div class="lbl">Total de meses ausentes</div>
-          <div class="val">${items.reduce((s: number, i: any) => s + i.meses.length, 0)}</div>
-        </div>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Conta</th>
-            <th>Descrição</th>
-            <th class="num">Meses ausentes</th>
-            <th>Períodos</th>
-          </tr>
-        </thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    </div>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">Board<em>ECD</em> <small>Ausências de Recorrência</small></div>
+    <button class="print-btn" onclick="window.print()">⎙ Imprimir / Salvar PDF</button>
   </div>
+  <div class="meta">
+    <h1>⚠ Ausências de Movimentação</h1>
+    <p>${esc(companyInfo?.nome || 'Empresa')}${companyInfo?.cnpj ? ' · CNPJ ' + esc(companyInfo.cnpj) : ''}</p>
+    <p>Gerado em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+  </div>
+  <div class="summary">
+    <div class="sum-card"><div class="lbl">Contas recorrentes</div><div class="val">${recorrentes.length}</div></div>
+    <div class="sum-card"><div class="lbl">Contas com ausências</div><div class="val">${items.length}</div></div>
+    <div class="sum-card"><div class="lbl">Total de meses ausentes</div><div class="val">${items.reduce((s: number, i: any) => s + i.meses.length, 0)}</div></div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Conta</th><th>Descrição</th><th class="num">Meses ausentes</th><th>Períodos</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  </div>
+</div>
 </body></html>`
 
     const w = window.open('', '_blank')
@@ -9338,61 +9338,112 @@ export default function App() {
                 </div>
               </div>
 
-              {ausenciasResumo.length > 0 && (
-                <div className="mx-6 md:mx-8 mt-4 mb-0 p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex flex-col gap-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-rose-700 font-semibold text-sm">
-                      <CalendarOff className="w-4 h-4 shrink-0" />
-                      <span>
-                        Ausências detectadas em {ausenciasResumo.length} conta
-                        {ausenciasResumo.length !== 1 ? 's' : ''} recorrente
-                        {ausenciasResumo.length !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => openAusenciasAsPage(ausenciasResumo)}
-                      className="flex items-center gap-1.5 text-xs font-bold text-rose-700 hover:text-rose-900 bg-white border border-rose-200 hover:bg-rose-100 rounded-lg px-2.5 py-1.5 transition-colors shrink-0"
-                      title="Abrir relatório completo em nova aba"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      Relatório
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {ausenciasResumo.map((item: any) => (
-                      <Popover
-                        key={item.conta}
-                        open={ausenciaDetalheConta === item.conta}
-                        onOpenChange={(open) => setAusenciaDetalheConta(open ? item.conta : null)}
-                      >
-                        <PopoverTrigger asChild>
-                          <button className="flex items-center gap-1 bg-white border border-rose-200 hover:border-rose-400 hover:bg-rose-50 rounded-lg px-2.5 py-1 text-xs text-rose-800 cursor-pointer transition-colors">
-                            <span className="font-mono font-bold">{item.conta}</span>
-                            <span className="text-rose-400 mx-0.5">·</span>
-                            <span>{item.nome}</span>
-                            <span className="text-rose-400 mx-0.5">·</span>
-                            <span className="font-semibold text-rose-600">
-                              {item.meses.length} {item.meses.length === 1 ? 'mês' : 'meses'} sem movimento
-                            </span>
+              {ausenciasResumo.length > 0 && (() => {
+                const isFloating = ausenciasPanelPos !== null
+                const handleDragStart = (e: React.MouseEvent) => {
+                  e.preventDefault()
+                  const panel = ausenciasPanelRef.current
+                  if (!panel) return
+                  const rect = panel.getBoundingClientRect()
+                  const startX = ausenciasPanelPos?.x ?? rect.left
+                  const startY = ausenciasPanelPos?.y ?? rect.top
+                  const ox = e.clientX - startX
+                  const oy = e.clientY - startY
+                  setAusenciasPanelPos({ x: startX, y: startY })
+                  const onMove = (me: MouseEvent) => setAusenciasPanelPos({ x: me.clientX - ox, y: me.clientY - oy })
+                  const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
+                  document.addEventListener('mousemove', onMove)
+                  document.addEventListener('mouseup', onUp)
+                }
+                return (
+                  <div
+                    ref={ausenciasPanelRef}
+                    style={isFloating ? { position: 'fixed', left: ausenciasPanelPos!.x, top: ausenciasPanelPos!.y, zIndex: 100, width: 680, maxWidth: '90vw' } : {}}
+                    className={`${!isFloating ? 'mx-6 md:mx-8 mt-4 mb-0' : ''} p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex flex-col gap-2 shadow-lg`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          onMouseDown={handleDragStart}
+                          className="cursor-grab active:cursor-grabbing p-0.5 text-rose-300 hover:text-rose-500 shrink-0 select-none"
+                          title="Arrastar painel"
+                        >
+                          <GripHorizontal className="w-4 h-4" />
+                        </div>
+                        <div className="flex items-center gap-2 text-rose-700 font-semibold text-sm min-w-0">
+                          <CalendarOff className="w-4 h-4 shrink-0" />
+                          <span className="truncate">
+                            Ausências detectadas em {ausenciasResumo.length} conta
+                            {ausenciasResumo.length !== 1 ? 's' : ''} recorrente
+                            {ausenciasResumo.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => openAusenciasAsPage(ausenciasResumo)}
+                          className="flex items-center gap-1.5 text-xs font-bold text-rose-700 hover:text-rose-900 bg-white border border-rose-200 hover:bg-rose-100 rounded-lg px-2.5 py-1.5 transition-colors"
+                          title="Abrir relatório completo em nova aba"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          Relatório
+                        </button>
+                        {isFloating && (
+                          <button
+                            onClick={() => setAusenciasPanelPos(null)}
+                            className="flex items-center gap-1 text-xs font-bold text-rose-600 hover:text-rose-900 bg-white border border-rose-200 hover:bg-rose-100 rounded-lg px-2 py-1.5 transition-colors"
+                            title="Encaixar no lugar original"
+                          >
+                            <Pin className="w-3.5 h-3.5" />
                           </button>
-                        </PopoverTrigger>
-                        <PopoverContent align="start" className="w-64 p-3 space-y-2 z-50">
-                          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Meses sem movimento</p>
-                          <p className="font-bold text-slate-800 text-sm">{item.conta} — {item.nome}</p>
-                          <div className="flex flex-col gap-1 pt-1 border-t border-slate-100">
-                            {item.meses.map((m: string) => (
-                              <div key={m} className="flex items-center gap-2 py-1">
-                                <CalendarOff className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                                <span className="text-sm text-slate-700 font-medium">{periodLabel(m)}</span>
+                        )}
+                        <button
+                          onClick={() => setAusenciasPanelOculto(v => !v)}
+                          className="flex items-center justify-center w-7 h-7 text-rose-500 hover:text-rose-800 bg-white border border-rose-200 hover:bg-rose-100 rounded-lg transition-colors"
+                          title={ausenciasPanelOculto ? 'Exibir contas' : 'Ocultar contas'}
+                        >
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${ausenciasPanelOculto ? '' : 'rotate-180'}`} />
+                        </button>
+                      </div>
+                    </div>
+                    {!ausenciasPanelOculto && (
+                      <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ flexWrap: 'nowrap' }}>
+                        {ausenciasResumo.map((item: any) => (
+                          <Popover
+                            key={item.conta}
+                            open={ausenciaDetalheConta === item.conta}
+                            onOpenChange={(open) => setAusenciaDetalheConta(open ? item.conta : null)}
+                          >
+                            <PopoverTrigger asChild>
+                              <button className="flex items-center gap-1 bg-white border border-rose-200 hover:border-rose-400 hover:bg-rose-50 rounded-lg px-2.5 py-1 text-xs text-rose-800 cursor-pointer transition-colors whitespace-nowrap shrink-0">
+                                <span className="font-mono font-bold">{item.conta}</span>
+                                <span className="text-rose-400 mx-0.5">·</span>
+                                <span>{item.nome}</span>
+                                <span className="text-rose-400 mx-0.5">·</span>
+                                <span className="font-semibold text-rose-600">
+                                  {item.meses.length} {item.meses.length === 1 ? 'mês' : 'meses'} sem movimento
+                                </span>
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent align="start" className="w-64 p-3 space-y-2 z-50">
+                              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Meses sem movimento</p>
+                              <p className="font-bold text-slate-800 text-sm">{item.conta} — {item.nome}</p>
+                              <div className="flex flex-col gap-1 pt-1 border-t border-slate-100">
+                                {item.meses.map((m: string) => (
+                                  <div key={m} className="flex items-center gap-2 py-1">
+                                    <CalendarOff className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                    <span className="text-sm text-slate-700 font-medium">{periodLabel(m)}</span>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    ))}
+                            </PopoverContent>
+                          </Popover>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                )
+              })()}
 
               <div
                 className="overflow-x-auto overflow-y-auto custom-scrollbar rounded-xl border border-slate-200 m-6 md:m-8 mt-2 md:mt-2"
