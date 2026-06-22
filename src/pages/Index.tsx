@@ -1756,7 +1756,7 @@ export default function App() {
         const lacBadge = nLac > 0
           ? `<span class="lac-badge">${nLac} com lacuna</span>`
           : ''
-        return `<tr class="tr-sin" data-id="${contaEsc}" data-pai="${pai}" data-nivel="${acc.nivel}">
+        return `<tr class="tr-sin" data-id="${contaEsc}" data-pai="${pai}" data-nivel="${acc.nivel}" data-type="S" data-lacunas="${nLac}">
           <td class="mono sin-td" style="padding-left:${indent + 4}px">
             <span class="chev" onclick="toggleGrupo('${contaEsc}')">▼</span>${contaEsc}
           </td>
@@ -1770,7 +1770,7 @@ export default function App() {
         st === 'aus' ? `<td class="cel aus">✗</td>` : `<td class="cel ok">✓</td>`
       ).join('')
       const rowClass = acc.lacunas > 0 ? 'tr-aus' : ''
-      return `<tr class="${rowClass}" data-id="${contaEsc}" data-pai="${pai}" data-nivel="${acc.nivel}">
+      return `<tr class="${rowClass}" data-id="${contaEsc}" data-pai="${pai}" data-nivel="${acc.nivel}" data-type="A" data-lacunas="${acc.lacunas}">
         <td class="mono" style="padding-left:${indent + 22}px">${contaEsc}</td>
         <td class="nome">${esc(acc.nome)}</td>
         ${cells}
@@ -1786,118 +1786,134 @@ export default function App() {
 <html lang="pt-BR"><head><meta charset="utf-8"/>
 <title>Mapa de Movimentação — BoardECD</title>
 <style>
-  *{box-sizing:border-box}
-  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f1f5f9;color:#0f172a}
-  .wrap{max-width:100%;margin:0 auto;padding:20px}
-  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;flex-wrap:wrap}
-  .brand{font-weight:900;font-size:18px;letter-spacing:-.02em}
-  .brand span{color:#f59e0b}
-  .btn{background:#0f172a;color:#fff;border:0;padding:8px 14px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px}
-  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,.04)}
-  h1{font-size:20px;margin:0 0 4px}
-  .sub{color:#64748b;font-size:13px;margin:3px 0}
-  .summary{display:flex;gap:12px;margin:16px 0;flex-wrap:wrap}
-  .sum-card{flex:1;min-width:120px;border:1px solid #e2e8f0;border-radius:10px;padding:12px}
-  .sum-card.warn{border-color:#fde68a;background:#fffbeb}
-  .sum-card .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:800}
-  .sum-card .val{font-size:20px;font-weight:900;margin-top:4px}
-  .sum-card.warn .val{color:#d97706}
-  .controls{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-  .controls label{font-size:12px;font-weight:700;color:#475569;margin-right:4px}
-  .lbtn{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;color:#475569}
-  .lbtn:hover{background:#e2e8f0}
-  .abtn{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;color:#4f46e5}
-  .abtn:hover{background:#eef2ff}
-  .legend{display:flex;gap:16px;margin-bottom:8px;font-size:11px;align-items:center}
-  .dot{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:4px}
-  .dot-ok{background:#dcfce7;border:1px solid #86efac}
-  .dot-aus{background:#fef3c7;border:1px solid #fcd34d}
-  .dot-sin{background:#e0e7ff;border:1px solid #a5b4fc}
-  .tbl-wrap{overflow-x:auto;max-height:calc(100vh - 280px);overflow-y:auto}
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+    --text:#e6edf3;--text2:#8b949e;--text3:#58a6ff;
+    --green:#3fb950;--green-bg:rgba(63,185,80,.12);--green-border:rgba(63,185,80,.3);
+    --amber:#d29922;--amber-bg:rgba(210,153,34,.12);--amber-border:rgba(210,153,34,.3);
+    --indigo:#818cf8;--indigo-bg:rgba(129,140,248,.1);--indigo-border:rgba(129,140,248,.25);
+  }
+  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+  .wrap{max-width:100%;padding:24px}
+  /* topbar */
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:16px}
+  .brand{font-weight:900;font-size:20px;letter-spacing:-.03em;color:var(--text)}
+  .brand em{color:var(--amber);font-style:normal}
+  .brand small{font-size:12px;font-weight:500;color:var(--text2);margin-left:8px;letter-spacing:.05em;text-transform:uppercase}
+  .print-btn{background:var(--bg3);color:var(--text);border:1px solid var(--border);padding:8px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;transition:border-color .2s}
+  .print-btn:hover{border-color:var(--indigo)}
+  /* meta */
+  .meta{margin-bottom:20px}
+  .meta h1{font-size:22px;font-weight:800;color:var(--text);margin-bottom:4px}
+  .meta p{font-size:13px;color:var(--text2);margin-top:3px}
+  /* cards */
+  .summary{display:flex;gap:12px;margin:20px 0;flex-wrap:wrap}
+  .sum-card{flex:1;min-width:130px;border:1px solid var(--border);border-radius:12px;padding:14px 16px;background:var(--bg2)}
+  .sum-card.warn{border-color:var(--amber-border);background:var(--amber-bg)}
+  .sum-card.ok{border-color:var(--green-border);background:var(--green-bg)}
+  .sum-card .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text2);font-weight:700}
+  .sum-card .val{font-size:26px;font-weight:900;margin-top:6px;color:var(--text)}
+  .sum-card.warn .val{color:var(--amber)}
+  .sum-card.ok .val{color:var(--green)}
+  /* controls */
+  .controls{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:10px}
+  .ctrl-sep{width:1px;height:20px;background:var(--border);margin:0 4px}
+  .ctrl-lbl{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+  .lbtn{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2);transition:all .15s}
+  .lbtn:hover,.lbtn.act{background:var(--indigo-bg);border-color:var(--indigo);color:var(--indigo)}
+  .fbtn{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2);transition:all .15s}
+  .fbtn:hover{border-color:var(--border)}
+  .fbtn.fok.act{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
+  .fbtn.faus.act{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}
+  .fbtn.fall.act{background:var(--indigo-bg);border-color:var(--indigo-border);color:var(--indigo)}
+  /* table */
+  .tbl-wrap{overflow-x:auto;max-height:calc(100vh - 320px);overflow-y:auto;border:1px solid var(--border);border-radius:10px}
   table{width:100%;border-collapse:collapse;font-size:12px}
-  thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;border-bottom:2px solid #e2e8f0;padding:8px 6px;font-weight:800;position:sticky;top:0;background:#fff;z-index:1}
-  thead th.per{text-align:center;min-width:54px}
-  thead th.num{text-align:right;white-space:nowrap}
-  tbody td{padding:6px 6px;border-bottom:1px solid #f1f5f9}
-  .tr-sin{background:#f8f9ff;cursor:pointer}
-  .tr-sin:hover{background:#eef2ff}
-  .tr-aus{background:#fffbeb}
-  .tr-aus:hover{background:#fef3c7}
-  tbody tr:not(.tr-aus):not(.tr-sin):hover{background:#f8fafc}
-  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;color:#475569;font-size:11px;white-space:nowrap}
-  .nome{color:#334155}
-  .sin-td{color:#3730a3;font-weight:800}
-  .sin-nome{font-weight:700;color:#3730a3}
-  .chev{display:inline-block;width:18px;text-align:center;cursor:pointer;color:#6366f1;font-size:10px;user-select:none}
-  .cel{text-align:center;font-weight:700;font-size:12px}
-  .sin-cel{text-align:center;color:#94a3b8;font-size:11px}
-  .ok{color:#16a34a;background:#f0fdf4}
-  .aus{color:#d97706;background:#fffbeb}
+  thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);border-bottom:1px solid var(--border);padding:10px 8px;font-weight:700;position:sticky;top:0;background:var(--bg2);z-index:2;white-space:nowrap}
+  thead th.per{text-align:center;min-width:56px}
+  thead th.num{text-align:right}
+  tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+  tbody td{padding:7px 8px}
+  .tr-sin{background:var(--indigo-bg);cursor:pointer}
+  .tr-sin:hover{background:rgba(129,140,248,.18)}
+  .tr-aus{background:var(--amber-bg)}
+  .tr-aus:hover{background:rgba(210,153,34,.2)}
+  tbody tr:not(.tr-aus):not(.tr-sin):hover{background:var(--bg3)}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--text2);font-size:11px;white-space:nowrap}
+  .nome{color:var(--text)}
+  .sin-td{color:var(--indigo);font-weight:800;font-size:11px}
+  .sin-nome{font-weight:700;color:var(--indigo)}
+  .chev{display:inline-block;width:18px;text-align:center;cursor:pointer;color:var(--indigo);font-size:10px;user-select:none;opacity:.8}
+  .chev:hover{opacity:1}
+  .cel{text-align:center;font-weight:800;font-size:13px}
+  .sin-cel{text-align:center;color:var(--text2);font-size:11px}
+  .ok{color:var(--green)}
+  .aus{color:var(--amber)}
   .num{text-align:right;font-weight:700}
-  .grc{text-align:right;font-weight:700;color:#6366f1}
-  .bad{color:#d97706}
-  .good{color:#94a3b8}
-  .lac-badge{font-size:10px;font-weight:700;background:#fef3c7;color:#d97706;border:1px solid #fde68a;border-radius:99px;padding:1px 7px;margin-left:6px}
+  .grc{text-align:right;font-weight:700;color:var(--indigo)}
+  .bad{color:var(--amber)}
+  .good{color:var(--text2)}
+  .lac-badge{font-size:10px;font-weight:700;background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);border-radius:99px;padding:1px 8px;margin-left:8px}
+  .ok-badge{font-size:10px;font-weight:700;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:99px;padding:1px 8px;margin-left:8px}
   @media print{
-    body{background:#fff}.btn,.controls{display:none}
-    .card{box-shadow:none;border:0}.wrap{padding:0}
+    :root{--bg:#fff;--bg2:#f8fafc;--bg3:#f1f5f9;--border:#e2e8f0;--text:#0f172a;--text2:#64748b;--text3:#4f46e5;--green:#16a34a;--green-bg:#f0fdf4;--green-border:#86efac;--amber:#d97706;--amber-bg:#fffbeb;--amber-border:#fde68a;--indigo:#4f46e5;--indigo-bg:#eef2ff;--indigo-border:#c7d2fe}
+    .controls,.print-btn{display:none}
+    .tbl-wrap{max-height:none;overflow:visible;border:none}
+    .wrap{padding:0}
     thead th{position:static}
-    .tbl-wrap{max-height:none;overflow:visible}
   }
 </style></head>
 <body>
 <div class="wrap">
   <div class="topbar">
-    <div class="brand">Board<span>ECD</span> — Mapa de Movimentação</div>
-    <button class="btn" onclick="window.print()">Imprimir / Salvar PDF</button>
+    <div class="brand">Board<em>ECD</em> <small>Mapa de Movimentação</small></div>
+    <button class="print-btn" onclick="window.print()">⎙ Imprimir / Salvar PDF</button>
   </div>
-  <div class="card">
+  <div class="meta">
     <h1>Mapa de Movimentação por Conta</h1>
-    <p class="sub">${esc(companyInfo?.nome || 'Empresa')}${companyInfo?.cnpj ? ' • CNPJ ' + esc(companyInfo.cnpj) : ''}</p>
-    <p class="sub">Período: ${periods.map((p: string) => periodLabel(p)).join(', ')} • Gerado em ${new Date().toLocaleDateString('pt-BR')}</p>
-    <div class="summary">
-      <div class="sum-card"><div class="lbl">Contas analíticas</div><div class="val">${totalAnaliticas}</div></div>
-      <div class="sum-card warn"><div class="lbl">Com alguma lacuna</div><div class="val">${comAus}</div></div>
-      <div class="sum-card"><div class="lbl">Sem nenhuma lacuna</div><div class="val">${totalAnaliticas - comAus}</div></div>
-    </div>
-    <div class="controls">
-      <label>Nível:</label>${levelBtns}
-      <button class="abtn" onclick="expandTudo()">Expandir tudo</button>
-      <button class="abtn" onclick="recolherTudo()">Recolher tudo</button>
-    </div>
-    <div class="legend">
-      <span><span class="dot dot-ok"></span>Com movimento</span>
-      <span><span class="dot dot-aus"></span>Sem movimento (lacuna)</span>
-      <span><span class="dot dot-sin"></span>Grupo/Subgrupo</span>
-    </div>
-    <div class="tbl-wrap">
-      <table id="tbl">
-        <thead><tr>
-          <th>Conta</th><th>Descrição</th>${theadCols}<th class="num">Lacunas</th>
-        </tr></thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    </div>
+    <p>${esc(companyInfo?.nome || 'Empresa')}${companyInfo?.cnpj ? ' · CNPJ ' + esc(companyInfo.cnpj) : ''}</p>
+    <p>Período: <strong>${periods.map((p: string) => periodLabel(p)).join(' · ')}</strong> · Gerado em ${new Date().toLocaleDateString('pt-BR')}</p>
+  </div>
+  <div class="summary">
+    <div class="sum-card"><div class="lbl">Contas analíticas</div><div class="val">${totalAnaliticas}</div></div>
+    <div class="sum-card warn"><div class="lbl">Com lacuna</div><div class="val">${comAus}</div></div>
+    <div class="sum-card ok"><div class="lbl">Sem lacuna</div><div class="val">${totalAnaliticas - comAus}</div></div>
+  </div>
+  <div class="controls">
+    <span class="ctrl-lbl">Mostrar:</span>
+    <button class="fbtn fall act" onclick="filtrar('all',this)">Todas</button>
+    <button class="fbtn faus" onclick="filtrar('aus',this)">Só com lacuna</button>
+    <button class="fbtn fok" onclick="filtrar('ok',this)">Só sem lacuna</button>
+    <div class="ctrl-sep"></div>
+    <span class="ctrl-lbl">Nível:</span>
+    ${levelBtns}
+    <button class="lbtn" onclick="expandTudo()">Expandir tudo</button>
+    <button class="lbtn" onclick="recolherTudo()">Recolher tudo</button>
+  </div>
+  <div class="tbl-wrap">
+    <table id="tbl">
+      <thead><tr>
+        <th>Conta</th><th>Descrição</th>${theadCols}<th class="num">Lacunas</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
   </div>
 </div>
 <script>
-  // Mapa de filhos diretos
   var filhos = {}
   document.querySelectorAll('tbody tr[data-pai]').forEach(function(r){
-    var p = r.dataset.pai
-    if(!p) return
+    var p = r.dataset.pai; if(!p) return
     if(!filhos[p]) filhos[p]=[]
     filhos[p].push(r.dataset.id)
   })
 
-  function setVisible(id, vis, recursive){
-    var rows = document.querySelectorAll('tbody tr[data-pai="'+id+'"]')
-    rows.forEach(function(r){
+  var filtroAtual = 'all'
+
+  function setVisible(id, vis){
+    document.querySelectorAll('tbody tr[data-pai="'+id+'"]').forEach(function(r){
       r.style.display = vis ? '' : 'none'
-      if(!vis) setVisible(r.dataset.id, false, true)
-      else if(!recursive && r.dataset.id && filhos[r.dataset.id]){
-        // ao expandir só mostra filhos diretos; mantém sub-grupos fechados se já estavam
-      }
+      if(!vis) setVisible(r.dataset.id, false)
     })
     var chev = document.querySelector('.chev[onclick*="\\'' + id + '\\'"]')
     if(chev) chev.textContent = vis ? '▼' : '▶'
@@ -1907,7 +1923,7 @@ export default function App() {
     var filhosDiretos = document.querySelectorAll('tbody tr[data-pai="'+id+'"]')
     if(!filhosDiretos.length) return
     var aberto = filhosDiretos[0].style.display !== 'none'
-    setVisible(id, !aberto, false)
+    setVisible(id, !aberto)
   }
 
   function expandNivel(n){
@@ -1917,24 +1933,63 @@ export default function App() {
     })
     document.querySelectorAll('.chev').forEach(function(c){
       var id = c.getAttribute('onclick').match(/'([^']+)'/)[1]
-      var temFilhoVis = document.querySelectorAll('tbody tr[data-pai="'+id+'"]')[0]
-      if(temFilhoVis) c.textContent = temFilhoVis.style.display!=='none' ? '▼' : '▶'
+      var f = document.querySelectorAll('tbody tr[data-pai="'+id+'"]')[0]
+      if(f) c.textContent = f.style.display !== 'none' ? '▼' : '▶'
     })
+    document.querySelectorAll('.lbtn').forEach(function(b){ b.classList.remove('act') })
+    event.target.classList.add('act')
   }
 
   function expandTudo(){
-    document.querySelectorAll('tbody tr').forEach(function(r){ r.style.display = '' })
-    document.querySelectorAll('.chev').forEach(function(c){ c.textContent = '▼' })
+    document.querySelectorAll('tbody tr').forEach(function(r){
+      if(filtroAtual==='all') r.style.display=''
+      else applyFiltro(r, filtroAtual)
+    })
+    document.querySelectorAll('.chev').forEach(function(c){ c.textContent='▼' })
+    document.querySelectorAll('.lbtn').forEach(function(b){ b.classList.remove('act') })
   }
 
   function recolherTudo(){
     document.querySelectorAll('tbody tr').forEach(function(r){
-      if(parseInt(r.dataset.nivel||1) > 1) r.style.display = 'none'
+      if(parseInt(r.dataset.nivel||1) > 1) r.style.display='none'
     })
-    document.querySelectorAll('.chev').forEach(function(c){ c.textContent = '▶' })
+    document.querySelectorAll('.chev').forEach(function(c){ c.textContent='▶' })
+    document.querySelectorAll('.lbtn').forEach(function(b){ b.classList.remove('act') })
   }
 
-  // Inicializa expandido até nível 2
+  function applyFiltro(r, f){
+    var tipo = r.dataset.type
+    if(tipo === 'S'){
+      // Grupo: visível se tiver algum filho visível após filtro
+      return true
+    }
+    var lacunas = parseInt(r.dataset.lacunas||0)
+    if(f === 'all') r.style.display=''
+    else if(f === 'aus') r.style.display = lacunas > 0 ? '' : 'none'
+    else if(f === 'ok') r.style.display = lacunas === 0 ? '' : 'none'
+  }
+
+  function filtrar(f, btn){
+    filtroAtual = f
+    document.querySelectorAll('.fbtn').forEach(function(b){ b.classList.remove('act') })
+    btn.classList.add('act')
+    // Aplica filtro nas analíticas
+    document.querySelectorAll('tbody tr[data-type="A"]').forEach(function(r){
+      applyFiltro(r, f)
+    })
+    // Mostra/esconde sintéticas baseado em filhos visíveis
+    var sinRows = []
+    document.querySelectorAll('tbody tr[data-type="S"]').forEach(function(r){ sinRows.push(r) })
+    // Processa de baixo pra cima (maiores níveis primeiro)
+    sinRows.sort(function(a,b){ return parseInt(b.dataset.nivel)-parseInt(a.dataset.nivel) })
+    sinRows.forEach(function(r){
+      var id = r.dataset.id
+      var temFilhoVis = Array.from(document.querySelectorAll('tbody tr[data-pai="'+id+'"]'))
+        .some(function(c){ return c.style.display !== 'none' })
+      r.style.display = (f === 'all' || temFilhoVis) ? '' : 'none'
+    })
+  }
+
   expandNivel(2)
 </script>
 </body></html>`
