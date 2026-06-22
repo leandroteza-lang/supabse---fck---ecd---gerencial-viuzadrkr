@@ -969,7 +969,28 @@ export default function App() {
   const [ausenciasPanelOculto, setAusenciasPanelOculto] = useState(false)
   const [ausenciasPanelPos, setAusenciasPanelPos] = useState<{ x: number; y: number } | null>(null)
   const ausenciasPanelRef = useRef<HTMLDivElement>(null)
-  const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const startAusenciasDrag = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const panel = ausenciasPanelRef.current
+    if (!panel) return
+    document.body.style.userSelect = 'none'
+    const rect = panel.getBoundingClientRect()
+    const initX = rect.left
+    const initY = rect.top
+    const startMX = e.clientX
+    const startMY = e.clientY
+    setAusenciasPanelPos({ x: initX, y: initY })
+    const handleMove = (me: MouseEvent) => {
+      setAusenciasPanelPos({ x: initX + (me.clientX - startMX), y: initY + (me.clientY - startMY) })
+    }
+    const handleUp = () => {
+      document.removeEventListener('mousemove', handleMove)
+      document.removeEventListener('mouseup', handleUp)
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('mousemove', handleMove)
+    document.addEventListener('mouseup', handleUp)
+  }, [])
   // Com AV%/AH% visível, oculta as colunas de valor (Saldo, Acumulado, Média),
   // deixando literalmente só os índices. Sem índice, apenas mascara os valores.
   const soIndices = ocultarValores && (showAV || showAH)
@@ -1619,15 +1640,25 @@ export default function App() {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
 
+    const periods = periodsToDisplay
+    const theadPeriods = periods.map((p: string) => `<th class="per">${esc(periodLabel(p))}</th>`).join('')
+
     const rowsHtml = items
       .map((item) => {
-        const mesLabels = item.meses.map((m: string) => periodLabel(m)).join(', ')
+        const mesSet = new Set(item.meses)
+        const periodCells = periods
+          .map((p: string) =>
+            mesSet.has(p)
+              ? `<td class="cel aus" title="${esc(periodLabel(p))} — sem movimento">✗</td>`
+              : `<td class="cel ok" title="${esc(periodLabel(p))} — com movimento">✓</td>`
+          )
+          .join('')
         return `
           <tr>
             <td class="mono">${esc(item.conta)}</td>
             <td>${esc(item.nome)}</td>
+            ${periodCells}
             <td class="num bad">${item.meses.length}</td>
-            <td class="meses">${esc(mesLabels)}</td>
           </tr>`
       })
       .join('')
@@ -1639,7 +1670,7 @@ export default function App() {
   *{box-sizing:border-box;margin:0;padding:0}
   :root{--bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;--text:#e6edf3;--text2:#8b949e;--rose:#f87171;--rose-bg:rgba(248,113,113,.12);--rose-border:rgba(248,113,113,.3);--amber:#d29922;--amber-bg:rgba(210,153,34,.1);--amber-border:rgba(210,153,34,.3)}
   body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-  .wrap{max-width:1000px;margin:0 auto;padding:24px}
+  .wrap{max-width:100%;margin:0 auto;padding:24px}
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px;border-bottom:1px solid var(--border);padding-bottom:16px;flex-wrap:wrap}
   .brand{font-weight:900;font-size:20px;letter-spacing:-.03em}
   .brand em{color:var(--rose);font-style:normal}
@@ -1655,15 +1686,18 @@ export default function App() {
   .sum-card .val{font-size:26px;font-weight:900;color:var(--rose);margin-top:6px}
   .tbl-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px}
   table{width:100%;border-collapse:collapse;font-size:13px}
-  thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);border-bottom:1px solid var(--border);padding:10px 10px;font-weight:700;background:var(--bg2);position:sticky;top:0}
+  thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);border-bottom:1px solid var(--border);padding:10px 10px;font-weight:700;background:var(--bg2);position:sticky;top:0;white-space:nowrap}
   thead th.num{text-align:right}
+  thead th.per{text-align:center;min-width:60px}
   tbody tr{border-bottom:1px solid var(--border)}
   tbody tr:hover{background:var(--bg3)}
-  tbody td{padding:10px 10px;color:var(--text)}
+  tbody td{padding:9px 10px;color:var(--text)}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--text2);font-size:12px}
   .num{text-align:right;font-weight:700}
   .bad{color:var(--rose);font-weight:800}
-  .meses{color:var(--amber);font-size:12px}
+  .cel{text-align:center;font-weight:800;font-size:14px}
+  .ok{color:#3fb950}
+  .aus{color:var(--amber)}
   @media print{
     :root{--bg:#fff;--bg2:#f8fafc;--bg3:#f1f5f9;--border:#e2e8f0;--text:#0f172a;--text2:#64748b;--rose:#e11d48;--rose-bg:#fff1f2;--rose-border:#fecdd3;--amber:#d97706}
     .print-btn{display:none}.wrap{max-width:none;padding:0}.tbl-wrap{border:none}
@@ -1688,7 +1722,7 @@ export default function App() {
   </div>
   <div class="tbl-wrap">
     <table>
-      <thead><tr><th>Conta</th><th>Descrição</th><th class="num">Meses ausentes</th><th>Períodos</th></tr></thead>
+      <thead><tr><th>Conta</th><th>Descrição</th>${theadPeriods}<th class="num">Ausências</th></tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>
   </div>
@@ -9340,33 +9374,18 @@ export default function App() {
 
               {ausenciasResumo.length > 0 && (() => {
                 const isFloating = ausenciasPanelPos !== null
-                const handleDragStart = (e: React.MouseEvent) => {
-                  e.preventDefault()
-                  const panel = ausenciasPanelRef.current
-                  if (!panel) return
-                  const rect = panel.getBoundingClientRect()
-                  const startX = ausenciasPanelPos?.x ?? rect.left
-                  const startY = ausenciasPanelPos?.y ?? rect.top
-                  const ox = e.clientX - startX
-                  const oy = e.clientY - startY
-                  setAusenciasPanelPos({ x: startX, y: startY })
-                  const onMove = (me: MouseEvent) => setAusenciasPanelPos({ x: me.clientX - ox, y: me.clientY - oy })
-                  const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
-                  document.addEventListener('mousemove', onMove)
-                  document.addEventListener('mouseup', onUp)
-                }
                 return (
                   <div
                     ref={ausenciasPanelRef}
-                    style={isFloating ? { position: 'fixed', left: ausenciasPanelPos!.x, top: ausenciasPanelPos!.y, zIndex: 100, width: 680, maxWidth: '90vw' } : {}}
+                    style={isFloating ? { position: 'fixed', left: ausenciasPanelPos!.x, top: ausenciasPanelPos!.y, zIndex: 100, width: 700, maxWidth: '92vw' } : {}}
                     className={`${!isFloating ? 'mx-6 md:mx-8 mt-4 mb-0' : ''} p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex flex-col gap-2 shadow-lg`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <div
-                          onMouseDown={handleDragStart}
+                          onMouseDown={startAusenciasDrag}
                           className="cursor-grab active:cursor-grabbing p-0.5 text-rose-300 hover:text-rose-500 shrink-0 select-none"
-                          title="Arrastar painel"
+                          title="Arrastar painel — segure e arraste"
                         >
                           <GripHorizontal className="w-4 h-4" />
                         </div>
@@ -9407,7 +9426,7 @@ export default function App() {
                       </div>
                     </div>
                     {!ausenciasPanelOculto && (
-                      <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ flexWrap: 'nowrap' }}>
+                      <div className="flex flex-wrap gap-1.5 overflow-y-auto" style={{ maxHeight: 120 }}>
                         {ausenciasResumo.map((item: any) => (
                           <Popover
                             key={item.conta}
