@@ -9875,8 +9875,14 @@ export default function App() {
                               // Recorrência mensal: conta marcada e mês sem movimento
                               const isAusente =
                                 recorrentesSet.has(acc.conta) && semMovimento(acc, period)
-                              // Lacuna geral: qualquer conta sem movimento (independente de config)
-                              const isLacuna = soLacunas && acc.tipo !== 'S' && semMovimento(acc, period)
+                              // Lacuna geral: qualquer conta sem movimento — ativo quando "Lacunas" ou
+                              // "Só ausências" estão ligados (no segundo caso, mostra contexto nas
+                              // contas não-recorrentes que aparecem como pais de recorrentes)
+                              const isLacuna =
+                                (soLacunas || soAusencias) &&
+                                !isAusente &&
+                                acc.tipo !== 'S' &&
+                                semMovimento(acc, period)
 
                               // Análise Horizontal
                               let ahContent: any = null
