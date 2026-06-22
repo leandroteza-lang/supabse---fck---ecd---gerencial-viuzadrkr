@@ -960,6 +960,7 @@ export default function App() {
   const [ocultarAlertas, setOcultarAlertas] = useState(false)
   const [showAhDelta, setShowAhDelta] = useState(false)
   const [soAusencias, setSoAusencias] = useState(false)
+  const [soLacunas, setSoLacunas] = useState(false)
   const [showRecorrenciaConfig, setShowRecorrenciaConfig] = useState(false)
   const [recorrenciaSearch, setRecorrenciaSearch] = useState('')
   const [ausenciaDetalheConta, setAusenciaDetalheConta] = useState<string | null>(null)
@@ -1690,6 +1691,142 @@ export default function App() {
         </thead>
         <tbody>${rowsHtml}</tbody>
       </table>
+    </div>
+  </div>
+</body></html>`
+
+    const w = window.open('', '_blank')
+    if (!w) {
+      toast({ variant: 'destructive', title: 'Pop-up bloqueado', description: 'Permita pop-ups deste site para abrir o relatório.' })
+      return
+    }
+    w.document.open()
+    w.document.write(html)
+    w.document.close()
+  }
+
+  const openMapaMovimentoAsPage = () => {
+    const esc = (s: any) =>
+      String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    const periods = periodsToDisplay
+    const contas = (monthlyData.allAccounts || []).filter((a: any) => a.tipo !== 'S')
+
+    const theadCols = periods.map((p: string) =>
+      `<th class="per">${esc(periodLabel(p))}</th>`
+    ).join('')
+
+    const rowsHtml = contas.map((acc: any) => {
+      let totalAus = 0
+      const cells = periods.map((p: string) => {
+        const sld = acc.saldos?.[p]
+        const semMov = !sld || (getRawNumber(sld.debito) === 0 && getRawNumber(sld.credito) === 0)
+        if (semMov) totalAus++
+        return semMov
+          ? `<td class="cel aus">✗</td>`
+          : `<td class="cel ok">✓</td>`
+      }).join('')
+      const rowClass = totalAus > 0 ? 'tr-aus' : ''
+      return `<tr class="${rowClass}">
+        <td class="mono">${esc(acc.conta)}</td>
+        <td class="nome">${esc(acc.nome)}</td>
+        ${cells}
+        <td class="num ${totalAus > 0 ? 'bad' : 'good'}">${totalAus > 0 ? totalAus : '—'}</td>
+      </tr>`
+    }).join('')
+
+    const totalContas = contas.length
+    const contasComAus = contas.filter((acc: any) =>
+      periods.some((p: string) => {
+        const sld = acc.saldos?.[p]
+        return !sld || (getRawNumber(sld.debito) === 0 && getRawNumber(sld.credito) === 0)
+      })
+    ).length
+
+    const html = `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8" />
+<title>Mapa de Movimentação — BoardECD</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f1f5f9;color:#0f172a}
+  .wrap{max-width:100%;margin:0 auto;padding:24px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+  .brand{font-weight:900;font-size:20px;letter-spacing:-.02em}
+  .brand span{color:#f59e0b}
+  .btn{background:#0f172a;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 8px 30px rgba(0,0,0,.04)}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:#64748b;font-size:14px;margin:4px 0}
+  .summary{display:flex;gap:16px;margin:20px 0;flex-wrap:wrap}
+  .sum-card{flex:1;min-width:140px;border:1px solid #e2e8f0;border-radius:12px;padding:14px}
+  .sum-card.warn{border-color:#fde68a;background:#fffbeb}
+  .sum-card .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:800}
+  .sum-card .val{font-size:22px;font-weight:900;margin-top:4px}
+  .sum-card.warn .val{color:#d97706}
+  .legend{display:flex;gap:16px;margin-bottom:12px;font-size:12px}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .dot-ok{width:10px;height:10px;border-radius:2px;background:#dcfce7;border:1px solid #86efac}
+  .dot-aus{width:10px;height:10px;border-radius:2px;background:#fef3c7;border:1px solid #fcd34d}
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;border-bottom:2px solid #e2e8f0;padding:8px 6px;font-weight:800;position:sticky;top:0;background:#fff}
+  thead th.per{text-align:center;min-width:56px}
+  thead th.num{text-align:right}
+  tbody td{padding:7px 6px;border-bottom:1px solid #f1f5f9}
+  .tr-aus{background:#fffbeb}
+  .tr-aus:hover{background:#fef3c7}
+  tbody tr:not(.tr-aus):hover{background:#f8fafc}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;color:#475569;font-size:11px;white-space:nowrap}
+  .nome{color:#334155;max-width:260px}
+  .cel{text-align:center;font-weight:700;font-size:13px}
+  .ok{color:#16a34a;background:#f0fdf4}
+  .aus{color:#d97706;background:#fffbeb}
+  .num{text-align:right;font-weight:700}
+  .bad{color:#d97706}
+  .good{color:#94a3b8}
+  @media print{body{background:#fff}.btn{display:none}.card{box-shadow:none;border:0}.wrap{padding:0}thead th{position:static}}
+</style></head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">Board<span>ECD</span> — Mapa de Movimentação</div>
+      <button class="btn" onclick="window.print()">Imprimir / Salvar PDF</button>
+    </div>
+    <div class="card">
+      <h1>Mapa de Movimentação por Conta</h1>
+      <p class="sub">${esc(companyInfo?.nome || 'Empresa')}${companyInfo?.cnpj ? ' • CNPJ ' + esc(companyInfo.cnpj) : ''}</p>
+      <p class="sub">Período: ${periods.map((p: string) => periodLabel(p)).join(', ')} • Gerado em ${new Date().toLocaleDateString('pt-BR')}</p>
+      <div class="summary">
+        <div class="sum-card">
+          <div class="lbl">Contas analíticas</div>
+          <div class="val">${totalContas}</div>
+        </div>
+        <div class="sum-card warn">
+          <div class="lbl">Com alguma lacuna</div>
+          <div class="val">${contasComAus}</div>
+        </div>
+        <div class="sum-card">
+          <div class="lbl">Sem nenhuma lacuna</div>
+          <div class="val">${totalContas - contasComAus}</div>
+        </div>
+      </div>
+      <div class="legend">
+        <span><div class="dot-ok"></div> Com movimento</span>
+        <span><div class="dot-aus"></div> Sem movimento (lacuna)</span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Conta</th>
+              <th>Descrição</th>
+              ${theadCols}
+              <th class="num">Lacunas</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
     </div>
   </div>
 </body></html>`
@@ -4898,7 +5035,8 @@ export default function App() {
     const ahActive = showAH && ahC.op !== 'none'
     const filtroDiv = soDivergencias && (avActive || ahActive)
     const filtroAus = soAusencias && recorrentesSet.size > 0
-    if (!filtroDiv && !filtroAus) return orderedBalanceteRows
+    const filtroLac = soLacunas
+    if (!filtroDiv && !filtroAus && !filtroLac) return orderedBalanceteRows
     const allP = monthlyData.periods
 
     const temAus = (acc: any) => {
@@ -4931,9 +5069,20 @@ export default function App() {
       return false
     }
 
+    const temLacuna = (acc: any) =>
+      periodsToDisplay.some((p: string) => {
+        const sld = acc.saldos?.[p]
+        if (!sld) return true
+        return getRawNumber(sld.debito) === 0 && getRawNumber(sld.credito) === 0
+      })
+
     const keep = new Set<string>()
     orderedBalanceteRows.forEach((acc: any) => {
-      if ((filtroDiv && diverge(acc)) || (filtroAus && temAus(acc))) {
+      if (
+        (filtroDiv && diverge(acc)) ||
+        (filtroAus && temAus(acc)) ||
+        (filtroLac && temLacuna(acc))
+      ) {
         keep.add(acc.conta)
         let par = accountParentMap[acc.conta]
         while (par) {
@@ -4948,6 +5097,7 @@ export default function App() {
     orderedBalanceteRows,
     soDivergencias,
     soAusencias,
+    soLacunas,
     recorrentesSet,
     showAV,
     showAH,
@@ -8788,6 +8938,17 @@ export default function App() {
                         </span>
                       )}
                     </button>
+                    {periodsToDisplay.length > 0 && monthlyData.allAccounts?.length > 0 && (
+                      <button
+                        onClick={openMapaMovimentoAsPage}
+                        className="flex items-center gap-2 bg-white border border-amber-300 px-3 py-2 rounded-lg text-sm font-bold text-amber-700 hover:bg-amber-50 transition-colors shadow-sm w-full sm:w-auto"
+                        title="Relatório geral: todas as contas analíticas × meses, mostrando quais tiveram ou não movimento"
+                      >
+                        <Activity className="w-4 h-4 text-amber-500" />
+                        Mapa de Movimento
+                        <ExternalLink className="w-3.5 h-3.5 opacity-60" />
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap xl:flex-nowrap items-center gap-3 xl:border-l xl:border-slate-200 xl:pl-4">
@@ -8926,6 +9087,20 @@ export default function App() {
                         />
                         <CalendarOff className="w-4 h-4 text-rose-500" />
                         <span className="whitespace-nowrap">Só ausências</span>
+                      </label>
+                      <div className="w-px h-4 bg-slate-200"></div>
+                      <label
+                        className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600"
+                        title="Mostra contas analíticas que ficaram sem movimento em pelo menos 1 mês do período — independente de configuração de recorrência"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={soLacunas}
+                          onChange={() => setSoLacunas(!soLacunas)}
+                          className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                        />
+                        <Activity className="w-4 h-4 text-amber-500" />
+                        <span className="whitespace-nowrap">Lacunas</span>
                       </label>
                     </div>
 
@@ -9700,6 +9875,8 @@ export default function App() {
                               // Recorrência mensal: conta marcada e mês sem movimento
                               const isAusente =
                                 recorrentesSet.has(acc.conta) && semMovimento(acc, period)
+                              // Lacuna geral: qualquer conta sem movimento (independente de config)
+                              const isLacuna = soLacunas && acc.tipo !== 'S' && semMovimento(acc, period)
 
                               // Análise Horizontal
                               let ahContent: any = null
@@ -9961,7 +10138,7 @@ export default function App() {
                                 <React.Fragment key={period}>
                                   {!soIndices && (
                                     <td
-                                      className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${isAusente ? (isDarkBg ? 'bg-rose-500/20' : 'bg-rose-50') : ''} ${isDarkBg ? 'text-white' : isLevel5 ? 'text-black' : 'text-blue-950'}`}
+                                      className={`py-1.5 px-4 whitespace-nowrap border-l border-white/10 ${isAusente ? (isDarkBg ? 'bg-rose-500/20' : 'bg-rose-50') : isLacuna ? (isDarkBg ? 'bg-amber-500/20' : 'bg-amber-50') : ''} ${isDarkBg ? 'text-white' : isLevel5 ? 'text-black' : 'text-blue-950'}`}
                                     >
                                       <div className="flex items-center w-full gap-1">
                                         {isAusente && (
@@ -9975,6 +10152,18 @@ export default function App() {
                                               Sem movimento neste mês — conta marcada como{' '}
                                               <strong>recorrência mensal</strong> (deveria ter
                                               lançamentos todo mês).
+                                            </TooltipContent>
+                                          </UITooltip>
+                                        )}
+                                        {!isAusente && isLacuna && (
+                                          <UITooltip delayDuration={0}>
+                                            <TooltipTrigger asChild>
+                                              <Activity
+                                                className={`w-3.5 h-3.5 cursor-help shrink-0 ${isDarkBg ? 'text-amber-300' : 'text-amber-600'}`}
+                                              />
+                                            </TooltipTrigger>
+                                            <TooltipContent className="max-w-[260px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
+                                              Sem movimento neste mês (lacuna de movimentação).
                                             </TooltipContent>
                                           </UITooltip>
                                         )}
@@ -10256,7 +10445,9 @@ export default function App() {
                             ? 'Nenhuma divergência encontrada para os limites de alerta do perfil.'
                             : soAusencias
                               ? 'Nenhuma ausência detectada nas contas marcadas como recorrentes.'
-                              : 'Nenhuma conta encontrada ou selecionada no filtro.'}
+                              : soLacunas
+                                ? 'Nenhuma lacuna de movimentação detectada no período selecionado.'
+                                : 'Nenhuma conta encontrada ou selecionada no filtro.'}
                         </td>
                       </tr>
                     )}
