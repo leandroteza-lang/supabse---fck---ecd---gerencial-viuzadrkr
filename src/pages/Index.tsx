@@ -970,23 +970,30 @@ export default function App() {
   const [ausenciasPanelPos, setAusenciasPanelPos] = useState<{ x: number; y: number } | null>(null)
   const ausenciasPanelRef = useRef<HTMLDivElement>(null)
   const startAusenciasDrag = useCallback((e: React.MouseEvent) => {
+    // only left button
+    if (e.button !== 0) return
     e.preventDefault()
+    e.stopPropagation()
     const panel = ausenciasPanelRef.current
     if (!panel) return
     document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'grabbing'
     const rect = panel.getBoundingClientRect()
     const initX = rect.left
     const initY = rect.top
     const startMX = e.clientX
     const startMY = e.clientY
+    // float immediately at current position
     setAusenciasPanelPos({ x: initX, y: initY })
     const handleMove = (me: MouseEvent) => {
+      me.preventDefault()
       setAusenciasPanelPos({ x: initX + (me.clientX - startMX), y: initY + (me.clientY - startMY) })
     }
     const handleUp = () => {
       document.removeEventListener('mousemove', handleMove)
       document.removeEventListener('mouseup', handleUp)
       document.body.style.userSelect = ''
+      document.body.style.cursor = ''
     }
     document.addEventListener('mousemove', handleMove)
     document.addEventListener('mouseup', handleUp)
@@ -9148,7 +9155,7 @@ export default function App() {
                     )}
                   </div>
 
-                  <div className="flex flex-wrap xl:flex-nowrap items-center gap-3 xl:border-l xl:border-slate-200 xl:pl-4">
+                  <div className="flex flex-wrap items-center gap-3 xl:border-l xl:border-slate-200 xl:pl-4">
                     <div className="flex items-center gap-3 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm w-full sm:w-auto">
                       <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
                         <input
@@ -9219,8 +9226,8 @@ export default function App() {
                       </button>
                     </div>
 
-                    <div className="flex items-center gap-4 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm w-full sm:w-auto xl:ml-auto">
-                      <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
+                    <div className="flex items-center gap-3 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+                      <label className="flex items-center gap-1.5 cursor-pointer text-sm font-bold text-slate-600">
                         <input
                           type="checkbox"
                           checked={showAV}
@@ -9230,7 +9237,7 @@ export default function App() {
                         <span>AV%</span>
                       </label>
                       <div className="w-px h-4 bg-slate-200"></div>
-                      <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600">
+                      <label className="flex items-center gap-1.5 cursor-pointer text-sm font-bold text-slate-600">
                         <input
                           type="checkbox"
                           checked={showAH}
@@ -9241,7 +9248,7 @@ export default function App() {
                       </label>
                       <div className="w-px h-4 bg-slate-200"></div>
                       <label
-                        className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600"
+                        className="flex items-center gap-1.5 cursor-pointer text-sm font-bold text-slate-600"
                         title="Ocultar os valores em R$ (mantém D/C e os índices AV%/AH%)"
                       >
                         <input
@@ -9250,16 +9257,13 @@ export default function App() {
                           onChange={() => setOcultarValores(!ocultarValores)}
                           className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                         />
-                        {ocultarValores ? (
-                          <EyeOff className="w-4 h-4" />
-                        ) : (
-                          <Eye className="w-4 h-4" />
-                        )}
+                        {ocultarValores ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         <span className="whitespace-nowrap">Ocultar valores</span>
                       </label>
-                      <div className="w-px h-4 bg-slate-200"></div>
+                    </div>
+                    <div className="flex items-center gap-3 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
                       <label
-                        className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600"
+                        className="flex items-center gap-1.5 cursor-pointer text-sm font-bold text-slate-600"
                         title="Mostra apenas as contas que divergem dos limites de alerta (AV%/AH%) do perfil ativo"
                       >
                         <input
@@ -9273,7 +9277,7 @@ export default function App() {
                       </label>
                       <div className="w-px h-4 bg-slate-200"></div>
                       <label
-                        className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600"
+                        className="flex items-center gap-1.5 cursor-pointer text-sm font-bold text-slate-600"
                         title="Mostra apenas as contas marcadas como recorrência mensal que ficaram sem movimento em algum mês"
                       >
                         <input
@@ -9287,7 +9291,7 @@ export default function App() {
                       </label>
                       <div className="w-px h-4 bg-slate-200"></div>
                       <label
-                        className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600"
+                        className="flex items-center gap-1.5 cursor-pointer text-sm font-bold text-slate-600"
                         title="Mostra contas analíticas que ficaram sem movimento em pelo menos 1 mês do período — independente de configuração de recorrência"
                       >
                         <input
@@ -9381,14 +9385,12 @@ export default function App() {
                     className={`${!isFloating ? 'mx-6 md:mx-8 mt-4 mb-0' : ''} p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex flex-col gap-2 shadow-lg`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div
-                          onMouseDown={startAusenciasDrag}
-                          className="cursor-grab active:cursor-grabbing p-0.5 text-rose-300 hover:text-rose-500 shrink-0 select-none"
-                          title="Arrastar painel — segure e arraste"
-                        >
-                          <GripHorizontal className="w-4 h-4" />
-                        </div>
+                      <div
+                        className="flex items-center gap-2 min-w-0 flex-1 cursor-grab active:cursor-grabbing select-none"
+                        onMouseDown={startAusenciasDrag}
+                        title="Segure e arraste para mover o painel"
+                      >
+                        <GripHorizontal className="w-4 h-4 text-rose-300 shrink-0" />
                         <div className="flex items-center gap-2 text-rose-700 font-semibold text-sm min-w-0">
                           <CalendarOff className="w-4 h-4 shrink-0" />
                           <span className="truncate">
