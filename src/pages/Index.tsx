@@ -1943,14 +1943,16 @@ export default function App() {
   </div>
 </div>
 <script>
-  var filhos = {}
-  document.querySelectorAll('tbody tr[data-pai]').forEach(function(r){
-    var p = r.dataset.pai; if(!p) return
-    if(!filhos[p]) filhos[p]=[]
-    filhos[p].push(r.dataset.id)
-  })
-
   var filtroAtual = 'all'
+  var nivelAtual = 2   // começa expandido até nível 2
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+  function passaFiltro(r){
+    var lac = parseInt(r.dataset.lacunas||0)
+    if(filtroAtual==='aus') return lac > 0
+    if(filtroAtual==='ok')  return lac === 0
+    return true
+  }
 
   function syncChk(id){
     var chk = document.querySelector('.grp-chk[data-grp-id="'+id+'"]')
@@ -1959,6 +1961,35 @@ export default function App() {
     chk.checked = f ? f.style.display !== 'none' : false
   }
 
+  // ── renderizar: aplica filtroAtual + nivelAtual juntos ───────────────────
+  function renderizar(){
+    var nMax = nivelAtual
+
+    // 1. Analíticas: passa filtro E nível
+    document.querySelectorAll('tbody tr[data-type="A"]').forEach(function(r){
+      var niv = parseInt(r.dataset.nivel||1)
+      r.style.display = (passaFiltro(r) && niv <= nMax) ? '' : 'none'
+    })
+
+    // 2. Sintéticas: bottom-up
+    var sins = Array.from(document.querySelectorAll('tbody tr[data-type="S"]'))
+    sins.sort(function(a,b){ return parseInt(b.dataset.nivel)-parseInt(a.dataset.nivel) })
+    sins.forEach(function(r){
+      var niv = parseInt(r.dataset.nivel||1)
+      if(niv > nMax){ r.style.display='none'; return }
+      // Nível 1: sempre visível (cabeçalhos do plano)
+      if(niv === 1){ r.style.display=''; return }
+      // Demais: visível se tiver filho visível
+      var temFilho = Array.from(document.querySelectorAll('tbody tr[data-pai="'+r.dataset.id+'"]'))
+        .some(function(c){ return c.style.display !== 'none' })
+      r.style.display = (filtroAtual==='all' || temFilho) ? '' : 'none'
+    })
+
+    // 3. Sincroniza checkboxes
+    document.querySelectorAll('.grp-chk').forEach(function(c){ syncChk(c.dataset.grpId) })
+  }
+
+  // ── toggle individual de checkbox ────────────────────────────────────────
   function setVisible(id, vis){
     document.querySelectorAll('tbody tr[data-pai="'+id+'"]').forEach(function(r){
       r.style.display = vis ? '' : 'none'
@@ -1967,73 +1998,41 @@ export default function App() {
     syncChk(id)
   }
 
-  function toggleGrupo(id, checked){
-    setVisible(id, checked)
+  function toggleGrupo(id, checked){ setVisible(id, checked) }
+
+  // ── filtrar ──────────────────────────────────────────────────────────────
+  function filtrar(f, btn){
+    filtroAtual = f
+    document.querySelectorAll('.fbtn').forEach(function(b){ b.classList.remove('act') })
+    btn.classList.add('act')
+    renderizar()
   }
 
+  // ── níveis ────────────────────────────────────────────────────────────────
   function expandNivel(n){
-    document.querySelectorAll('tbody tr').forEach(function(r){
-      var niv = parseInt(r.dataset.nivel||1)
-      r.style.display = niv <= n ? '' : 'none'
-    })
-    document.querySelectorAll('.grp-chk').forEach(function(c){
-      syncChk(c.dataset.grpId)
-    })
+    nivelAtual = n
+    renderizar()
     document.querySelectorAll('.lbtn').forEach(function(b){ b.classList.remove('act') })
     event.target.classList.add('act')
   }
 
   function expandTudo(){
-    document.querySelectorAll('tbody tr').forEach(function(r){
-      if(filtroAtual==='all') r.style.display=''
-      else applyFiltro(r, filtroAtual)
-    })
-    document.querySelectorAll('.grp-chk').forEach(function(c){ c.checked=true })
+    nivelAtual = 99
+    renderizar()
     document.querySelectorAll('.lbtn').forEach(function(b){ b.classList.remove('act') })
   }
 
   function recolherTudo(){
+    nivelAtual = 1
+    // Nivel 1 sintéticas sempre visíveis; tudo mais oculto
     document.querySelectorAll('tbody tr').forEach(function(r){
-      if(parseInt(r.dataset.nivel||1) > 1) r.style.display='none'
+      r.style.display = parseInt(r.dataset.nivel||1) === 1 ? '' : 'none'
     })
     document.querySelectorAll('.grp-chk').forEach(function(c){ c.checked=false })
     document.querySelectorAll('.lbtn').forEach(function(b){ b.classList.remove('act') })
   }
 
-  function applyFiltro(r, f){
-    var tipo = r.dataset.type
-    if(tipo === 'S'){
-      // Grupo: visível se tiver algum filho visível após filtro
-      return true
-    }
-    var lacunas = parseInt(r.dataset.lacunas||0)
-    if(f === 'all') r.style.display=''
-    else if(f === 'aus') r.style.display = lacunas > 0 ? '' : 'none'
-    else if(f === 'ok') r.style.display = lacunas === 0 ? '' : 'none'
-  }
-
-  function filtrar(f, btn){
-    filtroAtual = f
-    document.querySelectorAll('.fbtn').forEach(function(b){ b.classList.remove('act') })
-    btn.classList.add('act')
-    // Aplica filtro nas analíticas
-    document.querySelectorAll('tbody tr[data-type="A"]').forEach(function(r){
-      applyFiltro(r, f)
-    })
-    // Mostra/esconde sintéticas baseado em filhos visíveis
-    var sinRows = []
-    document.querySelectorAll('tbody tr[data-type="S"]').forEach(function(r){ sinRows.push(r) })
-    // Processa de baixo pra cima (maiores níveis primeiro)
-    sinRows.sort(function(a,b){ return parseInt(b.dataset.nivel)-parseInt(a.dataset.nivel) })
-    sinRows.forEach(function(r){
-      var id = r.dataset.id
-      var temFilhoVis = Array.from(document.querySelectorAll('tbody tr[data-pai="'+id+'"]'))
-        .some(function(c){ return c.style.display !== 'none' })
-      r.style.display = (f === 'all' || temFilhoVis) ? '' : 'none'
-    })
-  }
-
-  expandNivel(2)
+  renderizar()
 </script>
 </body></html>`
 
