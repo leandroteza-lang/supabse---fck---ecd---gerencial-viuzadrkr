@@ -1800,7 +1800,8 @@ export default function App() {
           : ''
         return `<tr class="tr-sin" data-id="${contaEsc}" data-pai="${pai}" data-nivel="${acc.nivel}" data-type="S" data-lacunas="${nLac}">
           <td class="mono sin-td" style="padding-left:${indent + 4}px">
-            <span class="chev" onclick="toggleGrupo('${contaEsc}')">▼</span>${contaEsc}
+            <input type="checkbox" class="grp-chk" data-grp-id="${contaEsc}" onchange="toggleGrupo('${contaEsc}',this.checked)" checked title="Marcar para expandir / desmarcar para recolher">
+            ${contaEsc}
           </td>
           <td class="nome sin-nome">${esc(acc.nome)} ${lacBadge}</td>
           ${cells}
@@ -1886,8 +1887,7 @@ export default function App() {
   .nome{color:var(--text)}
   .sin-td{color:var(--indigo);font-weight:800;font-size:11px}
   .sin-nome{font-weight:700;color:var(--indigo)}
-  .chev{display:inline-block;width:18px;text-align:center;cursor:pointer;color:var(--indigo);font-size:10px;user-select:none;opacity:.8}
-  .chev:hover{opacity:1}
+  .grp-chk{width:14px;height:14px;cursor:pointer;accent-color:var(--indigo);margin-right:5px;vertical-align:middle;flex-shrink:0;position:relative;top:-1px}
   .cel{text-align:center;font-weight:800;font-size:13px}
   .sin-cel{text-align:center;color:var(--text2);font-size:11px}
   .ok{color:var(--green)}
@@ -1952,20 +1952,23 @@ export default function App() {
 
   var filtroAtual = 'all'
 
+  function syncChk(id){
+    var chk = document.querySelector('.grp-chk[data-grp-id="'+id+'"]')
+    if(!chk) return
+    var f = document.querySelector('tbody tr[data-pai="'+id+'"]')
+    chk.checked = f ? f.style.display !== 'none' : false
+  }
+
   function setVisible(id, vis){
     document.querySelectorAll('tbody tr[data-pai="'+id+'"]').forEach(function(r){
       r.style.display = vis ? '' : 'none'
       if(!vis) setVisible(r.dataset.id, false)
     })
-    var chev = document.querySelector('.chev[onclick*="\\'' + id + '\\'"]')
-    if(chev) chev.textContent = vis ? '▼' : '▶'
+    syncChk(id)
   }
 
-  function toggleGrupo(id){
-    var filhosDiretos = document.querySelectorAll('tbody tr[data-pai="'+id+'"]')
-    if(!filhosDiretos.length) return
-    var aberto = filhosDiretos[0].style.display !== 'none'
-    setVisible(id, !aberto)
+  function toggleGrupo(id, checked){
+    setVisible(id, checked)
   }
 
   function expandNivel(n){
@@ -1973,10 +1976,8 @@ export default function App() {
       var niv = parseInt(r.dataset.nivel||1)
       r.style.display = niv <= n ? '' : 'none'
     })
-    document.querySelectorAll('.chev').forEach(function(c){
-      var id = c.getAttribute('onclick').match(/'([^']+)'/)[1]
-      var f = document.querySelectorAll('tbody tr[data-pai="'+id+'"]')[0]
-      if(f) c.textContent = f.style.display !== 'none' ? '▼' : '▶'
+    document.querySelectorAll('.grp-chk').forEach(function(c){
+      syncChk(c.dataset.grpId)
     })
     document.querySelectorAll('.lbtn').forEach(function(b){ b.classList.remove('act') })
     event.target.classList.add('act')
@@ -1987,7 +1988,7 @@ export default function App() {
       if(filtroAtual==='all') r.style.display=''
       else applyFiltro(r, filtroAtual)
     })
-    document.querySelectorAll('.chev').forEach(function(c){ c.textContent='▼' })
+    document.querySelectorAll('.grp-chk').forEach(function(c){ c.checked=true })
     document.querySelectorAll('.lbtn').forEach(function(b){ b.classList.remove('act') })
   }
 
@@ -1995,7 +1996,7 @@ export default function App() {
     document.querySelectorAll('tbody tr').forEach(function(r){
       if(parseInt(r.dataset.nivel||1) > 1) r.style.display='none'
     })
-    document.querySelectorAll('.chev').forEach(function(c){ c.textContent='▶' })
+    document.querySelectorAll('.grp-chk').forEach(function(c){ c.checked=false })
     document.querySelectorAll('.lbtn').forEach(function(b){ b.classList.remove('act') })
   }
 
