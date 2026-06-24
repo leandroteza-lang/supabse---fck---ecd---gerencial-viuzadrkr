@@ -966,6 +966,7 @@ export default function App() {
   const [showRecorrenciaConfig, setShowRecorrenciaConfig] = useState(false)
   const [recorrenciaSearch, setRecorrenciaSearch] = useState('')
   const [ausenciaDetalheConta, setAusenciaDetalheConta] = useState<string | null>(null)
+  const [soAnaliticas, setSoAnaliticas] = useState(false)
   const [ausenciasPanelOculto, setAusenciasPanelOculto] = useState(false)
   const [ausenciasPanelPos, setAusenciasPanelPos] = useState<{ x: number; y: number } | null>(null)
   const ausenciasPanelRef = useRef<HTMLDivElement>(null)
@@ -5240,7 +5241,8 @@ export default function App() {
     const filtroDiv = soDivergencias && (avActive || ahActive)
     const filtroAus = soAusencias && recorrentesSet.size > 0
     const filtroLac = soLacunas
-    if (!filtroDiv && !filtroAus && !filtroLac) return orderedBalanceteRows
+    const filtroAna = soAnaliticas
+    if (!filtroDiv && !filtroAus && !filtroLac && !filtroAna) return orderedBalanceteRows
     const allP = monthlyData.periods
 
     const temAus = (acc: any) => {
@@ -5280,18 +5282,30 @@ export default function App() {
         return getRawNumber(sld.debito) === 0 && getRawNumber(sld.credito) === 0
       })
 
+    // "Somente analíticas" — retorna direto, sem manter pais
+    if (filtroAna && !filtroDiv && !filtroAus && !filtroLac) {
+      return orderedBalanceteRows.filter((acc: any) => acc.tipo === 'A')
+    }
+
     const keep = new Set<string>()
     orderedBalanceteRows.forEach((acc: any) => {
+      // para filtros que precisam dos pais, só considera analíticas como candidatas
+      const isCandidate = !filtroAna || acc.tipo === 'A'
       if (
-        (filtroDiv && diverge(acc)) ||
-        (filtroAus && temAus(acc)) ||
-        (filtroLac && temLacuna(acc))
+        isCandidate && (
+          (filtroDiv && diverge(acc)) ||
+          (filtroAus && temAus(acc)) ||
+          (filtroLac && temLacuna(acc))
+        )
       ) {
         keep.add(acc.conta)
-        let par = accountParentMap[acc.conta]
-        while (par) {
-          keep.add(par)
-          par = accountParentMap[par]
+        if (!filtroAna) {
+          // inclui pais apenas quando não estamos em modo "só analíticas"
+          let par = accountParentMap[acc.conta]
+          while (par) {
+            keep.add(par)
+            par = accountParentMap[par]
+          }
         }
       }
     })
@@ -5305,6 +5319,7 @@ export default function App() {
     recorrentesSet,
     showAV,
     showAH,
+    soAnaliticas,
     activeProfileId,
     analysisProfiles,
     periodsToDisplay,
@@ -9044,6 +9059,19 @@ export default function App() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
+
+                    <button
+                      onClick={() => setSoAnaliticas(v => !v)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all shadow-sm whitespace-nowrap ${
+                        soAnaliticas
+                          ? 'bg-indigo-600 text-white border border-indigo-600 hover:bg-indigo-700'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                      title="Exibir somente contas analíticas (último nível, sem grupos sintéticos)"
+                    >
+                      <Filter className="w-4 h-4" />
+                      Somente analíticas
+                    </button>
 
                     <div className="relative period-dropdown-container z-30 w-full sm:w-auto">
                       <button
