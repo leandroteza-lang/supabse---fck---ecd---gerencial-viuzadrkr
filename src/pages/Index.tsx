@@ -9822,7 +9822,7 @@ export default function App() {
                               <PopoverTrigger asChild>
                                 <span
                                   onClick={(e) => e.stopPropagation()}
-                                  className={`text-[11px] font-mono border-b border-dotted cursor-pointer hover:opacity-80 transition-opacity ${isDarkBg ? 'text-white/70 border-white/40' : isP2 ? 'text-indigo-700 font-bold border-indigo-300' : 'text-blue-800/70 border-blue-800/40'}`}
+                                  className={`text-[0.9em] font-mono border-b border-dotted cursor-pointer hover:opacity-80 transition-opacity ${isDarkBg ? 'text-white/70 border-white/40' : isP2 ? 'text-indigo-700 font-bold border-indigo-300' : 'text-blue-800/70 border-blue-800/40'}`}
                                   title="Clique para ver a memória de cálculo"
                                 >
                                   {avPct.toFixed(2)}%
@@ -10261,7 +10261,7 @@ export default function App() {
                                         <PopoverTrigger asChild>
                                           <span
                                             onClick={(e) => e.stopPropagation()}
-                                            className={`text-[11px] font-mono border-b border-dotted border-current cursor-pointer hover:opacity-80 transition-opacity ${colorClass}`}
+                                            className={`text-[0.9em] font-mono border-b border-dotted border-current cursor-pointer hover:opacity-80 transition-opacity ${colorClass}`}
                                             title="Clique para ver a memória de cálculo"
                                           >
                                             {ahPct > 0 ? '+' : ''}
@@ -10330,7 +10330,7 @@ export default function App() {
                                 } else if (rawVal > 0 && prevVal === 0) {
                                   ahContent = (
                                     <span
-                                      className={`text-[11px] font-mono ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
+                                      className={`text-[0.9em] font-mono ${isDarkBg ? 'text-emerald-400' : 'text-emerald-600'}`}
                                       title="Análise Horizontal (vs Mês Anterior)"
                                     >
                                       N/A (Novo)
@@ -10386,7 +10386,7 @@ export default function App() {
                                           : 'text-slate-400'
                                   deltaLabel = (
                                     <span
-                                      className={`text-[11px] font-mono ${dColor}`}
+                                      className={`text-[0.9em] font-mono ${dColor}`}
                                       title="Variação em R$ vs período anterior"
                                     >
                                       {ocultarValores
