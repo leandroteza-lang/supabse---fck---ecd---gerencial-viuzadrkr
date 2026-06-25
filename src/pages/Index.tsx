@@ -13200,8 +13200,10 @@ export default function App() {
                         )}
                         {sec.items.map((item, ii) => {
                           const noteOpen = clExpandedNotes[item.id]
-                          const prevItem = ii > 0 ? sec.items[ii - 1] : null
-                          const locked = prevItem?.isPrereq && !prevItem?.checked
+                          // Pré-requisito efetivo: só prevalece se o item for obrigatório (não facultativo)
+                          const isEffectivePrereq = (it) => it.isPrereq && it.required !== false
+                          // Todos os itens anteriores que são pré-req efetivo e ainda não checados bloqueiam os seguintes
+                          const locked = ii > 0 && sec.items.slice(0, ii).some((prev) => isEffectivePrereq(prev) && !prev.checked)
                           const itemNum = `${si + 1}.${ii + 1}`
                           return (
                             <div key={item.id} className={`mb-1.5 transition-opacity ${locked ? 'opacity-40' : ''}`}>
@@ -13229,11 +13231,16 @@ export default function App() {
                                     {!item.required && (
                                       <span className="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">facultativo</span>
                                     )}
-                                    {item.isPrereq && !item.checked && (
-                                      <span className="text-[9px] font-bold text-violet-600 bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded-full">🔒 pré-req do próximo</span>
+                                    {/* Pré-req só prevalece se for obrigatório */}
+                                    {item.isPrereq && item.required !== false && !item.checked && (
+                                      <span className="text-[9px] font-bold text-violet-600 bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded-full">🔒 pré-req dos seguintes</span>
                                     )}
-                                    {item.isPrereq && item.checked && (
+                                    {item.isPrereq && item.required !== false && item.checked && (
                                       <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">✓ pré-req concluído</span>
+                                    )}
+                                    {/* Facultativo com pré-req: avisa que o bloqueio está inativo */}
+                                    {item.isPrereq && item.required === false && (
+                                      <span className="text-[9px] font-bold text-slate-400 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded-full">pré-req inativo (facultativo)</span>
                                     )}
                                   </div>
                                 </div>
