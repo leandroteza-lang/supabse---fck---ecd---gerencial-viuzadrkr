@@ -1506,7 +1506,7 @@ export default function App() {
   const [customMapping, setCustomMapping] = useState(() => getSavedState('customMapping', {}))
   const [customDaMapping, setCustomDaMapping] = useState(() => getSavedState('customDaMapping', {}))
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false)
-  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false)
+  const [isDreAuditModalOpen, setIsDreAuditModalOpen] = useState(false)
   const [auditFilter, setAuditFilter] = useState<'all' | 'auto'>('auto')
   const [auditSearch, setAuditSearch] = useState('')
   const [mappingSearch, setMappingSearch] = useState('')
@@ -7195,7 +7195,7 @@ export default function App() {
                   </div>
 
                   <button
-                    onClick={() => { setAuditFilter('auto'); setAuditSearch(''); setIsAuditModalOpen(true) }}
+                    onClick={() => { setAuditFilter('auto'); setAuditSearch(''); setIsDreAuditModalOpen(true) }}
                     className="w-full sm:w-auto flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 px-5 py-2.5 rounded-lg font-bold transition-all shadow-sm"
                     title="Identificar contas sem mapeamento explícito e corrigir"
                   >
@@ -11536,7 +11536,7 @@ export default function App() {
       )}
 
       {/* --- MODAL DE AUDITORIA DRE --- */}
-      {isAuditModalOpen && (() => {
+      {isDreAuditModalOpen && (() => {
         const allAccs = uniqueResultAccounts as any[]
         const getGroup = (a: any) =>
           customMapping[a.conta] || getDefaultClassification(a.conta, a.nome, a.indDc)
@@ -11577,7 +11577,7 @@ export default function App() {
                     </p>
                   </div>
                 </div>
-                <button onClick={() => setIsAuditModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+                <button onClick={() => setIsDreAuditModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
                   <X className="w-6 h-6" />
                 </button>
               </div>
@@ -11698,7 +11698,7 @@ export default function App() {
                   Alterações são salvas automaticamente e refletidas na DRE imediatamente.
                 </span>
                 <button
-                  onClick={() => setIsAuditModalOpen(false)}
+                  onClick={() => setIsDreAuditModalOpen(false)}
                   className="bg-slate-900 hover:bg-indigo-600 text-white px-8 py-2.5 rounded-lg font-bold transition-all shadow-md"
                 >
                   Concluir Auditoria
