@@ -7232,7 +7232,7 @@ export default function App() {
                   return accumBasePeriods.slice(0, idx + 1).reduce((s: number, p: any) => s + (acc.saldos[p] || 0), 0)
                 }
                 return (
-                <div className="overflow-x-auto custom-scrollbar">
+                <div className="overflow-auto custom-scrollbar" style={{ maxHeight: 'calc(100vh - 320px)' }}>
                   <Table
                     className="w-full text-left dre-viz-table"
                     data-grid={drePrefs.showGridlines ? 'on' : 'off'}
@@ -7243,15 +7243,15 @@ export default function App() {
                       ['--dre-gl']: drePrefs.gridlineColor,
                     } as any}
                   >
-                    <TableHeader>
-                      <TableRow className="bg-slate-50/80 border-b-2 border-slate-200 hover:bg-slate-50/80">
-                        <TableHead className="p-5 font-bold text-slate-500 uppercase tracking-widest text-[11px] min-w-[400px]">
+                    <TableHeader className="sticky top-0 z-10">
+                      <TableRow className="border-b-2 border-slate-200 hover:bg-slate-50/80">
+                        <TableHead className="p-5 font-bold text-slate-500 uppercase tracking-widest text-[11px] min-w-[400px] bg-slate-50 sticky left-0 z-20">
                           Estrutura Contábil Analítica
                         </TableHead>
                         {drePeriodsToDisplay.map((period: any) => (
                           <TableHead
                             key={period}
-                            className={`p-5 whitespace-nowrap text-${dreValAlign} border-l border-slate-100 h-auto`}
+                            className={`p-5 whitespace-nowrap text-${dreValAlign} border-l border-slate-100 h-auto bg-slate-50`}
                           >
                             <div className="text-[10px] text-slate-400 uppercase font-bold tracking-widest mb-1">
                               {period.split(' a ')[0].substring(3)}
