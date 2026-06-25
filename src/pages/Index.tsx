@@ -12772,7 +12772,7 @@ export default function App() {
                               Padrão (Ativo Total / Receita Líquida)
                             </SelectItem>
                             <SelectItem value="parent">Relativa à Conta Pai Imediata</SelectItem>
-                            <SelectItem value="lowest_synthetic">Relativa ao Sub-nível Mais Baixo (Grupo Folha = 100%)</SelectItem>
+                            <SelectItem value="lowest_synthetic">Relativa Último Sub-Nível</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
