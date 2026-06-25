@@ -83,6 +83,10 @@ import {
   EyeOff,
   GripHorizontal,
   Pin,
+  ClipboardList,
+  Trash2,
+  ListChecks,
+  StickyNote,
 } from 'lucide-react'
 import localforage from 'localforage'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -881,6 +885,63 @@ const EditableTitle = ({
   )
 }
 
+// ─── Roteiros / Checklists ────────────────────────────────────────────────────
+const CHECKLIST_COLORS = ['indigo','rose','amber','emerald','violet','sky','orange'] as const
+
+const CHECKLIST_TEMPLATES = [
+  {
+    name: 'Reunião Mensal de Resultados',
+    emoji: '📊',
+    color: 'indigo',
+    sections: [
+      { title: 'Abertura', items: ['Confirmar empresa e período selecionado', 'Verificar se todos os dados foram importados', 'Apresentar visão geral do dashboard'] },
+      { title: 'Receitas', items: ['Receita Bruta — apresentar variação AH%', 'Deduções de receita (impostos, devoluções)', 'Receita Líquida — evolução vs. período anterior'] },
+      { title: 'Custos e Despesas', items: ['CPV/CSP — Custo dos Produtos/Serviços', 'Top 5 despesas operacionais', 'Despesas financeiras — taxa e volume'] },
+      { title: 'Resultado', items: ['EBITDA — margem %', 'Lucro/Prejuízo Líquido', 'Análise Horizontal vs. período anterior'] },
+      { title: 'Encerramento', items: ['Pontos de atenção identificados', 'Próximas ações definidas', 'Data da próxima reunião confirmada'] },
+    ],
+  },
+  {
+    name: 'Fechamento de Período',
+    emoji: '📅',
+    color: 'amber',
+    sections: [
+      { title: 'Importação', items: ['Exportar SPED ECD do sistema contábil', 'Importar arquivo no BoardECD', 'Confirmar empresa e período importados'] },
+      { title: 'Validação SPED', items: ['Executar Validação SPED — sem divergências', 'Saldo inicial = saldo final do período anterior', 'Conferir totais J100 / J150'] },
+      { title: 'Conferência', items: ['Ausências de contas recorrentes verificadas', 'Mapa de Movimentação analisado', 'Lacunas de movimento identificadas'] },
+      { title: 'Backup e Registro', items: ['Exportar balancete em Excel/PDF', 'Registrar data de fechamento', 'Comunicar equipe sobre o encerramento'] },
+    ],
+  },
+  {
+    name: 'Auditoria Rápida',
+    emoji: '🔍',
+    color: 'rose',
+    sections: [
+      { title: 'Integridade dos Dados', items: ['Sem divergências de saldo (J100/J150)', 'Saldo inicial correto', 'Contas recorrentes sem ausências'] },
+      { title: 'Análises Percentuais', items: ['AV% — despesas dentro do limite do perfil', 'AH% — variações atípicas investigadas', 'Contas com alerta revisadas'] },
+      { title: 'Mapa de Movimentação', items: ['Contas sem movimento identificadas', 'Lacunas de período analisadas', 'Grupos com comportamento fora do padrão'] },
+    ],
+  },
+  {
+    name: 'DRE Analítica — Apresentação',
+    emoji: '📈',
+    color: 'emerald',
+    sections: [
+      { title: 'Preparação', items: ['Configurar layout DRE (grupos e subgrupos)', 'Selecionar período de análise', 'Definir base de comparação AH%'] },
+      { title: 'Análise', items: ['Receita Líquida — variação e margem', 'EBITDA ajustado', 'Resultado antes e depois dos impostos'] },
+      { title: 'Apresentação', items: ['Compartilhar relatório DRE em HTML', 'Destacar principais variações', 'Registrar observações nos pontos críticos'] },
+    ],
+  },
+]
+
+function makeCLSection(title: string, items: string[]) {
+  return {
+    id: crypto.randomUUID(),
+    title,
+    items: items.map((text) => ({ id: crypto.randomUUID(), text, checked: false, note: '' })),
+  }
+}
+
 export default function App() {
   const { user, signOut, isAdmin } = useAuth()
   const { toast } = useToast()
@@ -999,6 +1060,200 @@ export default function App() {
     document.addEventListener('mousemove', handleMove)
     document.addEventListener('mouseup', handleUp)
   }, [])
+
+  // ─── Roteiros / Checklists ──────────────────────────────────────────────────
+  const [checklists, setChecklists] = useState(() => getSavedState('checklists', []))
+  const [activeChecklistId, setActiveChecklistId] = useState(() => getSavedState('activeChecklistId', null))
+  const [showChecklistPanel, setShowChecklistPanel] = useState(false)
+  const [showChecklistManager, setShowChecklistManager] = useState(false)
+  const [checklistPanelPos, setChecklistPanelPos] = useState(null)
+  const [checklistPanelMinimized, setChecklistPanelMinimized] = useState(false)
+  const [clEditId, setClEditId] = useState(null)        // id do checklist sendo editado no manager
+  const [clNewSectionTitle, setClNewSectionTitle] = useState('')
+  const [clNewItemTexts, setClNewItemTexts] = useState({}) // { [sectionId]: string }
+  const [clExpandedNotes, setClExpandedNotes] = useState({}) // { [itemId]: bool }
+  const [clManagerTab, setClManagerTab] = useState('list') // 'list'|'edit'|'templates'
+  const checklistPanelRef = useRef(null)
+
+  const activeChecklist = checklists.find((c) => c.id === activeChecklistId) || checklists[0] || null
+
+  const clStats = (cl) => {
+    if (!cl) return { total: 0, done: 0, pct: 0 }
+    const total = cl.sections.reduce((a, s) => a + s.items.length, 0)
+    const done = cl.sections.reduce((a, s) => a + s.items.filter((i) => i.checked).length, 0)
+    return { total, done, pct: total === 0 ? 0 : Math.round((done / total) * 100) }
+  }
+
+  const pendingChecklistCount = (() => {
+    const cl = activeChecklist
+    if (!cl || !showChecklistPanel) return 0
+    return cl.sections.reduce((a, s) => a + s.items.filter((i) => !i.checked).length, 0)
+  })()
+
+  const toggleCheckItem = (clId, secId, itemId) => {
+    setChecklists((prev) =>
+      prev.map((cl) =>
+        cl.id !== clId ? cl : {
+          ...cl,
+          sections: cl.sections.map((s) =>
+            s.id !== secId ? s : {
+              ...s,
+              items: s.items.map((it) => it.id !== itemId ? it : { ...it, checked: !it.checked }),
+            }
+          ),
+        }
+      )
+    )
+  }
+
+  const setCheckItemNote = (clId, secId, itemId, note) => {
+    setChecklists((prev) =>
+      prev.map((cl) =>
+        cl.id !== clId ? cl : {
+          ...cl,
+          sections: cl.sections.map((s) =>
+            s.id !== secId ? s : {
+              ...s,
+              items: s.items.map((it) => it.id !== itemId ? it : { ...it, note }),
+            }
+          ),
+        }
+      )
+    )
+  }
+
+  const resetChecklist = (clId) => {
+    setChecklists((prev) =>
+      prev.map((cl) =>
+        cl.id !== clId ? cl : {
+          ...cl,
+          lastReset: new Date().toLocaleDateString('pt-BR'),
+          sections: cl.sections.map((s) => ({
+            ...s, items: s.items.map((it) => ({ ...it, checked: false })),
+          })),
+        }
+      )
+    )
+  }
+
+  const createChecklist = (name, emoji, color, fromTemplate = null) => {
+    const sections = fromTemplate
+      ? fromTemplate.sections.map((s) => makeCLSection(s.title, s.items))
+      : [makeCLSection('Seção 1', [])]
+    const id = crypto.randomUUID()
+    const novo = { id, name: name || fromTemplate?.name || 'Novo Roteiro', emoji: emoji || fromTemplate?.emoji || '📋', color: color || fromTemplate?.color || 'indigo', sections, createdAt: new Date().toLocaleDateString('pt-BR') }
+    setChecklists((prev) => [...prev, novo])
+    setActiveChecklistId(id)
+    return id
+  }
+
+  const deleteChecklist = (clId) => {
+    setChecklists((prev) => prev.filter((c) => c.id !== clId))
+    if (activeChecklistId === clId) setActiveChecklistId(checklists.find((c) => c.id !== clId)?.id || null)
+    if (clEditId === clId) setClEditId(null)
+  }
+
+  const updateCL = (clId, updates) => {
+    setChecklists((prev) => prev.map((c) => c.id !== clId ? c : { ...c, ...updates }))
+  }
+
+  const addCLSection = (clId, title) => {
+    if (!title.trim()) return
+    const sec = makeCLSection(title.trim(), [])
+    setChecklists((prev) => prev.map((c) => c.id !== clId ? c : { ...c, sections: [...c.sections, sec] }))
+    setClNewSectionTitle('')
+  }
+
+  const deleteCLSection = (clId, secId) => {
+    setChecklists((prev) =>
+      prev.map((c) => c.id !== clId ? c : { ...c, sections: c.sections.filter((s) => s.id !== secId) })
+    )
+  }
+
+  const addCLItem = (clId, secId, text) => {
+    if (!text.trim()) return
+    const item = { id: crypto.randomUUID(), text: text.trim(), checked: false, note: '' }
+    setChecklists((prev) =>
+      prev.map((c) =>
+        c.id !== clId ? c : {
+          ...c,
+          sections: c.sections.map((s) =>
+            s.id !== secId ? s : { ...s, items: [...s.items, item] }
+          ),
+        }
+      )
+    )
+    setClNewItemTexts((prev) => ({ ...prev, [secId]: '' }))
+  }
+
+  const deleteCLItem = (clId, secId, itemId) => {
+    setChecklists((prev) =>
+      prev.map((c) =>
+        c.id !== clId ? c : {
+          ...c,
+          sections: c.sections.map((s) =>
+            s.id !== secId ? s : { ...s, items: s.items.filter((it) => it.id !== itemId) }
+          ),
+        }
+      )
+    )
+  }
+
+  const moveCLItem = (clId, secId, itemId, dir) => {
+    setChecklists((prev) =>
+      prev.map((c) =>
+        c.id !== clId ? c : {
+          ...c,
+          sections: c.sections.map((s) => {
+            if (s.id !== secId) return s
+            const idx = s.items.findIndex((it) => it.id === itemId)
+            const newIdx = idx + dir
+            if (newIdx < 0 || newIdx >= s.items.length) return s
+            const items = [...s.items]
+            ;[items[idx], items[newIdx]] = [items[newIdx], items[idx]]
+            return { ...s, items }
+          }),
+        }
+      )
+    )
+  }
+
+  const startChecklistDrag = useCallback((e) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    const panel = checklistPanelRef.current
+    if (!panel) return
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'grabbing'
+    const rect = panel.getBoundingClientRect()
+    const initX = rect.left, initY = rect.top
+    const startMX = e.clientX, startMY = e.clientY
+    setChecklistPanelPos({ x: initX, y: initY })
+    const handleMove = (me) => {
+      me.preventDefault()
+      setChecklistPanelPos({ x: initX + (me.clientX - startMX), y: initY + (me.clientY - startMY) })
+    }
+    const handleUp = () => {
+      document.removeEventListener('mousemove', handleMove)
+      document.removeEventListener('mouseup', handleUp)
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+    }
+    document.addEventListener('mousemove', handleMove)
+    document.addEventListener('mouseup', handleUp)
+  }, [])
+
+  const CL_COLOR_MAP = {
+    indigo: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700', badge: 'bg-indigo-600', bar: 'bg-indigo-500', btn: 'bg-indigo-600 hover:bg-indigo-700 text-white', ring: 'ring-indigo-400', dot: 'bg-indigo-500' },
+    rose:   { bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-700',   badge: 'bg-rose-600',   bar: 'bg-rose-500',   btn: 'bg-rose-600 hover:bg-rose-700 text-white',   ring: 'ring-rose-400',   dot: 'bg-rose-500' },
+    amber:  { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  badge: 'bg-amber-500',  bar: 'bg-amber-400',  btn: 'bg-amber-500 hover:bg-amber-600 text-white',  ring: 'ring-amber-400',  dot: 'bg-amber-400' },
+    emerald:{ bg: 'bg-emerald-50',border: 'border-emerald-200',text: 'text-emerald-700',badge: 'bg-emerald-600',bar: 'bg-emerald-500',btn: 'bg-emerald-600 hover:bg-emerald-700 text-white',ring: 'ring-emerald-400',dot: 'bg-emerald-500' },
+    violet: { bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-700', badge: 'bg-violet-600', bar: 'bg-violet-500', btn: 'bg-violet-600 hover:bg-violet-700 text-white', ring: 'ring-violet-400', dot: 'bg-violet-500' },
+    sky:    { bg: 'bg-sky-50',    border: 'border-sky-200',    text: 'text-sky-700',    badge: 'bg-sky-600',    bar: 'bg-sky-500',    btn: 'bg-sky-600 hover:bg-sky-700 text-white',    ring: 'ring-sky-400',    dot: 'bg-sky-500' },
+    orange: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', badge: 'bg-orange-500', bar: 'bg-orange-400', btn: 'bg-orange-500 hover:bg-orange-600 text-white', ring: 'ring-orange-400', dot: 'bg-orange-400' },
+  }
+
   // Com AV%/AH% visível, oculta as colunas de valor (Saldo, Acumulado, Média),
   // deixando literalmente só os índices. Sem índice, apenas mascara os valores.
   const soIndices = ocultarValores && (showAV || showAH)
@@ -2067,6 +2322,8 @@ export default function App() {
       activeProfileId,
       recorrentes,
       recorrenciaPresets,
+      checklists,
+      activeChecklistId,
     }
     localStorage.setItem('boardecd_config', JSON.stringify(configData))
 
@@ -2141,6 +2398,8 @@ export default function App() {
     activeProfileId,
     recorrentes,
     recorrenciaPresets,
+    checklists,
+    activeChecklistId,
     user,
     companyInfo,
   ])
@@ -12800,6 +13059,514 @@ export default function App() {
       `,
         }}
       />
+
+      {/* ─── CHECKLIST: botão global flutuante ─────────────────────────────── */}
+      {(() => {
+        const stats = clStats(activeChecklist)
+        const colorKey = activeChecklist?.color || 'indigo'
+        const cc = CL_COLOR_MAP[colorKey] || CL_COLOR_MAP.indigo
+        const pending = activeChecklist ? stats.total - stats.done : 0
+        return (
+          <div style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 300 }}>
+            <button
+              onClick={() => setShowChecklistPanel((v) => !v)}
+              className={`relative flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-2xl shadow-indigo-600/20 font-bold text-sm transition-all hover:scale-105 active:scale-95 ${showChecklistPanel ? 'bg-indigo-700 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}
+              title="Abrir Roteiro / Checklist"
+            >
+              <ClipboardList className="w-4 h-4" />
+              <span className="hidden sm:inline">Roteiro</span>
+              {pending > 0 && (
+                <span className="absolute -top-2 -right-2 bg-rose-500 text-white text-[10px] font-black min-w-5 h-5 rounded-full flex items-center justify-center px-1 shadow-lg">
+                  {pending > 99 ? '99+' : pending}
+                </span>
+              )}
+              {activeChecklist && stats.total > 0 && stats.pct === 100 && (
+                <span className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-lg">✓</span>
+              )}
+            </button>
+          </div>
+        )
+      })()}
+
+      {/* ─── CHECKLIST: painel flutuante arrastável ─────────────────────────── */}
+      {showChecklistPanel && (() => {
+        const cl = activeChecklist
+        const stats = clStats(cl)
+        const colorKey = cl?.color || 'indigo'
+        const cc = CL_COLOR_MAP[colorKey] || CL_COLOR_MAP.indigo
+        const isFloating = checklistPanelPos !== null
+        return (
+          <div
+            ref={checklistPanelRef}
+            style={isFloating
+              ? { position: 'fixed', left: checklistPanelPos.x, top: checklistPanelPos.y, zIndex: 290, width: 380, maxWidth: '96vw' }
+              : { position: 'fixed', bottom: 88, right: 28, zIndex: 290, width: 380, maxWidth: 'calc(100vw - 32px)' }
+            }
+            className={`rounded-2xl shadow-2xl border ${cc.border} ${cc.bg} flex flex-col overflow-hidden`}
+          >
+            {/* Header — drag handle */}
+            <div
+              className="flex items-center gap-2 px-3.5 py-2.5 cursor-grab active:cursor-grabbing select-none border-b border-white/40"
+              onMouseDown={startChecklistDrag}
+              title="Arraste para mover"
+            >
+              <GripHorizontal className="w-4 h-4 text-slate-400 shrink-0" />
+              <span className="text-lg">{cl?.emoji || '📋'}</span>
+              {/* Seletor de checklist */}
+              <select
+                value={activeChecklistId || ''}
+                onChange={(e) => setActiveChecklistId(e.target.value || null)}
+                onMouseDown={(e) => e.stopPropagation()}
+                className={`flex-1 min-w-0 bg-transparent font-bold text-sm ${cc.text} border-none outline-none cursor-pointer truncate`}
+              >
+                {checklists.length === 0 && <option value="">Sem roteiros</option>}
+                {checklists.map((c) => (
+                  <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>
+                ))}
+              </select>
+              <div className="flex items-center gap-1 shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => setChecklistPanelMinimized((v) => !v)}
+                  className="p-1 rounded-lg hover:bg-white/60 transition-colors"
+                  title={checklistPanelMinimized ? 'Expandir' : 'Minimizar'}
+                >
+                  <ChevronDown className={`w-4 h-4 ${cc.text} transition-transform ${checklistPanelMinimized ? 'rotate-180' : ''}`} />
+                </button>
+                <button
+                  onClick={() => { setShowChecklistManager(true); setClEditId(cl?.id || null); setClManagerTab(cl ? 'edit' : 'templates') }}
+                  className="p-1 rounded-lg hover:bg-white/60 transition-colors"
+                  title="Gerenciar roteiros"
+                >
+                  <Settings className={`w-3.5 h-3.5 ${cc.text}`} />
+                </button>
+                <button
+                  onClick={() => setShowChecklistPanel(false)}
+                  className="p-1 rounded-lg hover:bg-white/60 transition-colors"
+                  title="Fechar painel"
+                >
+                  <X className="w-4 h-4 text-slate-500" />
+                </button>
+              </div>
+            </div>
+
+            {!checklistPanelMinimized && (
+              <>
+                {/* Barra de progresso */}
+                {cl && stats.total > 0 && (
+                  <div className="px-3.5 pt-2.5 pb-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-xs font-bold ${cc.text}`}>{stats.done}/{stats.total} itens</span>
+                      <span className={`text-xs font-black ${stats.pct === 100 ? 'text-emerald-600' : cc.text}`}>{stats.pct}%{stats.pct === 100 ? ' ✓' : ''}</span>
+                    </div>
+                    <div className="h-1.5 bg-white/60 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-500 ${stats.pct === 100 ? 'bg-emerald-500' : cc.bar}`} style={{ width: `${stats.pct}%` }} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Seções e itens */}
+                {cl ? (
+                  <div className="overflow-y-auto flex-1 px-2 py-2 flex flex-col gap-2" style={{ maxHeight: 420 }}>
+                    {cl.sections.length === 0 && (
+                      <p className={`text-xs ${cc.text} text-center py-6 opacity-60`}>Nenhuma seção. Clique em ⚙ para editar.</p>
+                    )}
+                    {cl.sections.map((sec) => (
+                      <div key={sec.id} className="bg-white/70 rounded-xl px-3 pt-2.5 pb-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">{sec.title}</p>
+                        {sec.items.length === 0 && (
+                          <p className="text-[11px] text-slate-400 italic pb-1">Seção vazia</p>
+                        )}
+                        {sec.items.map((item) => {
+                          const noteOpen = clExpandedNotes[item.id]
+                          return (
+                            <div key={item.id} className="mb-1">
+                              <div className="flex items-start gap-2">
+                                <button
+                                  onClick={() => toggleCheckItem(cl.id, sec.id, item.id)}
+                                  className={`mt-0.5 w-4 h-4 rounded shrink-0 border-2 flex items-center justify-center transition-all ${item.checked ? `${cc.badge} border-transparent` : 'border-slate-300 bg-white hover:border-indigo-400'}`}
+                                >
+                                  {item.checked && <Check className="w-2.5 h-2.5 text-white" />}
+                                </button>
+                                <span className={`text-xs leading-snug flex-1 transition-all ${item.checked ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                                  {item.text}
+                                </span>
+                                <button
+                                  onClick={() => setClExpandedNotes((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+                                  className="shrink-0 p-0.5 rounded hover:bg-white transition-colors"
+                                  title={item.note ? 'Ver/editar nota' : 'Adicionar nota'}
+                                >
+                                  <StickyNote className={`w-3 h-3 ${item.note ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400'}`} />
+                                </button>
+                              </div>
+                              {noteOpen && (
+                                <div className="mt-1 ml-6">
+                                  <textarea
+                                    value={item.note || ''}
+                                    onChange={(e) => setCheckItemNote(cl.id, sec.id, item.id, e.target.value)}
+                                    placeholder="Nota opcional..."
+                                    rows={2}
+                                    className="w-full text-[11px] text-slate-600 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 resize-none outline-none focus:ring-1 focus:ring-amber-300"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3 py-8 px-4">
+                    <ClipboardList className="w-10 h-10 text-indigo-300" />
+                    <p className="text-sm text-slate-500 text-center">Nenhum roteiro criado ainda.<br />Crie a partir de um template ou do zero.</p>
+                    <button
+                      onClick={() => { setShowChecklistManager(true); setClManagerTab('templates') }}
+                      className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold transition-colors"
+                    >
+                      + Criar Roteiro
+                    </button>
+                  </div>
+                )}
+
+                {/* Footer */}
+                {cl && (
+                  <div className="flex items-center gap-2 px-3 py-2 border-t border-white/40">
+                    <button
+                      onClick={() => resetChecklist(cl.id)}
+                      className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 hover:text-slate-700 transition-colors px-2 py-1 rounded-lg hover:bg-white/60"
+                      title="Desmarcar todos os itens"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Resetar
+                    </button>
+                    {cl.lastReset && (
+                      <span className="text-[10px] text-slate-400">último reset: {cl.lastReset}</span>
+                    )}
+                    <div className="flex-1" />
+                    <button
+                      onClick={() => { setShowChecklistManager(true); setClEditId(cl.id); setClManagerTab('edit') }}
+                      className={`text-[11px] font-bold px-3 py-1 rounded-xl transition-colors ${cc.btn}`}
+                    >
+                      Editar
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ─── CHECKLIST: modal gestor completo ───────────────────────────────── */}
+      <Dialog open={showChecklistManager} onOpenChange={setShowChecklistManager}>
+        <DialogContent className="max-w-3xl w-full bg-white p-0 overflow-hidden" style={{ maxHeight: '90vh' }}>
+          <div className="flex h-full" style={{ minHeight: 520 }}>
+            {/* Sidebar */}
+            <div className="w-56 shrink-0 bg-slate-50 border-r border-slate-100 flex flex-col">
+              <div className="px-4 py-4 border-b border-slate-100">
+                <div className="flex items-center gap-2 mb-1">
+                  <ClipboardList className="w-4 h-4 text-indigo-600" />
+                  <h2 className="font-black text-slate-800 text-sm">Gestor de Roteiros</h2>
+                </div>
+                <p className="text-[11px] text-slate-400">Checklists para reuniões e processos</p>
+              </div>
+              {/* Tabs */}
+              <div className="flex flex-col gap-0.5 px-2 pt-2">
+                {[
+                  { k: 'list', label: 'Meus Roteiros', icon: ListChecks },
+                  { k: 'templates', label: 'Templates', icon: BookOpen },
+                ].map(({ k, label, icon: Icon }) => (
+                  <button
+                    key={k}
+                    onClick={() => setClManagerTab(k)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-left transition-all ${clManagerTab === k ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    <Icon className="w-3.5 h-3.5" /> {label}
+                  </button>
+                ))}
+                {clEditId && (
+                  <button
+                    onClick={() => setClManagerTab('edit')}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-left transition-all ${clManagerTab === 'edit' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    <Edit2 className="w-3.5 h-3.5" /> Editar Roteiro
+                  </button>
+                )}
+              </div>
+              <div className="flex-1" />
+              <div className="px-2 py-3 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    const id = createChecklist('Novo Roteiro', '📋', 'indigo')
+                    setClEditId(id)
+                    setClManagerTab('edit')
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-indigo-600 hover:bg-indigo-50 transition-colors border border-indigo-200 border-dashed"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Novo Roteiro
+                </button>
+              </div>
+            </div>
+
+            {/* Main */}
+            <div className="flex-1 overflow-y-auto flex flex-col" style={{ maxHeight: '90vh' }}>
+              {/* Tab: Meus Roteiros */}
+              {clManagerTab === 'list' && (
+                <div className="p-5 flex flex-col gap-3">
+                  <h3 className="font-black text-slate-800 text-base">Meus Roteiros</h3>
+                  {checklists.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3 py-12">
+                      <ClipboardList className="w-12 h-12 text-slate-200" />
+                      <p className="text-sm text-slate-400 text-center">Nenhum roteiro criado.<br />Use templates para começar rapidamente.</p>
+                      <button onClick={() => setClManagerTab('templates')} className="text-sm bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors">
+                        Ver Templates
+                      </button>
+                    </div>
+                  ) : (
+                    checklists.map((cl) => {
+                      const stats = clStats(cl)
+                      const cc = CL_COLOR_MAP[cl.color] || CL_COLOR_MAP.indigo
+                      const isActive = cl.id === activeChecklistId
+                      return (
+                        <div key={cl.id} className={`border rounded-2xl p-4 flex items-center gap-3 transition-all ${isActive ? `${cc.border} ${cc.bg}` : 'border-slate-100 bg-white hover:border-slate-200'}`}>
+                          <span className="text-2xl">{cl.emoji}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-bold text-sm truncate ${isActive ? cc.text : 'text-slate-800'}`}>{cl.name}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full transition-all ${stats.pct === 100 ? 'bg-emerald-500' : cc.bar}`} style={{ width: `${stats.pct}%` }} />
+                              </div>
+                              <span className="text-[10px] text-slate-400 whitespace-nowrap">{stats.done}/{stats.total}</span>
+                            </div>
+                            {cl.lastReset && <p className="text-[10px] text-slate-400 mt-0.5">último reset: {cl.lastReset}</p>}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {!isActive && (
+                              <button onClick={() => { setActiveChecklistId(cl.id) }} className="text-[11px] font-bold text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded-lg transition-colors" title="Ativar este roteiro">
+                                Ativar
+                              </button>
+                            )}
+                            {isActive && <span className="text-[10px] font-black text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">Ativo</span>}
+                            <button onClick={() => { setClEditId(cl.id); setClManagerTab('edit') }} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors" title="Editar">
+                              <Edit2 className="w-3.5 h-3.5 text-slate-400" />
+                            </button>
+                            <button onClick={() => deleteChecklist(cl.id)} className="p-1.5 rounded-lg hover:bg-rose-50 transition-colors" title="Excluir">
+                              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              )}
+
+              {/* Tab: Templates */}
+              {clManagerTab === 'templates' && (
+                <div className="p-5 flex flex-col gap-3">
+                  <div>
+                    <h3 className="font-black text-slate-800 text-base">Templates prontos</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Crie um roteiro a partir de um modelo pré-definido</p>
+                  </div>
+                  {CHECKLIST_TEMPLATES.map((tpl) => {
+                    const cc = CL_COLOR_MAP[tpl.color] || CL_COLOR_MAP.indigo
+                    const totalItems = tpl.sections.reduce((a, s) => a + s.items.length, 0)
+                    return (
+                      <div key={tpl.name} className={`border ${cc.border} ${cc.bg} rounded-2xl p-4`}>
+                        <div className="flex items-start gap-3">
+                          <span className="text-3xl">{tpl.emoji}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-bold text-sm ${cc.text}`}>{tpl.name}</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">{tpl.sections.length} seções · {totalItems} itens</p>
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {tpl.sections.map((s) => (
+                                <span key={s.title} className="text-[10px] bg-white/70 border border-white/80 text-slate-600 px-2 py-0.5 rounded-full font-medium">{s.title}</span>
+                              ))}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const id = createChecklist(tpl.name, tpl.emoji, tpl.color, tpl)
+                              setClEditId(id)
+                              setClManagerTab('edit')
+                            }}
+                            className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-xl transition-colors ${cc.btn}`}
+                          >
+                            Usar template
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Tab: Editar */}
+              {clManagerTab === 'edit' && (() => {
+                const cl = checklists.find((c) => c.id === clEditId)
+                if (!cl) return (
+                  <div className="flex items-center justify-center flex-1 p-8">
+                    <p className="text-sm text-slate-400">Selecione um roteiro para editar.</p>
+                  </div>
+                )
+                const cc = CL_COLOR_MAP[cl.color] || CL_COLOR_MAP.indigo
+                return (
+                  <div className="p-5 flex flex-col gap-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">{cl.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <input
+                          value={cl.name}
+                          onChange={(e) => updateCL(cl.id, { name: e.target.value })}
+                          className="w-full font-black text-slate-800 text-base bg-transparent border-b-2 border-slate-200 focus:border-indigo-400 outline-none pb-0.5"
+                          placeholder="Nome do roteiro"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">Criado em {cl.createdAt}</p>
+                      </div>
+                    </div>
+
+                    {/* Emoji e Cor */}
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Emoji</label>
+                        <input
+                          value={cl.emoji}
+                          onChange={(e) => updateCL(cl.id, { emoji: e.target.value })}
+                          className="w-16 text-center text-xl border border-slate-200 rounded-xl p-1 outline-none focus:ring-2 focus:ring-indigo-300"
+                          maxLength={2}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Cor</label>
+                        <div className="flex gap-1.5">
+                          {CHECKLIST_COLORS.map((cor) => {
+                            const c = CL_COLOR_MAP[cor]
+                            return (
+                              <button
+                                key={cor}
+                                onClick={() => updateCL(cl.id, { color: cor })}
+                                className={`w-6 h-6 rounded-full ${c.dot} transition-all ${cl.color === cor ? 'ring-2 ring-offset-1 ring-slate-400 scale-110' : 'opacity-60 hover:opacity-100'}`}
+                                title={cor}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Seções e itens */}
+                    <div className="flex flex-col gap-3">
+                      {cl.sections.map((sec, si) => (
+                        <div key={sec.id} className="border border-slate-100 rounded-2xl overflow-hidden">
+                          <div className="flex items-center gap-2 bg-slate-50 px-3 py-2">
+                            <input
+                              value={sec.title}
+                              onChange={(e) => {
+                                setChecklists((prev) => prev.map((c) => c.id !== cl.id ? c : {
+                                  ...c,
+                                  sections: c.sections.map((s) => s.id !== sec.id ? s : { ...s, title: e.target.value }),
+                                }))
+                              }}
+                              className="flex-1 text-xs font-bold text-slate-700 bg-transparent outline-none border-b border-transparent focus:border-slate-300"
+                              placeholder="Nome da seção"
+                            />
+                            <button onClick={() => deleteCLSection(cl.id, sec.id)} className="p-1 rounded-lg hover:bg-rose-50 transition-colors" title="Remover seção">
+                              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                            </button>
+                          </div>
+                          <div className="p-2 flex flex-col gap-1">
+                            {sec.items.map((item, ii) => (
+                              <div key={item.id} className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-slate-50 group">
+                                <div className={`w-3.5 h-3.5 rounded-sm border-2 shrink-0 ${item.checked ? `${cc.badge} border-transparent` : 'border-slate-300'} flex items-center justify-center`}>
+                                  {item.checked && <Check className="w-2 h-2 text-white" />}
+                                </div>
+                                <input
+                                  value={item.text}
+                                  onChange={(e) => {
+                                    setChecklists((prev) => prev.map((c) => c.id !== cl.id ? c : {
+                                      ...c,
+                                      sections: c.sections.map((s) => s.id !== sec.id ? s : {
+                                        ...s,
+                                        items: s.items.map((it) => it.id !== item.id ? it : { ...it, text: e.target.value }),
+                                      }),
+                                    }))
+                                  }}
+                                  className="flex-1 text-xs text-slate-700 bg-transparent outline-none"
+                                  placeholder="Descrição do item"
+                                />
+                                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button disabled={ii === 0} onClick={() => moveCLItem(cl.id, sec.id, item.id, -1)} className="p-0.5 rounded disabled:opacity-20 hover:bg-slate-100">
+                                    <ArrowUp className="w-3 h-3 text-slate-400" />
+                                  </button>
+                                  <button disabled={ii === sec.items.length - 1} onClick={() => moveCLItem(cl.id, sec.id, item.id, 1)} className="p-0.5 rounded disabled:opacity-20 hover:bg-slate-100">
+                                    <ArrowDown className="w-3 h-3 text-slate-400" />
+                                  </button>
+                                  <button onClick={() => deleteCLItem(cl.id, sec.id, item.id)} className="p-0.5 rounded hover:bg-rose-50">
+                                    <X className="w-3 h-3 text-rose-400" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                            {/* Adicionar item */}
+                            <div className="flex items-center gap-2 px-2 pt-1">
+                              <input
+                                value={clNewItemTexts[sec.id] || ''}
+                                onChange={(e) => setClNewItemTexts((prev) => ({ ...prev, [sec.id]: e.target.value }))}
+                                onKeyDown={(e) => e.key === 'Enter' && addCLItem(cl.id, sec.id, clNewItemTexts[sec.id] || '')}
+                                placeholder="+ Adicionar item (Enter)"
+                                className="flex-1 text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-indigo-300 focus:border-indigo-300"
+                              />
+                              <button
+                                onClick={() => addCLItem(cl.id, sec.id, clNewItemTexts[sec.id] || '')}
+                                className={`p-1.5 rounded-lg transition-colors ${cc.btn}`}
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Adicionar seção */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={clNewSectionTitle}
+                        onChange={(e) => setClNewSectionTitle(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && addCLSection(cl.id, clNewSectionTitle)}
+                        placeholder="Nome da nova seção (Enter para adicionar)"
+                        className="flex-1 text-xs border border-dashed border-indigo-200 bg-indigo-50/50 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-300 text-slate-600"
+                      />
+                      <button
+                        onClick={() => addCLSection(cl.id, clNewSectionTitle)}
+                        className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 border border-indigo-200 hover:bg-indigo-50 px-3 py-2 rounded-xl transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Seção
+                      </button>
+                    </div>
+
+                    {/* Ações */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                      <button
+                        onClick={() => { setActiveChecklistId(cl.id); setShowChecklistManager(false) }}
+                        className={`flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl transition-colors ${cc.btn}`}
+                      >
+                        <ClipboardList className="w-3.5 h-3.5" /> Ativar e usar este roteiro
+                      </button>
+                      <button onClick={() => resetChecklist(cl.id)} className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 border border-slate-200 px-3 py-2 rounded-xl transition-colors hover:bg-slate-50">
+                        <RotateCcw className="w-3 h-3" /> Resetar checks
+                      </button>
+                      <div className="flex-1" />
+                      <button onClick={() => { if (confirm('Excluir este roteiro?')) deleteChecklist(cl.id); setClManagerTab('list') }} className="p-2 rounded-xl hover:bg-rose-50 text-rose-400 transition-colors" title="Excluir roteiro">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ChangePasswordDialog open={showChangePassword} onOpenChange={setShowChangePassword} />
       {isAdmin && <AdminUsersDialog open={showAdminUsers} onOpenChange={setShowAdminUsers} />}
