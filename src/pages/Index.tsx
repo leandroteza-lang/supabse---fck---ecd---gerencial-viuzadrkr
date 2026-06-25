@@ -12413,8 +12413,15 @@ export default function App() {
                           const setOp = (newOp: string) =>
                             updateProfile({
                               [`${cfg.k}AlertOp`]: newOp,
-                              [`${cfg.k}AlertV1`]: c.v1 ?? null,
-                              [`${cfg.k}AlertV2`]: c.v2 ?? null,
+                              [`${cfg.k}AlertV1`]: newOp !== 'none' ? (c.v1 ?? null) : null,
+                              [`${cfg.k}AlertV2`]: newOp !== 'none' ? (c.v2 ?? null) : null,
+                              // limpa campos legados para que effCond retorne op:'none' de verdade
+                              ...(newOp === 'none' ? {
+                                [`${cfg.k}AlertMin`]: null,
+                                [`${cfg.k}AlertMax`]: null,
+                                [`${cfg.k}AlertMode`]: null,
+                                [`${cfg.k}AlertThreshold`]: null,
+                              } : {}),
                             } as any)
                           const oneVal = op === 'gt' || op === 'lt'
                           const twoVal = op === 'between' || op === 'outside'
