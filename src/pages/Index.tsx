@@ -1496,6 +1496,7 @@ export default function App() {
   const [dreSelectedPeriods, setDreSelectedPeriods] = useState<string[]>([])
   const [drePeriodsNone, setDrePeriodsNone] = useState(false)
   const [dreIsAccumulated, setDreIsAccumulated] = useState(false)
+  const [dreAccumulateYear, setDreAccumulateYear] = useState<string | null>(null)
   const [drePeriodPopover, setDrePeriodPopover] = useState(false)
   const setAllDreColAlign = (val: 'left' | 'center' | 'right') =>
     updateDrePrefs({ alignments: { ...(drePrefs.alignments || {}), value: val } })
@@ -7025,6 +7026,38 @@ export default function App() {
                     </button>
                   </div>
 
+                  {/* Ano de acumulação (só aparece no modo Acumulado Mensal com múltiplos anos) */}
+                  {dreIsAccumulated && dreStructuredData?.periods?.length > 0 && (() => {
+                    const years = [...new Set(
+                      dreStructuredData.periods.map((p: any) => {
+                        const mm_aaaa = p.split(' a ')[0].substring(3) // "01/2026"
+                        return mm_aaaa.split('/')[1] || ''
+                      }).filter(Boolean)
+                    )] as string[]
+                    if (years.length < 2) return null
+                    return (
+                      <div className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 rounded-lg p-0.5">
+                        <button
+                          onClick={() => setDreAccumulateYear(null)}
+                          className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${dreAccumulateYear === null ? 'bg-white shadow text-indigo-700' : 'text-indigo-400 hover:text-indigo-600'}`}
+                          title="Acumular todos os anos juntos"
+                        >
+                          Todos
+                        </button>
+                        {years.map((y) => (
+                          <button
+                            key={y}
+                            onClick={() => setDreAccumulateYear(y)}
+                            className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${dreAccumulateYear === y ? 'bg-indigo-600 shadow text-white' : 'text-indigo-400 hover:text-indigo-600'}`}
+                            title={`Acumular apenas ${y} (Jan → Dez ${y})`}
+                          >
+                            {y}
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  })()}
+
                   {/* Expandir / Recolher todos os grupos */}
                   {dreStructuredData?.lines?.length > 0 && (() => {
                     const groupIds = dreStructuredData.lines
@@ -7175,20 +7208,28 @@ export default function App() {
 
               {dreStructuredData?.lines?.length > 0 ? (() => {
                 const allDrePeriods = dreStructuredData.periods
+                // Períodos do ano selecionado para acumulação (ou todos)
+                const getPeriodYear = (p: string) => p.split(' a ')[0].substring(3).split('/')[1] || ''
+                const accumBasePeriods = (dreIsAccumulated && dreAccumulateYear)
+                  ? allDrePeriods.filter((p: any) => getPeriodYear(p) === dreAccumulateYear)
+                  : allDrePeriods
+                // Períodos exibidos: respeitam o seletor de períodos e, em modo acumulado por ano, só mostram o ano escolhido
                 const drePeriodsToDisplay = drePeriodsNone
                   ? []
                   : dreSelectedPeriods.length === 0
-                    ? allDrePeriods
-                    : allDrePeriods.filter((p: any) => dreSelectedPeriods.includes(p))
+                    ? accumBasePeriods
+                    : accumBasePeriods.filter((p: any) => dreSelectedPeriods.includes(p))
                 const getDreLineVal = (line: any, period: string) => {
                   if (!dreIsAccumulated) return line.totals[period] || 0
-                  const idx = allDrePeriods.indexOf(period)
-                  return allDrePeriods.slice(0, idx + 1).reduce((s: number, p: any) => s + (line.totals[p] || 0), 0)
+                  const idx = accumBasePeriods.indexOf(period)
+                  if (idx < 0) return line.totals[period] || 0
+                  return accumBasePeriods.slice(0, idx + 1).reduce((s: number, p: any) => s + (line.totals[p] || 0), 0)
                 }
                 const getDreAccVal = (acc: any, period: string) => {
                   if (!dreIsAccumulated) return acc.saldos[period] || 0
-                  const idx = allDrePeriods.indexOf(period)
-                  return allDrePeriods.slice(0, idx + 1).reduce((s: number, p: any) => s + (acc.saldos[p] || 0), 0)
+                  const idx = accumBasePeriods.indexOf(period)
+                  if (idx < 0) return acc.saldos[period] || 0
+                  return accumBasePeriods.slice(0, idx + 1).reduce((s: number, p: any) => s + (acc.saldos[p] || 0), 0)
                 }
                 return (
                 <div className="overflow-x-auto custom-scrollbar">
