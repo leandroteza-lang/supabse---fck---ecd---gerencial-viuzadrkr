@@ -7025,6 +7025,34 @@ export default function App() {
                     </button>
                   </div>
 
+                  {/* Expandir / Recolher todos os grupos */}
+                  {dreStructuredData?.lines?.length > 0 && (() => {
+                    const groupIds = dreStructuredData.lines
+                      .filter((l: any) => l.isGroup && l.accounts?.length > 0)
+                      .map((l: any) => l.id)
+                    const allExpanded = groupIds.length > 0 && groupIds.every((id: any) => expandedDreGroups[id])
+                    return (
+                      <button
+                        onClick={() => {
+                          if (allExpanded) {
+                            setExpandedDreGroups({})
+                          } else {
+                            const next: any = {}
+                            groupIds.forEach((id: any) => { next[id] = true })
+                            setExpandedDreGroups(next)
+                          }
+                        }}
+                        className="flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm"
+                        title={allExpanded ? 'Recolher todos os grupos' : 'Expandir todos os grupos'}
+                      >
+                        {allExpanded
+                          ? <><ChevronsUpDown className="w-3.5 h-3.5" /> Recolher tudo</>
+                          : <><ChevronsUpDown className="w-3.5 h-3.5" /> Expandir tudo</>
+                        }
+                      </button>
+                    )
+                  })()}
+
                   {/* Períodos */}
                   {dreStructuredData?.periods?.length > 0 && (
                     <div className="relative">
