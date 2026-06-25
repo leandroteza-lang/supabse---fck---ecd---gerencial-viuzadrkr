@@ -1509,6 +1509,7 @@ export default function App() {
   const [isDreAuditModalOpen, setIsDreAuditModalOpen] = useState(false)
   const [auditFilter, setAuditFilter] = useState<'all' | 'auto'>('auto')
   const [auditSearch, setAuditSearch] = useState('')
+  const [dreVersion, setDreVersion] = useState<'cpc' | 'dominio'>('cpc')
   const [mappingSearch, setMappingSearch] = useState('')
   const [isEbitdaMappingModalOpen, setIsEbitdaMappingModalOpen] = useState(false)
   const [ebitdaMappingSearch, setEbitdaMappingSearch] = useState('')
@@ -4042,6 +4043,134 @@ export default function App() {
     const orderedKeys = Object.keys(groups).sort()
     return { periods, lines: orderedKeys.map((k: any) => groups[k]) }
   }, [data, customMapping, isAccumulated])
+
+  const dominioDreData = useMemo(() => {
+    if (!data.length) return null
+
+    let resultAccounts = data.filter((d: any) => d.natureza === '04' || d.natureza === '4')
+    if (resultAccounts.length === 0) {
+      resultAccounts = data.filter(
+        (d: any) => d.conta?.startsWith('3') || d.conta?.startsWith('4') || d.conta?.startsWith('5'),
+      )
+    }
+
+    const periods: string[] = [...new Set(resultAccounts.map((d: any) => d.periodo))] as string[]
+    periods.sort((a: any, b: any) => dateStrToMs(a.split(' a ')[0]) - dateStrToMs(b.split(' a ')[0]))
+
+    const syntheticNames: Record<string, string> = {}
+    resultAccounts.forEach((row: any) => {
+      if (row.tipo === 'S') syntheticNames[row.conta] = row.nome
+    })
+
+    const accMap: Record<string, any> = {}
+    resultAccounts.forEach((row: any) => {
+      if (row.tipo === 'S') return
+      let signedVal = 0
+      if (!isAccumulated) {
+        const deb = getRawNumber(row.debito)
+        const cred = getRawNumber(row.credito)
+        signedVal = cred - deb
+      } else {
+        const rawVal = getRawNumber(row.sldFin)
+        signedVal = row.indDcFin === 'D' ? -rawVal : rawVal
+      }
+      if (!accMap[row.conta]) accMap[row.conta] = { conta: row.conta, nome: row.nome, saldos: {} }
+      accMap[row.conta].saldos[row.periodo] = (accMap[row.conta].saldos[row.periodo] || 0) + signedVal
+    })
+
+    const allAccs: any[] = Object.values(accMap)
+    allAccs.sort((a: any, b: any) => a.conta.localeCompare(b.conta))
+
+    const getL3 = (c: string) => c.split('.').slice(0, 3).join('.')
+    const getL4 = (c: string) => { const p = c.split('.'); return p.length >= 4 ? p.slice(0, 4).join('.') : c }
+    const getL2 = (c: string) => c.split('.').slice(0, 2).join('.')
+
+    const byL3: Record<string, any[]> = {}
+    allAccs.forEach((acc: any) => {
+      const k = getL3(acc.conta)
+      if (!byL3[k]) byL3[k] = []
+      byL3[k].push(acc)
+    })
+
+    const buildSubGroups = (accs: any[]) => {
+      const byL4: Record<string, any[]> = {}
+      accs.forEach((acc: any) => {
+        const k = getL4(acc.conta)
+        if (!byL4[k]) byL4[k] = []
+        byL4[k].push(acc)
+      })
+      return Object.entries(byL4)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([code, accounts]) => ({ code, label: syntheticNames[code] || '', accounts }))
+    }
+
+    const periodSum = (accs: any[], p: string) =>
+      accs.reduce((s: number, a: any) => s + (a.saldos[p] || 0), 0)
+
+    const recBruta = byL3['3.1.01'] || []
+    const devol = byL3['3.1.02'] || []
+    const trib = byL3['3.1.03'] || []
+    const deducoes = [...devol, ...trib]
+    const cmvAccs = allAccs.filter((a: any) => getL2(a.conta) === '4.1')
+    const finRec = byL3['3.1.04'] || []
+    const finDesp = byL3['4.2.03'] || []
+    const outrasRec = byL3['3.1.05'] || []
+    const irpjAccs = allAccs.filter((a: any) => getL2(a.conta) === '4.4')
+
+    const expenseL3s = Object.entries(byL3)
+      .filter(([c]) => c.startsWith('4.2') && !c.startsWith('4.2.03'))
+      .sort(([a], [b]) => a.localeCompare(b))
+
+    const expGroups = expenseL3s.map(([code, accs]) => ({
+      code,
+      label: syntheticNames[code] || '',
+      accounts: accs,
+      subGroups: buildSubGroups(accs),
+    }))
+
+    const totRecBruta = (p: string) => periodSum(recBruta, p)
+    const totDeducoes = (p: string) => periodSum(deducoes, p)
+    const totCMV = (p: string) => periodSum(cmvAccs, p)
+    const totExpGroups = (p: string) => expGroups.reduce((s: number, g: any) => s + periodSum(g.accounts, p), 0)
+    const totFinRec = (p: string) => periodSum(finRec, p)
+    const totFinDesp = (p: string) => periodSum(finDesp, p)
+    const totFin = (p: string) => totFinRec(p) + totFinDesp(p)
+    const totOutras = (p: string) => periodSum(outrasRec, p)
+    const totIrpj = (p: string) => periodSum(irpjAccs, p)
+    const recLiquida = (p: string) => totRecBruta(p) + totDeducoes(p)
+    const lucroBruto = (p: string) => recLiquida(p) + totCMV(p)
+    const resOperacional = (p: string) =>
+      lucroBruto(p) + totExpGroups(p) + totFin(p) + totOutras(p)
+    const lucroLiquido = (p: string) => resOperacional(p) + totIrpj(p)
+
+    return {
+      periods,
+      recBruta,
+      devol: { label: syntheticNames['3.1.02'] || 'DEVOLUÇÕES DE VENDAS', accounts: devol },
+      trib: { label: syntheticNames['3.1.03'] || 'TRIBUTOS E CONTR. SOBRE VENDAS', accounts: trib },
+      deducoes,
+      cmv: { accounts: cmvAccs, subGroups: buildSubGroups(cmvAccs) },
+      expGroups,
+      finRec: {
+        label: syntheticNames['3.1.04'] || 'RECEITAS FINANCEIRAS',
+        accounts: finRec,
+        subGroups: buildSubGroups(finRec),
+      },
+      finDesp: {
+        label: syntheticNames['4.2.03'] || 'DESPESAS FINANCEIRAS',
+        accounts: finDesp,
+        subGroups: buildSubGroups(finDesp),
+      },
+      outrasRec: { label: syntheticNames['3.1.05'] || 'OUTRAS RECEITAS OPERACIONAIS', accounts: outrasRec },
+      irpj: { accounts: irpjAccs },
+      totFin,
+      recLiquida,
+      lucroBruto,
+      resOperacional,
+      lucroLiquido,
+      periodSum,
+    }
+  }, [data, isAccumulated])
 
   const toggleDreGroup = (groupId: any) => {
     setExpandedDreGroups((prev: any) => ({ ...prev, [groupId]: !prev[groupId] }))
@@ -7001,11 +7130,18 @@ export default function App() {
             <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100/60 overflow-hidden flex flex-col">
               <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 bg-white">
                 <div className="relative w-full">
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3 flex-wrap">
                     Demonstração do Resultado (DRE)
-                    <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-md uppercase tracking-widest">
-                      Padrão CPC
-                    </span>
+                    <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
+                      <button
+                        onClick={() => setDreVersion('cpc')}
+                        className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${dreVersion === 'cpc' ? 'bg-white shadow text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
+                      >Padrão CPC</button>
+                      <button
+                        onClick={() => setDreVersion('dominio')}
+                        className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${dreVersion === 'dominio' ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
+                      >Padrão Domínio</button>
+                    </div>
                   </h2>
                   <p className="text-sm text-slate-500 font-medium mt-1">
                     Classificação inteligente baseada no seu plano de contas.
@@ -7241,6 +7377,260 @@ export default function App() {
                   if (idx < 0) return acc.saldos[period] || 0
                   return accumBasePeriods.slice(0, idx + 1).reduce((s: number, p: any) => s + (acc.saldos[p] || 0), 0)
                 }
+
+                // === PADRÃO DOMÍNIO ===
+                if (dreVersion === 'dominio' && dominioDreData) {
+                  const dom = dominioDreData
+                  const getDomAccVal = (acc: any, p: string) => {
+                    if (!dreIsAccumulated) return acc.saldos[p] || 0
+                    const idx = accumBasePeriods.indexOf(p)
+                    if (idx < 0) return acc.saldos[p] || 0
+                    return accumBasePeriods.slice(0, idx + 1).reduce((s: number, q: any) => s + (acc.saldos[q] || 0), 0)
+                  }
+                  const getDomGroupVal = (accs: any[], p: string) => {
+                    if (!dreIsAccumulated) return dom.periodSum(accs, p)
+                    const idx = accumBasePeriods.indexOf(p)
+                    if (idx < 0) return dom.periodSum(accs, p)
+                    return accumBasePeriods.slice(0, idx + 1).reduce((s: number, q: any) => s + dom.periodSum(accs, q), 0)
+                  }
+                  const getDomCalcVal = (fn: (p: string) => number, p: string) => {
+                    if (!dreIsAccumulated) return fn(p)
+                    const idx = accumBasePeriods.indexOf(p)
+                    if (idx < 0) return fn(p)
+                    return accumBasePeriods.slice(0, idx + 1).reduce((s: number, q: any) => s + fn(q), 0)
+                  }
+                  const fv = formatDreValue
+                  const va = dreValAlign
+
+                  return (
+                    <div className="overflow-auto custom-scrollbar" style={{ maxHeight: 'calc(100vh - 320px)' }}>
+                      <table
+                        className="w-full text-left dre-viz-table border-separate border-spacing-0"
+                        data-grid={drePrefs.showGridlines ? 'on' : 'off'}
+                        data-density={drePrefs.rowHeight || 'standard'}
+                        style={{ fontSize: `${drePrefs.fontSize}px`, ['--dre-gw']: `${drePrefs.gridlineWidth}px`, ['--dre-gl']: drePrefs.gridlineColor } as any}
+                      >
+                        <thead>
+                          <tr>
+                            <th className="p-5 font-bold text-slate-500 uppercase tracking-widest text-[11px] min-w-[450px] bg-slate-50 sticky top-0 z-20" style={{ boxShadow: '0 1px 0 #e2e8f0' }}>Descrição</th>
+                            {drePeriodsToDisplay.map((p: string) => (
+                              <th key={p} className={`p-5 whitespace-nowrap text-${va} border-l border-slate-100 bg-slate-50 sticky top-0 z-10`} style={{ boxShadow: '0 1px 0 #e2e8f0' }}>
+                                <div className="text-[10px] text-slate-400 uppercase font-bold tracking-widest mb-1">{p.split(' a ')[0].substring(3)}</div>
+                                <span className="font-bold text-slate-700 text-sm">{dreIsAccumulated ? 'Saldo Acumulado' : 'Saldo no Período'}</span>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+
+                          {/* 3 — RECEITA BRUTA */}
+                          {dom.recBruta.length > 0 && <>
+                            <tr className="bg-slate-800">
+                              <td className="py-2.5 px-5 font-black text-white text-[12px] uppercase tracking-wide">3 — RECEITA BRUTA</td>
+                              {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-2.5 px-5 text-${va} font-black text-white border-l border-white/10`}>{fv(getDomGroupVal(dom.recBruta, p))}</td>)}
+                            </tr>
+                            {dom.recBruta.map((acc: any) => (
+                              <tr key={acc.conta} className="bg-white hover:bg-slate-50/80 border-b border-slate-100">
+                                <td className="py-1.5 px-5 pl-10 text-slate-600"><span className="font-mono text-[10px] text-slate-400 mr-2">{acc.conta}</span>{acc.nome}</td>
+                                {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} text-slate-700 border-l border-slate-100`}>{fv(getDomAccVal(acc, p))}</td>)}
+                              </tr>
+                            ))}
+                          </>}
+
+                          {/* 3.1 — DEDUÇÕES DA RECEITA BRUTA */}
+                          {dom.deducoes.length > 0 && <>
+                            <tr className="bg-slate-700">
+                              <td className="py-2.5 px-5 font-black text-white text-[12px] uppercase tracking-wide">3.1 — DEDUÇÕES DA RECEITA BRUTA</td>
+                              {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-2.5 px-5 text-${va} font-black text-white border-l border-white/10`}>{fv(getDomGroupVal(dom.deducoes, p))}</td>)}
+                            </tr>
+                            {dom.devol.accounts.length > 0 && <>
+                              <tr className="bg-slate-200/60">
+                                <td className="py-1.5 px-5 pl-10 font-bold text-slate-700 text-[12px] uppercase">{dom.devol.label}</td>
+                                {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} font-bold text-slate-700 border-l border-slate-200/50`}>{fv(getDomGroupVal(dom.devol.accounts, p))}</td>)}
+                              </tr>
+                              {dom.devol.accounts.map((acc: any) => (
+                                <tr key={acc.conta} className="bg-white hover:bg-slate-50/80 border-b border-slate-100">
+                                  <td className="py-1.5 px-5 pl-14 text-slate-600"><span className="font-mono text-[10px] text-slate-400 mr-2">{acc.conta}</span>{acc.nome}</td>
+                                  {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} text-slate-700 border-l border-slate-100`}>{fv(getDomAccVal(acc, p))}</td>)}
+                                </tr>
+                              ))}
+                            </>}
+                            {dom.trib.accounts.length > 0 && <>
+                              <tr className="bg-slate-200/60">
+                                <td className="py-1.5 px-5 pl-10 font-bold text-slate-700 text-[12px] uppercase">{dom.trib.label}</td>
+                                {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} font-bold text-slate-700 border-l border-slate-200/50`}>{fv(getDomGroupVal(dom.trib.accounts, p))}</td>)}
+                              </tr>
+                              {dom.trib.accounts.map((acc: any) => (
+                                <tr key={acc.conta} className="bg-white hover:bg-slate-50/80 border-b border-slate-100">
+                                  <td className="py-1.5 px-5 pl-14 text-slate-600"><span className="font-mono text-[10px] text-slate-400 mr-2">{acc.conta}</span>{acc.nome}</td>
+                                  {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} text-slate-700 border-l border-slate-100`}>{fv(getDomAccVal(acc, p))}</td>)}
+                                </tr>
+                              ))}
+                            </>}
+                          </>}
+
+                          {/* = RECEITA LÍQUIDA */}
+                          <tr className="bg-blue-700">
+                            <td className="py-3 px-5 font-black text-white text-[13px] uppercase tracking-wide">= RECEITA LÍQUIDA</td>
+                            {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-3 px-5 text-${va} font-black text-white border-l border-white/20`}>{fv(getDomCalcVal(dom.recLiquida, p))}</td>)}
+                          </tr>
+
+                          {/* 4 — CMV */}
+                          {dom.cmv.accounts.length > 0 && <>
+                            <tr className="bg-slate-800">
+                              <td className="py-2.5 px-5 font-black text-white text-[12px] uppercase tracking-wide">4 — CMV</td>
+                              {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-2.5 px-5 text-${va} font-black text-white border-l border-white/10`}>{fv(getDomGroupVal(dom.cmv.accounts, p))}</td>)}
+                            </tr>
+                            {dom.cmv.subGroups.length > 1
+                              ? dom.cmv.subGroups.map((sg: any) => (
+                                  <React.Fragment key={sg.code}>
+                                    <tr className="bg-slate-200/60">
+                                      <td className="py-1.5 px-5 pl-10 font-bold text-slate-700 text-[12px] uppercase">{sg.code}{sg.label ? ' — ' + sg.label : ''}</td>
+                                      {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} font-bold text-slate-700 border-l border-slate-200/50`}>{fv(getDomGroupVal(sg.accounts, p))}</td>)}
+                                    </tr>
+                                    {sg.accounts.map((acc: any) => (
+                                      <tr key={acc.conta} className="bg-white hover:bg-slate-50/80 border-b border-slate-100">
+                                        <td className="py-1.5 px-5 pl-14 text-slate-600"><span className="font-mono text-[10px] text-slate-400 mr-2">{acc.conta}</span>{acc.nome}</td>
+                                        {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} text-slate-700 border-l border-slate-100`}>{fv(getDomAccVal(acc, p))}</td>)}
+                                      </tr>
+                                    ))}
+                                  </React.Fragment>
+                                ))
+                              : dom.cmv.accounts.map((acc: any) => (
+                                  <tr key={acc.conta} className="bg-white hover:bg-slate-50/80 border-b border-slate-100">
+                                    <td className="py-1.5 px-5 pl-10 text-slate-600"><span className="font-mono text-[10px] text-slate-400 mr-2">{acc.conta}</span>{acc.nome}</td>
+                                    {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} text-slate-700 border-l border-slate-100`}>{fv(getDomAccVal(acc, p))}</td>)}
+                                  </tr>
+                                ))
+                            }
+                          </>}
+
+                          {/* = (3-4) LUCRO BRUTO */}
+                          <tr className="bg-indigo-700">
+                            <td className="py-3 px-5 font-black text-white text-[13px] uppercase tracking-wide">= (3 - 4) LUCRO BRUTO</td>
+                            {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-3 px-5 text-${va} font-black text-white border-l border-white/20`}>{fv(getDomCalcVal(dom.lucroBruto, p))}</td>)}
+                          </tr>
+
+                          {/* GRUPOS DE DESPESAS: 4.2.01, 4.2.02, 4.2.04, 4.2.05, 4.2.07, etc. */}
+                          {dom.expGroups.map((grp: any) => (
+                            <React.Fragment key={grp.code}>
+                              <tr className="bg-slate-600">
+                                <td className="py-2.5 px-5 font-black text-white text-[12px] uppercase tracking-wide">{grp.code}{grp.label ? ' — ' + grp.label : ''}</td>
+                                {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-2.5 px-5 text-${va} font-black text-white border-l border-white/10`}>{fv(getDomGroupVal(grp.accounts, p))}</td>)}
+                              </tr>
+                              {grp.subGroups.map((sg: any) => (
+                                <React.Fragment key={sg.code}>
+                                  <tr className="bg-slate-100/90">
+                                    <td className="py-1.5 px-5 pl-10 font-bold text-slate-700 text-[12px] uppercase">{sg.code}{sg.label ? ' — ' + sg.label : ''}</td>
+                                    {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} font-bold text-slate-700 border-l border-slate-200/50`}>{fv(getDomGroupVal(sg.accounts, p))}</td>)}
+                                  </tr>
+                                  {sg.accounts.map((acc: any) => (
+                                    <tr key={acc.conta} className="bg-white hover:bg-slate-50/80 border-b border-slate-100">
+                                      <td className="py-1.5 px-5 pl-14 text-slate-600"><span className="font-mono text-[10px] text-slate-400 mr-2">{acc.conta}</span>{acc.nome}</td>
+                                      {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} text-slate-700 border-l border-slate-100`}>{fv(getDomAccVal(acc, p))}</td>)}
+                                    </tr>
+                                  ))}
+                                </React.Fragment>
+                              ))}
+                            </React.Fragment>
+                          ))}
+
+                          {/* RESULTADO FINANCEIRO */}
+                          {(dom.finRec.accounts.length > 0 || dom.finDesp.accounts.length > 0) && (
+                            <React.Fragment>
+                              <tr className="bg-slate-700">
+                                <td className="py-2.5 px-5 font-black text-white text-[12px] uppercase tracking-wide">RESULTADO FINANCEIRO</td>
+                                {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-2.5 px-5 text-${va} font-black text-white border-l border-white/10`}>{fv(getDomCalcVal(dom.totFin, p))}</td>)}
+                              </tr>
+                              {dom.finRec.accounts.length > 0 && <>
+                                <tr className="bg-slate-200/60">
+                                  <td className="py-1.5 px-5 pl-10 font-bold text-slate-700 text-[12px] uppercase">{dom.finRec.label}</td>
+                                  {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} font-bold text-slate-700 border-l border-slate-200/50`}>{fv(getDomGroupVal(dom.finRec.accounts, p))}</td>)}
+                                </tr>
+                                {dom.finRec.accounts.map((acc: any) => (
+                                  <tr key={acc.conta} className="bg-white hover:bg-slate-50/80 border-b border-slate-100">
+                                    <td className="py-1.5 px-5 pl-14 text-slate-600"><span className="font-mono text-[10px] text-slate-400 mr-2">{acc.conta}</span>{acc.nome}</td>
+                                    {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} text-slate-700 border-l border-slate-100`}>{fv(getDomAccVal(acc, p))}</td>)}
+                                  </tr>
+                                ))}
+                              </>}
+                              {dom.finDesp.accounts.length > 0 && <>
+                                <tr className="bg-slate-200/60">
+                                  <td className="py-1.5 px-5 pl-10 font-bold text-slate-700 text-[12px] uppercase">{dom.finDesp.label}</td>
+                                  {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} font-bold text-slate-700 border-l border-slate-200/50`}>{fv(getDomGroupVal(dom.finDesp.accounts, p))}</td>)}
+                                </tr>
+                                {dom.finDesp.accounts.map((acc: any) => (
+                                  <tr key={acc.conta} className="bg-white hover:bg-slate-50/80 border-b border-slate-100">
+                                    <td className="py-1.5 px-5 pl-14 text-slate-600"><span className="font-mono text-[10px] text-slate-400 mr-2">{acc.conta}</span>{acc.nome}</td>
+                                    {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} text-slate-700 border-l border-slate-100`}>{fv(getDomAccVal(acc, p))}</td>)}
+                                  </tr>
+                                ))}
+                              </>}
+                            </React.Fragment>
+                          )}
+
+                          {/* 3.1.05 — OUTRAS RECEITAS OPERACIONAIS */}
+                          {dom.outrasRec.accounts.length > 0 && (
+                            <React.Fragment>
+                              <tr className="bg-slate-700">
+                                <td className="py-2.5 px-5 font-black text-white text-[12px] uppercase tracking-wide">3.1.05 — {dom.outrasRec.label}</td>
+                                {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-2.5 px-5 text-${va} font-black text-white border-l border-white/10`}>{fv(getDomGroupVal(dom.outrasRec.accounts, p))}</td>)}
+                              </tr>
+                              {dom.outrasRec.accounts.map((acc: any) => (
+                                <tr key={acc.conta} className="bg-white hover:bg-slate-50/80 border-b border-slate-100">
+                                  <td className="py-1.5 px-5 pl-10 text-slate-600"><span className="font-mono text-[10px] text-slate-400 mr-2">{acc.conta}</span>{acc.nome}</td>
+                                  {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} text-slate-700 border-l border-slate-100`}>{fv(getDomAccVal(acc, p))}</td>)}
+                                </tr>
+                              ))}
+                            </React.Fragment>
+                          )}
+
+                          {/* = RESULTADO OPERACIONAL */}
+                          <tr className="bg-[#1E40AF]">
+                            <td className="py-3 px-5 font-black text-white text-[13px] uppercase tracking-wide">= RESULTADO OPERACIONAL</td>
+                            {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-3 px-5 text-${va} font-black text-white border-l border-white/20`}>{fv(getDomCalcVal(dom.resOperacional, p))}</td>)}
+                          </tr>
+
+                          {/* = RESULTADO ANTES DO IRPJ E CSLL */}
+                          <tr className="bg-[#1E40AF]/80">
+                            <td className="py-2.5 px-5 font-black text-white text-[12px] uppercase tracking-wide">= RESULTADO ANTES DO IRPJ E CSLL</td>
+                            {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-2.5 px-5 text-${va} font-black text-white border-l border-white/20`}>{fv(getDomCalcVal(dom.resOperacional, p))}</td>)}
+                          </tr>
+
+                          {/* 4.4 — PROVISÃO IRPJ E CSLL */}
+                          {dom.irpj.accounts.length > 0 && (
+                            <React.Fragment>
+                              <tr className="bg-slate-700">
+                                <td className="py-2.5 px-5 font-black text-white text-[12px] uppercase tracking-wide">4.4 — PROVISÃO IRPJ E CSLL</td>
+                                {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-2.5 px-5 text-${va} font-black text-white border-l border-white/10`}>{fv(getDomGroupVal(dom.irpj.accounts, p))}</td>)}
+                              </tr>
+                              {dom.irpj.accounts.map((acc: any) => (
+                                <tr key={acc.conta} className="bg-white hover:bg-slate-50/80 border-b border-slate-100">
+                                  <td className="py-1.5 px-5 pl-10 text-slate-600"><span className="font-mono text-[10px] text-slate-400 mr-2">{acc.conta}</span>{acc.nome}</td>
+                                  {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-1.5 px-5 text-${va} text-slate-700 border-l border-slate-100`}>{fv(getDomAccVal(acc, p))}</td>)}
+                                </tr>
+                              ))}
+                            </React.Fragment>
+                          )}
+
+                          {/* = RESULTADO DO EXERCÍCIO */}
+                          <tr className="bg-indigo-800">
+                            <td className="py-3 px-5 font-black text-white text-[13px] uppercase tracking-wide">= RESULTADO DO EXERCÍCIO</td>
+                            {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-3 px-5 text-${va} font-black text-white border-l border-white/20`}>{fv(getDomCalcVal(dom.lucroLiquido, p))}</td>)}
+                          </tr>
+
+                          {/* = LUCRO LÍQUIDO DO EXERCÍCIO */}
+                          <tr className="bg-[#1E1B4B]">
+                            <td className="py-4 px-5 font-black text-white text-[14px] uppercase tracking-wider">= LUCRO LÍQUIDO DO EXERCÍCIO</td>
+                            {drePeriodsToDisplay.map((p: string) => <td key={p} className={`py-4 px-5 text-${va} font-black text-white border-l border-white/10 text-[14px]`}>{fv(getDomCalcVal(dom.lucroLiquido, p))}</td>)}
+                          </tr>
+
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                }
+
                 return (
                 <div className="overflow-auto custom-scrollbar" style={{ maxHeight: 'calc(100vh - 320px)' }}>
                   {/* <table> puro: evita o <div overflow-auto> interno do Shadcn <Table>
