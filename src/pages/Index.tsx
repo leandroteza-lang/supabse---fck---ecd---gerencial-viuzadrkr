@@ -84,6 +84,7 @@ import {
   GripHorizontal,
   GripVertical,
   Pin,
+  Copy,
   ClipboardList,
   Trash2,
   ListChecks,
@@ -12653,20 +12654,40 @@ export default function App() {
                   className={`p-2 rounded-lg cursor-pointer text-sm font-medium transition-colors flex justify-between items-center group ${editingProfileId === p.id ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-700'}`}
                   onClick={() => setEditingProfileId(p.id)}
                 >
-                  <span className="truncate">{p.name}</span>
-                  {p.id !== 'default' && (
+                  <span className="truncate flex-1 min-w-0">{p.name}</span>
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 shrink-0 ml-1">
                     <button
+                      title="Replicar perfil"
                       onClick={(e) => {
                         e.stopPropagation()
-                        setAnalysisProfiles((prev) => prev.filter((x) => x.id !== p.id))
-                        if (editingProfileId === p.id) setEditingProfileId('default')
-                        if (activeProfileId === p.id) setActiveProfileId('default')
+                        const newId = `profile_${Date.now()}`
+                        const clone = {
+                          ...JSON.parse(JSON.stringify(p)),
+                          id: newId,
+                          name: `${p.name} (Cópia)`,
+                        }
+                        setAnalysisProfiles((prev) => [...prev, clone])
+                        setEditingProfileId(newId)
                       }}
-                      className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-700"
+                      className="p-0.5 rounded text-indigo-400 hover:text-indigo-700 hover:bg-indigo-50 transition-colors"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      <Copy className="w-3.5 h-3.5" />
                     </button>
-                  )}
+                    {p.id !== 'default' && (
+                      <button
+                        title="Excluir perfil"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setAnalysisProfiles((prev) => prev.filter((x) => x.id !== p.id))
+                          if (editingProfileId === p.id) setEditingProfileId('default')
+                          if (activeProfileId === p.id) setActiveProfileId('default')
+                        }}
+                        className="p-0.5 rounded text-rose-400 hover:text-rose-700 hover:bg-rose-50 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
               <button
