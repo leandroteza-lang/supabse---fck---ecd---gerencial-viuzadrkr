@@ -13430,15 +13430,21 @@ export default function App() {
                     </div>
 
                     {/* Emoji e Cor */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-col gap-2">
                       <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Emoji</label>
-                        <input
-                          value={cl.emoji}
-                          onChange={(e) => updateCL(cl.id, { emoji: e.target.value })}
-                          className="w-16 text-center text-xl border border-slate-200 rounded-xl p-1 outline-none focus:ring-2 focus:ring-indigo-300"
-                          maxLength={2}
-                        />
+                        <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Ícone (clique para escolher)</label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {['📊','📅','🔍','📈','📉','💰','🏦','📋','✅','⚡','🎯','📌','🗂️','💼','🔒','📣','🧾','🧮','🔎','📝'].map((em) => (
+                            <button
+                              key={em}
+                              onClick={() => updateCL(cl.id, { emoji: em })}
+                              className={`w-9 h-9 text-xl rounded-xl border-2 transition-all hover:scale-110 ${cl.emoji === em ? 'border-indigo-400 bg-indigo-50 scale-110' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                              title={em}
+                            >
+                              {em}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                       <div>
                         <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Cor</label>
