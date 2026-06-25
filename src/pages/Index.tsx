@@ -5134,23 +5134,31 @@ export default function App() {
       .filter((acc: any) => selectedMonthlyAccounts.includes(acc.conta))
       .map((acc: any) => {
         const cells: any[] = [{ text: acc.conta }, { text: acc.nome }]
+        const isRecorrente = recorrentesSet.has(acc.conta) && acc.tipo === 'A'
         periodsToDisplay.forEach((p: string) => {
+          const sld = acc.saldos?.[p]
+          const semMovimento = !sld || (getRawNumber(sld.debito) === 0 && getRawNumber(sld.credito) === 0)
+          const isLacuna = isRecorrente && semMovimento
           const vi = periodVI(acc, p)
-          cells.push({ text: vi.val > 0 ? fmt(vi.val) : '', value: vi.val }, { text: vi.ind })
+          cells.push(
+            { text: vi.val > 0 ? fmt(vi.val) : '', value: vi.val, isLacuna },
+            { text: vi.ind, isLacuna },
+          )
           if (showAV) {
             const base1 = getBaseValueForAccountWithProfile(acc, p, activeProfile)
             cells.push({
               text: base1 && vi.val > 0 ? ((vi.val / base1) * 100).toFixed(2).replace('.', ',') + '%' : '',
+              isLacuna,
             })
             if (p2) {
               const base2 = getBaseValueForAccountWithProfile(acc, p, p2)
               cells.push({
-                text:
-                  base2 && vi.val > 0 ? ((vi.val / base2) * 100).toFixed(2).replace('.', ',') + '%' : '',
+                text: base2 && vi.val > 0 ? ((vi.val / base2) * 100).toFixed(2).replace('.', ',') + '%' : '',
+                isLacuna,
               })
             }
           }
-          if (showAH) cells.push({ text: ahPctOf(acc, p, vi) })
+          if (showAH) cells.push({ text: ahPctOf(acc, p, vi), isLacuna })
         })
         const ac = acumVI(acc)
         cells.push({ text: ac.val > 0 ? fmt(ac.val) : '', value: ac.val }, { text: ac.ind })

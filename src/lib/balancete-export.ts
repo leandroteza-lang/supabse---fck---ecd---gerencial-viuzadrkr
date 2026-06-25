@@ -8,6 +8,7 @@ export interface ExportColumn {
 export interface ExportCell {
   text: string
   value?: number // para colunas numéricas (XLSX usa o número real)
+  isLacuna?: boolean // período sem movimento em conta recorrente
 }
 export interface ExportRow {
   level: number
@@ -92,7 +93,9 @@ export function buildHtml(data: ExportData): string {
           const align = col.kind === 'text' ? 'left' : col.kind === 'ind' ? 'center' : 'right'
           const pad = col.indent ? `padding-left:${(r.level - 1) * 16 + 8}px;` : ''
           const mono = col.kind === 'num' || (col.kind === 'text' && i === 0) ? 'font-variant-numeric:tabular-nums;' : ''
-          return `<td style="text-align:${align};${pad}${mono}">${escHtml(cell.text)}</td>`
+          const lacunaTag = cell.isLacuna ? `<span style="display:inline-block;margin-left:4px;font-size:10px;background:#f97316;color:#fff;border-radius:4px;padding:0 3px;vertical-align:middle" title="Lacuna — sem movimento neste período">⚡</span>` : ''
+          const cellContent = cell.isLacuna && !cell.text ? lacunaTag : escHtml(cell.text) + lacunaTag
+          return `<td style="text-align:${align};${pad}${mono}${cell.isLacuna ? 'background:rgba(251,146,60,.15);' : ''}">${cellContent}</td>`
         })
         .join('')
       return `<tr style="background:#${st.bg};color:#${st.fg};${st.bold ? 'font-weight:700;' : ''}">${tds}</tr>`
