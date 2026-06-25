@@ -1575,7 +1575,8 @@ export default function App() {
   const [ruleAhV2, setRuleAhV2] = useState('')
 
   const [ruleTreeExpanded, setRuleTreeExpanded] = useState<Set<string>>(new Set())
-  const resetRuleForm = () => { setRuleSearch(''); setRuleAcct(null); setRuleAvOp('none'); setRuleAvV1(''); setRuleAvV2(''); setRuleAhOp('none'); setRuleAhV1(''); setRuleAhV2('') }
+  const [ruleEditId, setRuleEditId] = useState<string | null>(null)
+  const resetRuleForm = () => { setRuleSearch(''); setRuleAcct(null); setRuleAvOp('none'); setRuleAvV1(''); setRuleAvV2(''); setRuleAhOp('none'); setRuleAhV1(''); setRuleAhV2(''); setRuleEditId(null) }
 
   const [selectedMonthlyAccounts, setSelectedMonthlyAccounts] = useState<string[]>([])
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set())
@@ -10143,18 +10144,28 @@ export default function App() {
                         const hasAlert = condDispara(avPct, avCond)
                         const avHasCustomRule = (profile.accountRules || []).some((r: any) => { let c = acc.conta; while(c){ if(r.conta===c && r.avOp!=null) return true; c=accountParentMap?.[c] } return false })
 
-                        const avAlertNode = hasAlert ? (
+                        const avCustomBadge = avHasCustomRule ? (
                           <UITooltip delayDuration={0}>
                             <TooltipTrigger asChild>
-                              <AlertCircle
-                                className={`w-3.5 h-3.5 cursor-help shrink-0 ${isDarkBg ? 'text-amber-400' : 'text-amber-500'}`}
-                              />
+                              <span className={`text-[11px] font-bold cursor-help shrink-0 leading-none ${isDarkBg ? 'text-violet-300' : 'text-violet-500'}`}>✦</span>
                             </TooltipTrigger>
-                            <TooltipContent className="max-w-[260px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
-                              Atenção: o peso de {avPct.toFixed(2)}% está {condTexto(avCond)} — faixa
-                              de alerta configurada no perfil.
-                            </TooltipContent>
+                            <TooltipContent className="p-2 text-xs shadow-xl z-50">Limiar de alerta customizado para esta conta/grupo</TooltipContent>
                           </UITooltip>
+                        ) : null
+                        const avAlertNode = (hasAlert || avHasCustomRule) ? (
+                          <span className="flex items-center gap-0.5">
+                            {hasAlert && (
+                              <UITooltip delayDuration={0}>
+                                <TooltipTrigger asChild>
+                                  <AlertCircle className={`w-3.5 h-3.5 cursor-help shrink-0 ${isDarkBg ? 'text-amber-400' : 'text-amber-500'}`} />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[260px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
+                                  Atenção: o peso de {avPct.toFixed(2)}% está {condTexto(avCond)} — faixa de alerta configurada no perfil.
+                                </TooltipContent>
+                              </UITooltip>
+                            )}
+                            {avCustomBadge}
+                          </span>
                         ) : null
 
                         return wrapIdxCell(
@@ -10183,7 +10194,6 @@ export default function App() {
                                   title="Clique para ver a memória de cálculo"
                                 >
                                   {avPct.toFixed(2)}%
-                                  {avHasCustomRule && <span className="text-violet-400 text-[8px] ml-0.5" title="Limiar de alerta customizado para esta conta/grupo">✦</span>}
                                 </span>
                               </PopoverTrigger>
                               <PopoverContent
@@ -10601,18 +10611,29 @@ export default function App() {
                                   const hasAlert = condDispara(ahPct, ahCond)
                                   const ahHasCustomRule = (activeProfile?.accountRules || []).some((r: any) => { let c = acc.conta; while(c){ if(r.conta===c && r.ahOp!=null) return true; c=accountParentMap?.[c] } return false })
 
-                                  ahAlertNode = hasAlert ? (
+                                  const ahCustomBadge = ahHasCustomRule ? (
                                     <UITooltip delayDuration={0}>
                                       <TooltipTrigger asChild>
-                                        <AlertCircle
-                                          className={`w-3.5 h-3.5 cursor-help shrink-0 ${isDarkBg ? 'text-amber-400' : 'text-amber-500'}`}
+                                        <span className={`text-[11px] font-bold cursor-help shrink-0 leading-none ${isDarkBg ? 'text-violet-300' : 'text-violet-500'}`}>✦</span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="p-2 text-xs shadow-xl z-50">Limiar de alerta customizado para esta conta/grupo</TooltipContent>
+                                    </UITooltip>
+                                  ) : null
+                                  ahAlertNode = (hasAlert || ahHasCustomRule) ? (
+                                    <span className="flex items-center gap-0.5">
+                                      {hasAlert && <UITooltip delayDuration={0}>
+                                        <TooltipTrigger asChild>
+                                          <AlertCircle
+                                            className={`w-3.5 h-3.5 cursor-help shrink-0 ${isDarkBg ? 'text-amber-400' : 'text-amber-500'}`}
                                         />
                                       </TooltipTrigger>
-                                      <TooltipContent className="max-w-[260px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
-                                        Atenção: a variação de {ahPct.toFixed(2)}% está{' '}
-                                        {condTexto(ahCond)} — faixa de alerta configurada no perfil.
-                                      </TooltipContent>
-                                    </UITooltip>
+                                        <TooltipContent className="max-w-[260px] p-2 text-xs shadow-xl z-50 whitespace-normal text-left">
+                                          Atenção: a variação de {ahPct.toFixed(2)}% está{' '}
+                                          {condTexto(ahCond)} — faixa de alerta configurada no perfil.
+                                        </TooltipContent>
+                                      </UITooltip>}
+                                      {ahCustomBadge}
+                                    </span>
                                   ) : null
 
                                   ahContent = (
@@ -10625,7 +10646,6 @@ export default function App() {
                                           >
                                             {ahPct > 0 ? '+' : ''}
                                             {ahPct.toFixed(2)}%
-                                            {ahHasCustomRule && <span className="text-violet-400 text-[8px] ml-0.5" title="Limiar customizado para esta conta/grupo">✦</span>}
                                           </span>
                                         </PopoverTrigger>
                                         <PopoverContent
@@ -12913,26 +12933,44 @@ export default function App() {
                           )
                         }
 
+                        const buildRuleData = (id: string) => ({
+                          id,
+                          conta: ruleAcct!.conta,
+                          nome: ruleAcct!.nome,
+                          avOp: ruleAvOp !== 'none' ? ruleAvOp : null,
+                          avV1: ruleAvOp !== 'none' ? (ruleAvV1 || null) : null,
+                          avV2: ruleAvOp !== 'none' ? (ruleAvV2 || null) : null,
+                          ahOp: ruleAhOp !== 'none' ? ruleAhOp : null,
+                          ahV1: ruleAhOp !== 'none' ? (ruleAhV1 || null) : null,
+                          ahV2: ruleAhOp !== 'none' ? (ruleAhV2 || null) : null,
+                        })
+
                         const addRule = () => {
                           if (!ruleAcct) return
-                          if (rules.find((r: any) => r.conta === ruleAcct.conta)) return
-                          const newRule = {
-                            id: crypto.randomUUID(),
-                            conta: ruleAcct.conta,
-                            nome: ruleAcct.nome,
-                            avOp: ruleAvOp !== 'none' ? ruleAvOp : null,
-                            avV1: ruleAvOp !== 'none' ? (ruleAvV1 || null) : null,
-                            avV2: ruleAvOp !== 'none' ? (ruleAvV2 || null) : null,
-                            ahOp: ruleAhOp !== 'none' ? ruleAhOp : null,
-                            ahV1: ruleAhOp !== 'none' ? (ruleAhV1 || null) : null,
-                            ahV2: ruleAhOp !== 'none' ? (ruleAhV2 || null) : null,
+                          if (ruleEditId) {
+                            updateProfile({ accountRules: rules.map((r: any) => r.id === ruleEditId ? buildRuleData(ruleEditId) : r) } as any)
+                          } else {
+                            if (rules.find((r: any) => r.conta === ruleAcct.conta)) return
+                            updateProfile({ accountRules: [...rules, buildRuleData(crypto.randomUUID())] } as any)
                           }
-                          updateProfile({ accountRules: [...rules, newRule] } as any)
                           resetRuleForm()
+                        }
+
+                        const editRule = (rule: any) => {
+                          const acc = accounts.find((a: any) => a.conta === rule.conta) || { conta: rule.conta, nome: rule.nome }
+                          setRuleAcct(acc)
+                          setRuleAvOp(rule.avOp ?? 'none')
+                          setRuleAvV1(rule.avV1 ?? '')
+                          setRuleAvV2(rule.avV2 ?? '')
+                          setRuleAhOp(rule.ahOp ?? 'none')
+                          setRuleAhV1(rule.ahV1 ?? '')
+                          setRuleAhV2(rule.ahV2 ?? '')
+                          setRuleEditId(rule.id)
                         }
 
                         const deleteRule = (id: string) => {
                           updateProfile({ accountRules: rules.filter((r: any) => r.id !== id) } as any)
+                          if (ruleEditId === id) resetRuleForm()
                         }
 
                         const OpSelect = ({ value, onChange, label }: any) => (
@@ -12962,10 +13000,12 @@ export default function App() {
                               <div className="mb-3 flex flex-col gap-1.5 max-h-44 overflow-y-auto custom-scrollbar pr-1">
                                 {rules.map((rule: any) => {
                                   const accInfo = accounts.find((a: any) => a.conta === rule.conta)
+                                  const isEditing = ruleEditId === rule.id
                                   return (
-                                    <div key={rule.id} className="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                                    <div key={rule.id} className={`flex items-center gap-2 border rounded-xl px-3 py-2 transition-colors ${isEditing ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100'}`}>
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-1.5 flex-wrap">
+                                          {isEditing && <span className="text-[9px] font-bold bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full shrink-0">Editando</span>}
                                           <span className="text-[11px] font-mono font-bold text-indigo-700">{rule.conta}</span>
                                           <span className="text-[11px] text-slate-500 truncate">{accInfo?.nome || rule.nome}</span>
                                         </div>
@@ -12975,9 +13015,14 @@ export default function App() {
                                           {!rule.avOp && !rule.ahOp && <span className="text-[10px] text-slate-400 italic">herda perfil global</span>}
                                         </div>
                                       </div>
-                                      <button onClick={() => deleteRule(rule.id)} className="p-1 rounded-lg hover:bg-rose-50 transition-colors shrink-0">
-                                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                                      </button>
+                                      <div className="flex items-center gap-0.5 shrink-0">
+                                        <button onClick={() => isEditing ? resetRuleForm() : editRule(rule)} className={`p-1.5 rounded-lg transition-colors ${isEditing ? 'bg-amber-100 hover:bg-amber-200 text-amber-600' : 'hover:bg-indigo-50 text-slate-400 hover:text-indigo-500'}`} title={isEditing ? 'Cancelar edição' : 'Editar regra'}>
+                                          <Edit2 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={() => deleteRule(rule.id)} className="p-1.5 rounded-lg hover:bg-rose-50 transition-colors text-slate-400 hover:text-rose-400" title="Excluir regra">
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
                                     </div>
                                   )
                                 })}
@@ -13072,10 +13117,13 @@ export default function App() {
                               <button
                                 onClick={addRule}
                                 disabled={!ruleAcct}
-                                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-colors bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-40 disabled:cursor-not-allowed self-end"
+                                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-colors text-white disabled:opacity-40 disabled:cursor-not-allowed self-end ${ruleEditId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                               >
-                                <Plus className="w-3.5 h-3.5" /> Adicionar regra
+                                {ruleEditId ? <><Edit2 className="w-3.5 h-3.5" /> Salvar alterações</> : <><Plus className="w-3.5 h-3.5" /> Adicionar regra</>}
                               </button>
+                              {ruleEditId && (
+                                <button onClick={resetRuleForm} className="self-end text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2 transition-colors">Cancelar</button>
+                              )}
                             </div>
                           </div>
                         )
