@@ -938,7 +938,7 @@ function makeCLSection(title: string, items: string[]) {
   return {
     id: crypto.randomUUID(),
     title,
-    items: items.map((text) => ({ id: crypto.randomUUID(), text, checked: false, note: '' })),
+    items: items.map((text) => ({ id: crypto.randomUUID(), text, checked: false, note: '', required: true, isPrereq: false })),
   }
 }
 
@@ -1177,7 +1177,7 @@ export default function App() {
 
   const addCLItem = (clId, secId, text) => {
     if (!text.trim()) return
-    const item = { id: crypto.randomUUID(), text: text.trim(), checked: false, note: '' }
+    const item = { id: crypto.randomUUID(), text: text.trim(), checked: false, note: '', required: true, isPrereq: false }
     setChecklists((prev) =>
       prev.map((c) =>
         c.id !== clId ? c : {
@@ -1189,6 +1189,21 @@ export default function App() {
       )
     )
     setClNewItemTexts((prev) => ({ ...prev, [secId]: '' }))
+  }
+
+  const updateCLItemProp = (clId, secId, itemId, prop, value) => {
+    setChecklists((prev) =>
+      prev.map((c) =>
+        c.id !== clId ? c : {
+          ...c,
+          sections: c.sections.map((s) =>
+            s.id !== secId ? s : {
+              ...s, items: s.items.map((it) => it.id !== itemId ? it : { ...it, [prop]: value }),
+            }
+          ),
+        }
+      )
+    )
   }
 
   const deleteCLItem = (clId, secId, itemId) => {
@@ -13175,26 +13190,53 @@ export default function App() {
                     {cl.sections.length === 0 && (
                       <p className={`text-xs ${cc.text} text-center py-6 opacity-60`}>Nenhuma seção. Clique em ⚙ para editar.</p>
                     )}
-                    {cl.sections.map((sec) => (
+                    {cl.sections.map((sec, si) => (
                       <div key={sec.id} className="bg-white/70 rounded-xl px-3 pt-2.5 pb-2">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">{sec.title}</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                          <span className={`${cc.text} mr-1`}>{si + 1}.</span>{sec.title}
+                        </p>
                         {sec.items.length === 0 && (
                           <p className="text-[11px] text-slate-400 italic pb-1">Seção vazia</p>
                         )}
-                        {sec.items.map((item) => {
+                        {sec.items.map((item, ii) => {
                           const noteOpen = clExpandedNotes[item.id]
+                          const prevItem = ii > 0 ? sec.items[ii - 1] : null
+                          const locked = prevItem?.isPrereq && !prevItem?.checked
+                          const itemNum = `${si + 1}.${ii + 1}`
                           return (
-                            <div key={item.id} className="mb-1">
+                            <div key={item.id} className={`mb-1.5 transition-opacity ${locked ? 'opacity-40' : ''}`}>
                               <div className="flex items-start gap-2">
-                                <button
-                                  onClick={() => toggleCheckItem(cl.id, sec.id, item.id)}
-                                  className={`mt-0.5 w-4 h-4 rounded shrink-0 border-2 flex items-center justify-center transition-all ${item.checked ? `${cc.badge} border-transparent` : 'border-slate-300 bg-white hover:border-indigo-400'}`}
-                                >
-                                  {item.checked && <Check className="w-2.5 h-2.5 text-white" />}
-                                </button>
-                                <span className={`text-xs leading-snug flex-1 transition-all ${item.checked ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-                                  {item.text}
-                                </span>
+                                {/* Número */}
+                                <span className="text-[10px] font-mono text-slate-400 shrink-0 mt-0.5 w-6 text-right">{itemNum}</span>
+                                {/* Checkbox ou cadeado */}
+                                {locked ? (
+                                  <div className="mt-0.5 w-4 h-4 rounded shrink-0 border-2 border-slate-200 bg-slate-50 flex items-center justify-center" title="Aguardando item anterior (pré-requisito)">
+                                    <svg className="w-2.5 h-2.5 text-slate-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd"/></svg>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => toggleCheckItem(cl.id, sec.id, item.id)}
+                                    className={`mt-0.5 w-4 h-4 rounded shrink-0 border-2 flex items-center justify-center transition-all ${item.checked ? `${cc.badge} border-transparent` : 'border-slate-300 bg-white hover:border-indigo-400'}`}
+                                  >
+                                    {item.checked && <Check className="w-2.5 h-2.5 text-white" />}
+                                  </button>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <span className={`text-xs leading-snug transition-all ${item.checked ? 'line-through text-slate-400' : locked ? 'text-slate-400' : 'text-slate-700'}`}>
+                                    {item.text}
+                                  </span>
+                                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                    {!item.required && (
+                                      <span className="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">facultativo</span>
+                                    )}
+                                    {item.isPrereq && !item.checked && (
+                                      <span className="text-[9px] font-bold text-violet-600 bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded-full">🔒 pré-req do próximo</span>
+                                    )}
+                                    {item.isPrereq && item.checked && (
+                                      <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">✓ pré-req concluído</span>
+                                    )}
+                                  </div>
+                                </div>
                                 <button
                                   onClick={() => setClExpandedNotes((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
                                   className="shrink-0 p-0.5 rounded hover:bg-white transition-colors"
@@ -13204,7 +13246,7 @@ export default function App() {
                                 </button>
                               </div>
                               {noteOpen && (
-                                <div className="mt-1 ml-6">
+                                <div className="mt-1 ml-8">
                                   <textarea
                                     value={item.note || ''}
                                     onChange={(e) => setCheckItemNote(cl.id, sec.id, item.id, e.target.value)}
@@ -13469,6 +13511,7 @@ export default function App() {
                       {cl.sections.map((sec, si) => (
                         <div key={sec.id} className="border border-slate-100 rounded-2xl overflow-hidden">
                           <div className="flex items-center gap-2 bg-slate-50 px-3 py-2">
+                            <span className={`text-xs font-black ${cc.text} shrink-0`}>{si + 1}.</span>
                             <input
                               value={sec.title}
                               onChange={(e) => {
@@ -13486,34 +13529,57 @@ export default function App() {
                           </div>
                           <div className="p-2 flex flex-col gap-1">
                             {sec.items.map((item, ii) => (
-                              <div key={item.id} className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-slate-50 group">
-                                <div className={`w-3.5 h-3.5 rounded-sm border-2 shrink-0 ${item.checked ? `${cc.badge} border-transparent` : 'border-slate-300'} flex items-center justify-center`}>
-                                  {item.checked && <Check className="w-2 h-2 text-white" />}
+                              <div key={item.id} className="rounded-xl border border-transparent hover:border-slate-100 hover:bg-slate-50/60 group px-2 py-1.5">
+                                <div className="flex items-center gap-2">
+                                  {/* Número automático */}
+                                  <span className="text-[10px] font-mono text-slate-400 shrink-0 w-7 text-right">{si + 1}.{ii + 1}</span>
+                                  <div className={`w-3.5 h-3.5 rounded-sm border-2 shrink-0 ${item.checked ? `${cc.badge} border-transparent` : 'border-slate-300'} flex items-center justify-center`}>
+                                    {item.checked && <Check className="w-2 h-2 text-white" />}
+                                  </div>
+                                  <input
+                                    value={item.text}
+                                    onChange={(e) => {
+                                      setChecklists((prev) => prev.map((c) => c.id !== cl.id ? c : {
+                                        ...c,
+                                        sections: c.sections.map((s) => s.id !== sec.id ? s : {
+                                          ...s,
+                                          items: s.items.map((it) => it.id !== item.id ? it : { ...it, text: e.target.value }),
+                                        }),
+                                      }))
+                                    }}
+                                    className="flex-1 text-xs text-slate-700 bg-transparent outline-none"
+                                    placeholder="Descrição do item"
+                                  />
+                                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button disabled={ii === 0} onClick={() => moveCLItem(cl.id, sec.id, item.id, -1)} className="p-0.5 rounded disabled:opacity-20 hover:bg-slate-100" title="Mover para cima">
+                                      <ArrowUp className="w-3 h-3 text-slate-400" />
+                                    </button>
+                                    <button disabled={ii === sec.items.length - 1} onClick={() => moveCLItem(cl.id, sec.id, item.id, 1)} className="p-0.5 rounded disabled:opacity-20 hover:bg-slate-100" title="Mover para baixo">
+                                      <ArrowDown className="w-3 h-3 text-slate-400" />
+                                    </button>
+                                    <button onClick={() => deleteCLItem(cl.id, sec.id, item.id)} className="p-0.5 rounded hover:bg-rose-50" title="Excluir item">
+                                      <X className="w-3 h-3 text-rose-400" />
+                                    </button>
+                                  </div>
                                 </div>
-                                <input
-                                  value={item.text}
-                                  onChange={(e) => {
-                                    setChecklists((prev) => prev.map((c) => c.id !== cl.id ? c : {
-                                      ...c,
-                                      sections: c.sections.map((s) => s.id !== sec.id ? s : {
-                                        ...s,
-                                        items: s.items.map((it) => it.id !== item.id ? it : { ...it, text: e.target.value }),
-                                      }),
-                                    }))
-                                  }}
-                                  className="flex-1 text-xs text-slate-700 bg-transparent outline-none"
-                                  placeholder="Descrição do item"
-                                />
-                                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button disabled={ii === 0} onClick={() => moveCLItem(cl.id, sec.id, item.id, -1)} className="p-0.5 rounded disabled:opacity-20 hover:bg-slate-100">
-                                    <ArrowUp className="w-3 h-3 text-slate-400" />
+                                {/* Toggles: obrigatório / pré-requisito */}
+                                <div className="flex items-center gap-2 mt-1 ml-9 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() => updateCLItemProp(cl.id, sec.id, item.id, 'required', !item.required)}
+                                    className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full border transition-all ${item.required !== false ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}
+                                    title="Alternar obrigatório / facultativo"
+                                  >
+                                    {item.required !== false ? '★ Obrigatório' : '◇ Facultativo'}
                                   </button>
-                                  <button disabled={ii === sec.items.length - 1} onClick={() => moveCLItem(cl.id, sec.id, item.id, 1)} className="p-0.5 rounded disabled:opacity-20 hover:bg-slate-100">
-                                    <ArrowDown className="w-3 h-3 text-slate-400" />
-                                  </button>
-                                  <button onClick={() => deleteCLItem(cl.id, sec.id, item.id)} className="p-0.5 rounded hover:bg-rose-50">
-                                    <X className="w-3 h-3 text-rose-400" />
-                                  </button>
+                                  {ii < sec.items.length - 1 && (
+                                    <button
+                                      onClick={() => updateCLItemProp(cl.id, sec.id, item.id, 'isPrereq', !item.isPrereq)}
+                                      className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full border transition-all ${item.isPrereq ? 'bg-violet-50 border-violet-300 text-violet-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                                      title="Marcar como pré-requisito do próximo item"
+                                    >
+                                      🔒 Pré-req do próximo
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             ))}
