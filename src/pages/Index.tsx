@@ -1062,8 +1062,13 @@ export default function App() {
   }, [])
 
   // ─── Roteiros / Checklists ──────────────────────────────────────────────────
-  const [checklists, setChecklists] = useState(() => getSavedState('checklists', []))
-  const [activeChecklistId, setActiveChecklistId] = useState(() => getSavedState('activeChecklistId', null))
+  // Leitura direta (getSavedState não está definida ainda neste ponto do body)
+  const [checklists, setChecklists] = useState(() => {
+    try { const s = localStorage.getItem('boardecd_config'); return s ? (JSON.parse(s).checklists ?? []) : [] } catch { return [] }
+  })
+  const [activeChecklistId, setActiveChecklistId] = useState(() => {
+    try { const s = localStorage.getItem('boardecd_config'); return s ? (JSON.parse(s).activeChecklistId ?? null) : null } catch { return null }
+  })
   const [showChecklistPanel, setShowChecklistPanel] = useState(false)
   const [showChecklistManager, setShowChecklistManager] = useState(false)
   const [checklistPanelPos, setChecklistPanelPos] = useState(null)
