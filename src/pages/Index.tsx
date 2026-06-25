@@ -7229,29 +7229,37 @@ export default function App() {
                         const hasChildren =
                           line.isGroup && line.accounts && line.accounts.length > 0
 
-                        let rowClass = 'hover:bg-slate-50 transition-colors'
-                        let textClass = 'text-slate-700 font-semibold text-[14px]'
+                        // Esquema de cores espelhando o Balancete Comparativo
+                        let rowBg = ''
+                        let textClass = 'text-slate-700 font-semibold text-[13px]'
                         let valClass = 'text-slate-700'
+                        let chevronClass = 'bg-white/20 text-white'
 
                         if (line.id === '14_LUCRO_LIQUIDO') {
-                          rowClass = 'bg-slate-900 text-white hover:bg-slate-800'
-                          textClass = 'text-white font-black text-base uppercase tracking-wide'
-                          valClass = 'text-white font-black text-base'
+                          // Resultado final → azul mais escuro (nível 1 do Balancete)
+                          rowBg = 'bg-[#1E1B4B]'
+                          textClass = 'text-white font-black text-[13px] uppercase tracking-wide'
+                          valClass = 'text-white font-black'
                         } else if (line.id === '08_EBIT' || line.id === '05_LUCRO_BRUTO') {
-                          rowClass =
-                            'bg-indigo-50/50 border-t-2 border-indigo-100 hover:bg-indigo-50/80'
-                          textClass = 'text-indigo-900 font-black text-[14px] uppercase'
-                          valClass = 'text-indigo-900 font-black'
+                          // Resultados intermediários importantes → azul-800
+                          rowBg = 'bg-[#1E40AF]'
+                          textClass = 'text-white font-black text-[13px] uppercase tracking-wide'
+                          valClass = 'text-white font-black'
                         } else if (isSubtotal) {
-                          rowClass =
-                            'bg-slate-50 font-bold border-t-2 border-slate-200 hover:bg-slate-50/80'
-                          textClass = 'text-slate-800 uppercase text-[12px] tracking-wide'
-                          valClass = 'text-slate-800 font-bold'
+                          // Demais subtotais → azul-500
+                          rowBg = 'bg-[#3B82F6]'
+                          textClass = 'text-white font-bold text-[12px] uppercase tracking-wide'
+                          valClass = 'text-white font-bold'
                         } else if (hasChildren) {
-                          rowClass = 'hover:bg-blue-50/30 cursor-pointer group'
-                          textClass =
-                            'text-slate-600 font-bold text-[13px] group-hover:text-blue-700 transition-colors'
+                          // Grupos sintéticos expandíveis → azul mais escuro (nível 1)
+                          rowBg = 'bg-[#1E1B4B] cursor-pointer group'
+                          textClass = 'text-white font-bold text-[13px]'
+                          valClass = 'text-white font-bold'
                         }
+
+                        const rowClass = rowBg
+                          ? `${rowBg} hover:brightness-110 transition-all`
+                          : 'hover:bg-slate-50 transition-colors'
 
                         return (
                           <React.Fragment key={line.id}>
@@ -7262,10 +7270,10 @@ export default function App() {
                               <TableCell className="p-4 md:px-6 flex items-center gap-3">
                                 {hasChildren ? (
                                   <span
-                                    className={`p-1 rounded transition-colors ${isExpanded ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600'}`}
+                                    className={`p-1 rounded transition-colors ${isExpanded ? 'bg-white/30' : 'bg-white/10 hover:bg-white/20'}`}
                                   >
                                     <ChevronDown
-                                      className={`w-4 h-4 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+                                      className={`w-4 h-4 text-white transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
                                     />
                                   </span>
                                 ) : (
@@ -7291,13 +7299,13 @@ export default function App() {
                                   className="bg-white hover:bg-slate-50/80 transition-colors"
                                 >
                                   <TableCell className="py-3 px-6 pl-14 whitespace-nowrap">
-                                    <span className="font-mono text-[11px] font-bold text-slate-400 tracking-wider mr-2">{acc.conta}</span>
-                                    <span className="text-slate-600 font-medium text-[13px]">{acc.nome}</span>
+                                    <span className="font-mono text-[11px] font-bold text-slate-900 tracking-wider mr-2">{acc.conta}</span>
+                                    <span className="text-slate-900 font-medium text-[13px]">{acc.nome}</span>
                                   </TableCell>
                                   {drePeriodsToDisplay.map((period: any) => (
                                     <TableCell
                                       key={period}
-                                      className={`p-3 md:px-6 whitespace-nowrap border-l border-slate-100/50 text-slate-500 text-[13px] font-medium text-${dreValAlign}`}
+                                      className={`p-3 md:px-6 whitespace-nowrap border-l border-slate-100/50 text-slate-900 text-[13px] font-medium text-${dreValAlign}`}
                                     >
                                       {formatDreValue(getDreAccVal(acc, period))}
                                     </TableCell>
