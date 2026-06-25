@@ -1034,6 +1034,7 @@ export default function App() {
   const [data, setData] = useState([])
   const [companyInfo, setCompanyInfo] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [txImportProgress, setTxImportProgress] = useState<{ current: number; total: number } | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [activeTab, setActiveTab] = useState('dashboard')
   const [filesCount, setFilesCount] = useState(0)
@@ -3202,12 +3203,28 @@ export default function App() {
 
           audit.transactions.deleted = totalDeleted
 
-          for (let i = 0; i < validTxs.length; i += 2000) {
-            const chunk = validTxs.slice(i, i + 2000)
-            const { error: txError } = await supabase.from('transactions').insert(chunk)
-            if (txError) audit.errors.push(`Erro ao salvar lançamentos: ${txError.message}`)
+          const TX_CHUNK = 300
+          for (let i = 0; i < validTxs.length; i += TX_CHUNK) {
+            const chunk = validTxs.slice(i, i + TX_CHUNK)
+            setTxImportProgress({ current: Math.min(i + TX_CHUNK, validTxs.length), total: validTxs.length })
+            let retries = 0
+            let chunkSaved = false
+            while (retries < 3 && !chunkSaved) {
+              const { error: txError } = await supabase.from('transactions').insert(chunk)
+              if (!txError) {
+                chunkSaved = true
+              } else {
+                retries++
+                if (retries === 3) {
+                  audit.errors.push(`Erro lote ${i}–${i + chunk.length} (${chunk[0]?.date}): ${txError.message}`)
+                } else {
+                  await new Promise((r) => setTimeout(r, 800 * retries))
+                }
+              }
+            }
+            if (!chunkSaved) break
           }
-
+          setTxImportProgress(null)
           audit.transactions.inserted = validTxs.length
         }
       }
@@ -6137,6 +6154,31 @@ export default function App() {
           )}
         </div>
       </header>
+
+      {/* Overlay de progresso de importação de lançamentos */}
+      {txImportProgress && (
+        <div className="fixed inset-0 z-[9999] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <Loader2 className="w-6 h-6 text-indigo-600 animate-spin flex-shrink-0" />
+              <div>
+                <p className="font-black text-slate-900 text-[15px]">Salvando lançamentos na nuvem</p>
+                <p className="text-xs text-slate-500 mt-0.5">Não feche ou recarregue esta página</p>
+              </div>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden mb-3">
+              <div
+                className="h-full bg-indigo-600 rounded-full transition-all duration-200"
+                style={{ width: `${Math.round((txImportProgress.current / txImportProgress.total) * 100)}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-xs font-semibold text-slate-500">
+              <span>{txImportProgress.current.toLocaleString('pt-BR')} de {txImportProgress.total.toLocaleString('pt-BR')} lançamentos</span>
+              <span>{Math.round((txImportProgress.current / txImportProgress.total) * 100)}%</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1 w-full max-w-[1920px] mx-auto px-4 md:px-8 2xl:px-12 py-8 space-y-8">
         <Alert className="bg-indigo-50/50 border-indigo-200 text-indigo-900 shadow-sm relative overflow-hidden">
