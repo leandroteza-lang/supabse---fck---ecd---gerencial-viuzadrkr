@@ -1574,6 +1574,7 @@ export default function App() {
   const [ruleAhV1, setRuleAhV1] = useState('')
   const [ruleAhV2, setRuleAhV2] = useState('')
 
+  const [ruleTreeExpanded, setRuleTreeExpanded] = useState<Set<string>>(new Set())
   const resetRuleForm = () => { setRuleSearch(''); setRuleAcct(null); setRuleAvOp('none'); setRuleAvV1(''); setRuleAvV2(''); setRuleAhOp('none'); setRuleAhV1(''); setRuleAhV2('') }
 
   const [selectedMonthlyAccounts, setSelectedMonthlyAccounts] = useState<string[]>([])
@@ -12850,9 +12851,67 @@ export default function App() {
                       {(() => {
                         const rules: any[] = profile.accountRules || []
                         const accounts = monthlyData.allAccounts || []
-                        const filteredAccts = ruleSearch.trim().length > 0
-                          ? accounts.filter((a: any) => a.conta.includes(ruleSearch) || a.nome.toLowerCase().includes(ruleSearch.toLowerCase())).slice(0, 8)
-                          : []
+                        // build children map for the account tree
+                        const treeChildrenMap: Record<string, any[]> = {}
+                        accounts.forEach((a: any) => {
+                          const par = accountParentMap?.[a.conta] ?? '__root__'
+                          if (!treeChildrenMap[par]) treeChildrenMap[par] = []
+                          treeChildrenMap[par].push(a)
+                        })
+                        const treeRoots: any[] = treeChildrenMap['__root__'] || []
+
+                        const toggleTreeNode = (conta: string) =>
+                          setRuleTreeExpanded(prev => {
+                            const next = new Set(prev)
+                            next.has(conta) ? next.delete(conta) : next.add(conta)
+                            return next
+                          })
+
+                        const expandAllTree = () =>
+                          setRuleTreeExpanded(new Set(
+                            accounts.filter((a: any) => (treeChildrenMap[a.conta]?.length ?? 0) > 0).map((a: any) => a.conta)
+                          ))
+
+                        const collapseAllTree = () => setRuleTreeExpanded(new Set())
+
+                        const treeFilter = ruleSearch.trim().toLowerCase()
+                        const isMatchOrDescendant = (acc: any): boolean => {
+                          if (!treeFilter) return true
+                          if (acc.conta.toLowerCase().includes(treeFilter) || acc.nome.toLowerCase().includes(treeFilter)) return true
+                          return (treeChildrenMap[acc.conta] || []).some(isMatchOrDescendant)
+                        }
+
+                        const renderTreeNode = (acc: any, depth: number): any => {
+                          if (!isMatchOrDescendant(acc)) return null
+                          const children: any[] = treeChildrenMap[acc.conta] || []
+                          const hasChildren = children.length > 0
+                          const isExpanded = ruleTreeExpanded.has(acc.conta) || treeFilter.length > 0
+                          const isSelected = ruleAcct?.conta === acc.conta
+                          const alreadyHasRule = rules.some((r: any) => r.conta === acc.conta)
+                          return (
+                            <div key={acc.conta}>
+                              <div
+                                style={{ paddingLeft: 6 + depth * 14 }}
+                                onClick={() => !alreadyHasRule && setRuleAcct(isSelected ? null : acc)}
+                                className={`flex items-center gap-1 py-1 pr-2 rounded-lg transition-colors select-none ${alreadyHasRule ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} ${isSelected ? 'bg-indigo-100' : 'hover:bg-slate-50'}`}
+                              >
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); if (hasChildren) toggleTreeNode(acc.conta) }}
+                                  className={`w-4 h-4 flex items-center justify-center shrink-0 rounded transition-colors ${hasChildren ? 'hover:bg-slate-200 cursor-pointer' : 'cursor-default'}`}
+                                >
+                                  {hasChildren
+                                    ? <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-150 ${isExpanded ? '' : '-rotate-90'}`} />
+                                    : <span className="w-2 h-px bg-slate-200 block rounded" />}
+                                </button>
+                                <span className={`text-[11px] font-mono shrink-0 ${isSelected ? 'text-indigo-700 font-bold' : depth === 0 ? 'text-slate-700 font-bold' : 'text-slate-400'}`}>{acc.conta}</span>
+                                <span className={`text-[11px] truncate flex-1 ${isSelected ? 'text-indigo-800 font-semibold' : hasChildren ? 'font-semibold text-slate-700' : 'text-slate-500'}`}>{acc.nome}</span>
+                                {alreadyHasRule && <span className="text-[9px] text-indigo-400 font-bold shrink-0 bg-indigo-50 px-1 rounded">✓ regra</span>}
+                                {isSelected && !alreadyHasRule && <span className="text-indigo-600 text-xs font-bold shrink-0">✓</span>}
+                              </div>
+                              {isExpanded && hasChildren && children.map((child: any) => renderTreeNode(child, depth + 1))}
+                            </div>
+                          )
+                        }
 
                         const addRule = () => {
                           if (!ruleAcct) return
@@ -12929,29 +12988,41 @@ export default function App() {
                             <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-3 flex flex-col gap-2">
                               <p className="text-[10px] font-bold text-slate-500 uppercase">+ Nova regra</p>
 
-                              {/* Seletor de conta */}
-                              <div className="relative">
-                                <input
-                                  value={ruleAcct ? `${ruleAcct.conta} — ${ruleAcct.nome}` : ruleSearch}
-                                  onChange={(e) => { setRuleAcct(null); setRuleSearch(e.target.value) }}
-                                  placeholder="Buscar conta ou grupo..."
-                                  className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-indigo-300 bg-white"
-                                />
-                                {filteredAccts.length > 0 && !ruleAcct && (
-                                  <div className="absolute z-10 top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl mt-1 max-h-44 overflow-y-auto">
-                                    {filteredAccts.map((a: any) => (
-                                      <button
-                                        key={a.conta}
-                                        onClick={() => { setRuleAcct(a); setRuleSearch('') }}
-                                        className="w-full text-left px-3 py-2 hover:bg-indigo-50 flex items-center gap-2"
-                                      >
-                                        <span className="text-[11px] font-mono text-indigo-600 w-20 shrink-0">{a.conta}</span>
-                                        <span className="text-[11px] text-slate-600 truncate">{a.nome}</span>
-                                        <span className="text-[10px] text-slate-400 shrink-0">{a.tipo === 'S' ? 'grupo' : 'analítica'}</span>
-                                      </button>
-                                    ))}
+                              {/* Plano de contas — tree picker */}
+                              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                                {/* Toolbar da árvore */}
+                                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 border-b border-slate-100">
+                                  <input
+                                    value={ruleSearch}
+                                    onChange={(e) => { setRuleAcct(null); setRuleSearch(e.target.value) }}
+                                    placeholder="Filtrar..."
+                                    className="flex-1 text-[11px] bg-transparent outline-none placeholder:text-slate-300 text-slate-600 min-w-0"
+                                  />
+                                  <button onClick={expandAllTree} className="text-[10px] text-indigo-500 hover:text-indigo-700 font-semibold whitespace-nowrap shrink-0 transition-colors">Expandir tudo</button>
+                                  <span className="text-slate-200 text-xs">|</span>
+                                  <button onClick={collapseAllTree} className="text-[10px] text-slate-400 hover:text-slate-600 font-medium whitespace-nowrap shrink-0 transition-colors">Recolher</button>
+                                  {ruleAcct && (
+                                    <>
+                                      <span className="text-slate-200 text-xs">|</span>
+                                      <button onClick={() => setRuleAcct(null)} className="text-[10px] text-rose-400 hover:text-rose-600 font-medium whitespace-nowrap shrink-0">Limpar</button>
+                                    </>
+                                  )}
+                                </div>
+                                {/* Conta selecionada (topo) */}
+                                {ruleAcct && (
+                                  <div className="flex items-center gap-2 px-2.5 py-1.5 bg-indigo-50 border-b border-indigo-100">
+                                    <span className="text-[11px] font-mono font-bold text-indigo-700">{ruleAcct.conta}</span>
+                                    <span className="text-[11px] text-indigo-600 truncate flex-1">{ruleAcct.nome}</span>
+                                    <span className="text-[9px] bg-indigo-200 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold shrink-0">Selecionado</span>
                                   </div>
                                 )}
+                                {/* Árvore */}
+                                <div className="overflow-y-auto custom-scrollbar py-1" style={{ maxHeight: 200 }}>
+                                  {treeRoots.length === 0
+                                    ? <p className="text-[11px] text-slate-400 text-center py-6">Nenhuma conta carregada</p>
+                                    : treeRoots.map((acc: any) => renderTreeNode(acc, 0))
+                                  }
+                                </div>
                               </div>
 
                               {/* Condições AV% e AH% */}
