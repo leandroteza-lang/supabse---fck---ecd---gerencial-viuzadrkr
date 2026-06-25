@@ -720,7 +720,7 @@ const ExplanationPanel = ({
 interface AnalysisProfile {
   id: string
   name: string
-  globalAvMode: 'default' | 'parent' | 'lowest_synthetic'
+  globalAvMode: 'default' | 'parent' | 'lowest_synthetic' | 'receita_bruta'
   globalAhMode: 'previous' | 'base_period'
   basePeriodForAh?: string
   customAvBases: Record<string, string | string[]>
@@ -3682,24 +3682,40 @@ export default function App() {
   const baseValuesPerPeriod = useMemo(() => {
     if (!monthlyData?.periods?.length) return {}
 
-    const bases: Record<string, { ativo: number; receita: number }> = {}
-    monthlyData.periods.forEach((period) => {
-      // Encontra a conta raiz do Ativo (1)
-      const ativoAcc = monthlyData.allAccounts.find(
-        (a: any) => a.conta.startsWith('1') && a.nivel === '1',
-      )
-      // Encontra a conta raiz de Receitas (3 ou 4)
-      const receitaAcc =
-        monthlyData.allAccounts.find(
-          (a: any) =>
-            (a.conta.startsWith('3') || a.conta.startsWith('4')) &&
-            a.nome.toUpperCase().includes('RECEITA') &&
-            a.nivel === '1',
-        ) ||
-        monthlyData.allAccounts.find(
-          (a: any) => (a.conta.startsWith('3') || a.conta.startsWith('4')) && a.nivel === '1',
-        )
+    const bases: Record<string, { ativo: number; receita: number; receitaBruta: number }> = {}
 
+    // Encontra a conta raiz do Ativo (1) — uma vez, fora do loop de períodos
+    const ativoAcc = monthlyData.allAccounts.find(
+      (a: any) => a.conta.startsWith('1') && a.nivel === '1',
+    )
+    // Encontra a conta raiz de Receitas Líquidas (3 ou 4, nível 1)
+    const receitaAcc =
+      monthlyData.allAccounts.find(
+        (a: any) =>
+          (a.conta.startsWith('3') || a.conta.startsWith('4')) &&
+          a.nome.toUpperCase().includes('RECEITA') &&
+          a.nivel === '1',
+      ) ||
+      monthlyData.allAccounts.find(
+        (a: any) => (a.conta.startsWith('3') || a.conta.startsWith('4')) && a.nivel === '1',
+      )
+    // Encontra a conta de Receita Bruta: sintética com "BRUTA" no nome sob o grupo de Receitas
+    const receitaBrutaAcc =
+      monthlyData.allAccounts.find(
+        (a: any) =>
+          a.tipo === 'S' &&
+          a.nome.toUpperCase().includes('BRUTA') &&
+          a.nome.toUpperCase().includes('RECEITA') &&
+          (a.conta.startsWith('3') || a.conta.startsWith('4')),
+      ) ||
+      monthlyData.allAccounts.find(
+        (a: any) =>
+          a.tipo === 'S' &&
+          a.nome.toUpperCase().includes('BRUTA') &&
+          (a.conta.startsWith('3') || a.conta.startsWith('4')),
+      )
+
+    monthlyData.periods.forEach((period) => {
       const getAtivoVal = (acc: any) => {
         if (!acc) return 0
         const sld = acc.saldos[period]
@@ -3723,6 +3739,7 @@ export default function App() {
       bases[period] = {
         ativo: getAtivoVal(ativoAcc),
         receita: getReceitaVal(receitaAcc),
+        receitaBruta: getReceitaVal(receitaBrutaAcc),
       }
     })
     return bases
@@ -5546,6 +5563,13 @@ export default function App() {
     if (!baseAccCode) {
       if (profile.globalAvMode === 'parent') {
         baseAccCode = accountParentMap[acc.conta]
+      } else if (profile.globalAvMode === 'receita_bruta') {
+        const isPatrimonial = acc.conta.startsWith('1') || acc.conta.startsWith('2')
+        const type = isPatrimonial ? 'Ativo Total (Padrão Global)' : 'Receita Bruta (Padrão Global)'
+        const totalValue = isPatrimonial
+          ? baseValuesPerPeriod[period]?.ativo
+          : baseValuesPerPeriod[period]?.receitaBruta
+        return { type, totalValue, accounts: [] }
       } else if (profile.globalAvMode === 'lowest_synthetic') {
         if (acc.tipo === 'S') {
           // Sintética folha = nenhum filho sintético → ela mesma é 100%
@@ -12778,6 +12802,9 @@ export default function App() {
                           <SelectContent>
                             <SelectItem value="default">
                               Padrão (Ativo Total / Receita Líquida)
+                            </SelectItem>
+                            <SelectItem value="receita_bruta">
+                              Padrão (Ativo Total / Receita Bruta)
                             </SelectItem>
                             <SelectItem value="parent">Relativa à Conta Pai Imediata</SelectItem>
                             <SelectItem value="lowest_synthetic">Relativa Último Sub-Nível</SelectItem>
