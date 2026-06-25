@@ -1490,6 +1490,10 @@ export default function App() {
   )
   const [openDropdownId, setOpenDropdownId] = useState(null)
   const [expandedDreGroups, setExpandedDreGroups] = useState({})
+  const [dreFontSize, setDreFontSize] = useState(11)
+  const [dreSelectedPeriods, setDreSelectedPeriods] = useState<string[]>([])
+  const [dreIsAccumulated, setDreIsAccumulated] = useState(false)
+  const [drePeriodPopover, setDrePeriodPopover] = useState(false)
   const dropdownRef = useRef(null)
 
   const [customMapping, setCustomMapping] = useState(() => getSavedState('customMapping', {}))
@@ -6998,7 +7002,105 @@ export default function App() {
                   </p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto flex-wrap justify-end">
+                  {/* Perspectiva */}
+                  <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
+                    <button
+                      onClick={() => setDreIsAccumulated(false)}
+                      className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${!dreIsAccumulated ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      Mensal Isolado
+                    </button>
+                    <button
+                      onClick={() => setDreIsAccumulated(true)}
+                      className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${dreIsAccumulated ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      Acumulado Mensal
+                    </button>
+                  </div>
+
+                  {/* Períodos */}
+                  {dreStructuredData?.periods?.length > 0 && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setDrePeriodPopover((v) => !v)}
+                        className="flex items-center gap-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm"
+                      >
+                        <CalendarDays className="w-3.5 h-3.5 text-slate-400" />
+                        Períodos ({dreSelectedPeriods.length > 0 ? dreSelectedPeriods.length : dreStructuredData.periods.length})
+                      </button>
+                      {drePeriodPopover && (
+                        <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl p-3 min-w-[220px]">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Períodos</span>
+                            <button
+                              onClick={() => { setDreSelectedPeriods([]); setDrePeriodPopover(false) }}
+                              className="text-xs text-indigo-600 font-bold hover:underline"
+                            >
+                              Todos
+                            </button>
+                          </div>
+                          <div className="flex flex-col gap-1 max-h-52 overflow-y-auto">
+                            {dreStructuredData.periods.map((p: any) => {
+                              const checked = dreSelectedPeriods.length === 0 || dreSelectedPeriods.includes(p)
+                              return (
+                                <label key={p} className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 rounded px-1 py-0.5">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => {
+                                      if (dreSelectedPeriods.length === 0) {
+                                        setDreSelectedPeriods(dreStructuredData.periods.filter((x: any) => x !== p))
+                                      } else if (checked) {
+                                        const next = dreSelectedPeriods.filter((x) => x !== p)
+                                        setDreSelectedPeriods(next.length === dreStructuredData.periods.length ? [] : next)
+                                      } else {
+                                        const next = [...dreSelectedPeriods, p]
+                                        setDreSelectedPeriods(next.length === dreStructuredData.periods.length ? [] : next)
+                                      }
+                                    }}
+                                    className="accent-indigo-600"
+                                  />
+                                  <span className="text-xs text-slate-700">{p.split(' a ')[0].substring(3)}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                          <button
+                            onClick={() => setDrePeriodPopover(false)}
+                            className="mt-2 w-full text-xs text-center text-slate-500 hover:text-slate-700 font-medium"
+                          >
+                            Fechar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Font size */}
+                  <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-sm">
+                    <button
+                      onClick={() => setDreFontSize((s) => Math.max(8, s - 1))}
+                      className="text-slate-500 hover:text-slate-800 font-bold text-xs px-1"
+                    >
+                      A-
+                    </button>
+                    <span className="text-xs font-bold text-slate-600 w-5 text-center">{dreFontSize}</span>
+                    <button
+                      onClick={() => setDreFontSize((s) => Math.min(18, s + 1))}
+                      className="text-slate-500 hover:text-slate-800 font-bold text-xs px-1"
+                    >
+                      A+
+                    </button>
+                    <button
+                      onClick={() => setDreFontSize(11)}
+                      title="Resetar tamanho"
+                      className="text-slate-400 hover:text-slate-600 ml-1"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
+                  </div>
+
                   <button
                     onClick={() => setIsMappingModalOpen(true)}
                     className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-5 py-2.5 rounded-lg font-bold transition-all shadow-sm"
@@ -7014,15 +7116,29 @@ export default function App() {
                 </div>
               </div>
 
-              {dreStructuredData?.lines?.length > 0 ? (
+              {dreStructuredData?.lines?.length > 0 ? (() => {
+                const drePeriodsToDisplay = dreSelectedPeriods.length > 0
+                  ? dreStructuredData.periods.filter((p: any) => dreSelectedPeriods.includes(p))
+                  : dreStructuredData.periods
+                const getDreLineVal = (line: any, period: string) => {
+                  if (!dreIsAccumulated) return line.totals[period] || 0
+                  const idx = dreStructuredData.periods.indexOf(period)
+                  return dreStructuredData.periods.slice(0, idx + 1).reduce((s: number, p: any) => s + (line.totals[p] || 0), 0)
+                }
+                const getDreAccVal = (acc: any, period: string) => {
+                  if (!dreIsAccumulated) return acc.saldos[period] || 0
+                  const idx = dreStructuredData.periods.indexOf(period)
+                  return dreStructuredData.periods.slice(0, idx + 1).reduce((s: number, p: any) => s + (acc.saldos[p] || 0), 0)
+                }
+                return (
                 <div className="overflow-x-auto custom-scrollbar">
-                  <Table className="w-full text-left text-sm">
+                  <Table className="w-full text-left" style={{ fontSize: dreFontSize }}>
                     <TableHeader>
                       <TableRow className="bg-slate-50/80 border-b-2 border-slate-200 hover:bg-slate-50/80">
                         <TableHead className="p-5 font-bold text-slate-500 uppercase tracking-widest text-[11px] min-w-[400px]">
                           Estrutura Contábil Analítica
                         </TableHead>
-                        {dreStructuredData.periods.map((period) => (
+                        {drePeriodsToDisplay.map((period: any) => (
                           <TableHead
                             key={period}
                             className="p-5 whitespace-nowrap text-right border-l border-slate-100 h-auto"
@@ -7031,7 +7147,7 @@ export default function App() {
                               {period.split(' a ')[0].substring(3)}
                             </div>
                             <span className="font-bold text-slate-700 text-sm">
-                              Saldo no Período
+                              {dreIsAccumulated ? 'Saldo Acumulado' : 'Saldo no Período'}
                             </span>
                           </TableHead>
                         ))}
@@ -7088,12 +7204,12 @@ export default function App() {
                                 )}
                                 <span className={textClass}>{line.label}</span>
                               </TableCell>
-                              {dreStructuredData.periods.map((period) => (
+                              {drePeriodsToDisplay.map((period: any) => (
                                 <TableCell
                                   key={period}
                                   className={`p-4 md:px-6 text-right whitespace-nowrap border-l border-slate-100/50 ${valClass}`}
                                 >
-                                  {formatDreValue(line.totals[period])}
+                                  {formatDreValue(getDreLineVal(line, period))}
                                 </TableCell>
                               ))}
                             </TableRow>
@@ -7113,12 +7229,12 @@ export default function App() {
                                       {acc.nome}
                                     </span>
                                   </TableCell>
-                                  {dreStructuredData.periods.map((period) => (
+                                  {drePeriodsToDisplay.map((period: any) => (
                                     <TableCell
                                       key={period}
                                       className="p-3 md:px-6 text-right whitespace-nowrap border-l border-slate-100/50 text-slate-500 text-[13px] font-medium"
                                     >
-                                      {formatDreValue(acc.saldos[period] || 0)}
+                                      {formatDreValue(getDreAccVal(acc, period))}
                                     </TableCell>
                                   ))}
                                 </TableRow>
@@ -7129,7 +7245,8 @@ export default function App() {
                     </TableBody>
                   </Table>
                 </div>
-              ) : (
+                )
+              })() : (
                 <div className="p-16 text-center flex flex-col items-center">
                   <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
                     <AlertCircle className="w-8 h-8 text-slate-400" />
