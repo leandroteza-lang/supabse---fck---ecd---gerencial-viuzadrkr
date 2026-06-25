@@ -1506,6 +1506,9 @@ export default function App() {
   const [customMapping, setCustomMapping] = useState(() => getSavedState('customMapping', {}))
   const [customDaMapping, setCustomDaMapping] = useState(() => getSavedState('customDaMapping', {}))
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false)
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false)
+  const [auditFilter, setAuditFilter] = useState<'all' | 'auto'>('auto')
+  const [auditSearch, setAuditSearch] = useState('')
   const [mappingSearch, setMappingSearch] = useState('')
   const [isEbitdaMappingModalOpen, setIsEbitdaMappingModalOpen] = useState(false)
   const [ebitdaMappingSearch, setEbitdaMappingSearch] = useState('')
@@ -7192,6 +7195,13 @@ export default function App() {
                   </div>
 
                   <button
+                    onClick={() => { setAuditFilter('auto'); setAuditSearch(''); setIsAuditModalOpen(true) }}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 px-5 py-2.5 rounded-lg font-bold transition-all shadow-sm"
+                    title="Identificar contas sem mapeamento explícito e corrigir"
+                  >
+                    <ClipboardList className="w-4 h-4" /> Auditoria DRE
+                  </button>
+                  <button
                     onClick={() => setIsMappingModalOpen(true)}
                     className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-5 py-2.5 rounded-lg font-bold transition-all shadow-sm"
                   >
@@ -11524,6 +11534,180 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* --- MODAL DE AUDITORIA DRE --- */}
+      {isAuditModalOpen && (() => {
+        const allAccs = uniqueResultAccounts as any[]
+        const getGroup = (a: any) =>
+          customMapping[a.conta] || getDefaultClassification(a.conta, a.nome, a.indDc)
+        const isCustom = (a: any) => !!customMapping[a.conta]
+
+        const filtered = allAccs
+          .filter((a) => auditFilter === 'auto' ? !isCustom(a) : true)
+          .filter((a) => {
+            if (!auditSearch) return true
+            const q = auditSearch.toLowerCase()
+            return a.conta.toLowerCase().includes(q) || a.nome.toLowerCase().includes(q)
+          })
+
+        // Agrupar por grupo DRE
+        const grouped: Record<string, any[]> = {}
+        filtered.forEach((a) => {
+          const g = getGroup(a)
+          if (!grouped[g]) grouped[g] = []
+          grouped[g].push(a)
+        })
+
+        const totalCustom = allAccs.filter(isCustom).length
+        const totalAuto = allAccs.length - totalCustom
+
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 md:p-8">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+              {/* Cabeçalho */}
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+                <div className="flex items-center gap-3">
+                  <div className="bg-amber-100 p-2 rounded-lg">
+                    <ClipboardList className="w-6 h-6 text-amber-700" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">Auditoria de Mapeamento DRE</h3>
+                    <p className="text-sm text-slate-500">
+                      Identifique contas sem mapeamento explícito e corrija a classificação.
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => setIsAuditModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Estatísticas */}
+              <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 flex flex-wrap gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Total de contas</span>
+                  <span className="text-sm font-black text-slate-800">{allAccs.length}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                  <span className="text-xs font-bold text-slate-500">Mapeamento explícito</span>
+                  <span className="text-sm font-black text-emerald-700">{totalCustom}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />
+                  <span className="text-xs font-bold text-slate-500">Auto-classificadas</span>
+                  <span className="text-sm font-black text-amber-700">{totalAuto}</span>
+                </div>
+                <div className="flex-1 text-right">
+                  <span className="text-xs text-slate-400">
+                    {totalAuto === 0
+                      ? '✓ Todas as contas possuem mapeamento explícito'
+                      : `${totalAuto} conta${totalAuto > 1 ? 's dependem' : ' depende'} da classificação automática — revise abaixo`}
+                  </span>
+                </div>
+              </div>
+
+              {/* Filtros */}
+              <div className="px-6 py-3 border-b border-slate-100 bg-white flex flex-col sm:flex-row gap-3 items-center">
+                <div className="relative w-full sm:max-w-sm">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar conta ou descrição..."
+                    value={auditSearch}
+                    onChange={(e) => setAuditSearch(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50"
+                  />
+                </div>
+                <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5 shrink-0">
+                  <button
+                    onClick={() => setAuditFilter('auto')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${auditFilter === 'auto' ? 'bg-amber-500 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Só auto-classificadas ({totalAuto})
+                  </button>
+                  <button
+                    onClick={() => setAuditFilter('all')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${auditFilter === 'all' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Todas ({allAccs.length})
+                  </button>
+                </div>
+                {totalAuto === 0 && (
+                  <span className="text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg">
+                    ✓ Nenhuma conta pendente de revisão
+                  </span>
+                )}
+              </div>
+
+              {/* Lista agrupada */}
+              <div className="overflow-y-auto flex-1">
+                {filtered.length === 0 ? (
+                  <div className="p-12 text-center text-slate-400 text-sm">
+                    {auditFilter === 'auto' ? 'Todas as contas possuem mapeamento explícito.' : 'Nenhuma conta encontrada.'}
+                  </div>
+                ) : (
+                  DRE_GROUPS_OPTIONS.filter((grp) => grouped[grp.id]?.length > 0).map((grp) => (
+                    <div key={grp.id} className="border-b border-slate-100 last:border-0">
+                      <div className="flex items-center gap-3 px-6 py-2 bg-slate-50 border-b border-slate-100 sticky top-0 z-10">
+                        <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{grp.label}</span>
+                        <span className="text-[10px] font-bold bg-slate-200 text-slate-600 rounded-full px-2 py-0.5">{grouped[grp.id].length}</span>
+                        <span className="text-[10px] text-amber-600 font-bold">
+                          {grouped[grp.id].filter((a) => !isCustom(a)).length > 0
+                            ? `${grouped[grp.id].filter((a) => !isCustom(a)).length} auto-classificada${grouped[grp.id].filter((a) => !isCustom(a)).length > 1 ? 's' : ''}`
+                            : ''}
+                        </span>
+                      </div>
+                      {grouped[grp.id].map((a) => (
+                        <div key={a.conta} className={`flex items-center gap-3 px-6 py-2.5 border-b border-slate-50 hover:bg-slate-50/60 ${!isCustom(a) ? 'bg-amber-50/40' : ''}`}>
+                          <span className="font-mono text-[11px] text-slate-500 w-32 shrink-0">{a.conta}</span>
+                          <span className="text-[13px] text-slate-700 flex-1 min-w-0 truncate">{a.nome}</span>
+                          {!isCustom(a)
+                            ? <span className="text-[10px] font-bold text-amber-600 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full shrink-0">auto</span>
+                            : <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full shrink-0">✓ explícito</span>
+                          }
+                          <select
+                            value={customMapping[a.conta] || getDefaultClassification(a.conta, a.nome, a.indDc)}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              const def = getDefaultClassification(a.conta, a.nome, a.indDc)
+                              setCustomMapping((prev: any) => {
+                                const next = { ...prev }
+                                if (val === def) delete next[a.conta]
+                                else next[a.conta] = val
+                                localStorage.setItem('boardecd_customMapping', JSON.stringify(next))
+                                return next
+                              })
+                            }}
+                            className={`text-xs border rounded-lg px-2 py-1.5 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-400 shrink-0 max-w-[280px] ${!isCustom(a) ? 'border-amber-200 bg-amber-50/80 text-amber-800' : 'border-slate-200 bg-white text-slate-700'}`}
+                          >
+                            {DRE_GROUPS_OPTIONS.map((opt) => (
+                              <option key={opt.id} value={opt.id}>{opt.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Rodapé */}
+              <div className="p-5 border-t border-slate-100 bg-white flex justify-between items-center">
+                <span className="text-xs text-slate-400">
+                  Alterações são salvas automaticamente e refletidas na DRE imediatamente.
+                </span>
+                <button
+                  onClick={() => setIsAuditModalOpen(false)}
+                  className="bg-slate-900 hover:bg-indigo-600 text-white px-8 py-2.5 rounded-lg font-bold transition-all shadow-md"
+                >
+                  Concluir Auditoria
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* --- MODAL DE MAPEAMENTO CUSTOMIZADO DO EBITDA (D&A) --- */}
       {isEbitdaMappingModalOpen && (
