@@ -7243,15 +7243,15 @@ export default function App() {
                       ['--dre-gl']: drePrefs.gridlineColor,
                     } as any}
                   >
-                    <TableHeader className="sticky top-0 z-10">
+                    <TableHeader>
                       <TableRow className="border-b-2 border-slate-200 hover:bg-slate-50/80">
-                        <TableHead className="p-5 font-bold text-slate-500 uppercase tracking-widest text-[11px] min-w-[400px] bg-slate-50 sticky left-0 z-20">
+                        <TableHead className="p-5 font-bold text-slate-500 uppercase tracking-widest text-[11px] min-w-[400px] bg-slate-50 sticky top-0 z-20 shadow-[0_1px_0_0_#e2e8f0]">
                           Estrutura Contábil Analítica
                         </TableHead>
                         {drePeriodsToDisplay.map((period: any) => (
                           <TableHead
                             key={period}
-                            className={`p-5 whitespace-nowrap text-${dreValAlign} border-l border-slate-100 h-auto bg-slate-50`}
+                            className={`p-5 whitespace-nowrap text-${dreValAlign} border-l border-slate-100 h-auto bg-slate-50 sticky top-0 z-10 shadow-[0_1px_0_0_#e2e8f0]`}
                           >
                             <div className="text-[10px] text-slate-400 uppercase font-bold tracking-widest mb-1">
                               {period.split(' a ')[0].substring(3)}
