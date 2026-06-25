@@ -1566,7 +1566,7 @@ export default function App() {
 
   // Estados para o formulário de nova regra de alerta por conta/grupo
   const [ruleSearch, setRuleSearch] = useState('')
-  const [ruleAcct, setRuleAcct] = useState<any>(null)
+  const [ruleAccts, setRuleAccts] = useState<any[]>([])
   const [ruleAvOp, setRuleAvOp] = useState('none')
   const [ruleAvV1, setRuleAvV1] = useState('')
   const [ruleAvV2, setRuleAvV2] = useState('')
@@ -1576,7 +1576,7 @@ export default function App() {
 
   const [ruleTreeExpanded, setRuleTreeExpanded] = useState<Set<string>>(new Set())
   const [ruleEditId, setRuleEditId] = useState<string | null>(null)
-  const resetRuleForm = () => { setRuleSearch(''); setRuleAcct(null); setRuleAvOp('none'); setRuleAvV1(''); setRuleAvV2(''); setRuleAhOp('none'); setRuleAhV1(''); setRuleAhV2(''); setRuleEditId(null) }
+  const resetRuleForm = () => { setRuleSearch(''); setRuleAccts([]); setRuleAvOp('none'); setRuleAvV1(''); setRuleAvV2(''); setRuleAhOp('none'); setRuleAhV1(''); setRuleAhV2(''); setRuleEditId(null) }
 
   const [selectedMonthlyAccounts, setSelectedMonthlyAccounts] = useState<string[]>([])
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set())
@@ -12901,18 +12901,32 @@ export default function App() {
                           return (treeChildrenMap[acc.conta] || []).some(isMatchOrDescendant)
                         }
 
+                        const toggleAcctSelection = (acc: any) => {
+                          setRuleAccts(prev =>
+                            prev.some((a: any) => a.conta === acc.conta)
+                              ? prev.filter((a: any) => a.conta !== acc.conta)
+                              : [...prev, acc]
+                          )
+                        }
+
                         const renderTreeNode = (acc: any, depth: number): any => {
                           if (!isMatchOrDescendant(acc)) return null
                           const children: any[] = treeChildrenMap[acc.conta] || []
                           const hasChildren = children.length > 0
                           const isExpanded = ruleTreeExpanded.has(acc.conta) || treeFilter.length > 0
-                          const isSelected = ruleAcct?.conta === acc.conta
-                          const alreadyHasRule = rules.some((r: any) => r.conta === acc.conta)
+                          const isSelected = ruleAccts.some((a: any) => a.conta === acc.conta)
+                          // em modo edição, só a conta sendo editada pode ser reajustada
+                          const alreadyHasRule = rules.some((r: any) => r.conta === acc.conta && r.id !== ruleEditId)
+                          const isEditTarget = ruleEditId && rules.find((r: any) => r.id === ruleEditId)?.conta === acc.conta
                           return (
                             <div key={acc.conta}>
                               <div
                                 style={{ paddingLeft: 6 + depth * 14 }}
-                                onClick={() => !alreadyHasRule && setRuleAcct(isSelected ? null : acc)}
+                                onClick={() => {
+                                  if (alreadyHasRule) return
+                                  if (ruleEditId && !isEditTarget && !isSelected) return // em edição, não adiciona novas
+                                  toggleAcctSelection(acc)
+                                }}
                                 className={`flex items-center gap-1 py-1 pr-2 rounded-lg transition-colors select-none ${alreadyHasRule ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} ${isSelected ? 'bg-indigo-100' : 'hover:bg-slate-50'}`}
                               >
                                 <button
@@ -12923,20 +12937,23 @@ export default function App() {
                                     ? <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-150 ${isExpanded ? '' : '-rotate-90'}`} />
                                     : <span className="w-2 h-px bg-slate-200 block rounded" />}
                                 </button>
+                                {/* mini checkbox */}
+                                <span className={`w-3.5 h-3.5 shrink-0 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'} ${alreadyHasRule ? 'opacity-0' : ''}`}>
+                                  {isSelected && <span className="text-white text-[8px] font-bold leading-none">✓</span>}
+                                </span>
                                 <span className={`text-[11px] font-mono shrink-0 ${isSelected ? 'text-indigo-700 font-bold' : depth === 0 ? 'text-slate-700 font-bold' : 'text-slate-400'}`}>{acc.conta}</span>
                                 <span className={`text-[11px] truncate flex-1 ${isSelected ? 'text-indigo-800 font-semibold' : hasChildren ? 'font-semibold text-slate-700' : 'text-slate-500'}`}>{acc.nome}</span>
                                 {alreadyHasRule && <span className="text-[9px] text-indigo-400 font-bold shrink-0 bg-indigo-50 px-1 rounded">✓ regra</span>}
-                                {isSelected && !alreadyHasRule && <span className="text-indigo-600 text-xs font-bold shrink-0">✓</span>}
                               </div>
                               {isExpanded && hasChildren && children.map((child: any) => renderTreeNode(child, depth + 1))}
                             </div>
                           )
                         }
 
-                        const buildRuleData = (id: string) => ({
+                        const buildRuleData = (id: string, acc: any) => ({
                           id,
-                          conta: ruleAcct!.conta,
-                          nome: ruleAcct!.nome,
+                          conta: acc.conta,
+                          nome: acc.nome,
                           avOp: ruleAvOp !== 'none' ? ruleAvOp : null,
                           avV1: ruleAvOp !== 'none' ? (ruleAvV1 || null) : null,
                           avV2: ruleAvOp !== 'none' ? (ruleAvV2 || null) : null,
@@ -12946,19 +12963,24 @@ export default function App() {
                         })
 
                         const addRule = () => {
-                          if (!ruleAcct) return
+                          if (ruleAccts.length === 0) return
                           if (ruleEditId) {
-                            updateProfile({ accountRules: rules.map((r: any) => r.id === ruleEditId ? buildRuleData(ruleEditId) : r) } as any)
+                            // editar: atualiza a regra existente com os novos valores
+                            updateProfile({ accountRules: rules.map((r: any) => r.id === ruleEditId ? buildRuleData(ruleEditId, ruleAccts[0]) : r) } as any)
                           } else {
-                            if (rules.find((r: any) => r.conta === ruleAcct.conta)) return
-                            updateProfile({ accountRules: [...rules, buildRuleData(crypto.randomUUID())] } as any)
+                            // multi-add: cria uma regra por conta selecionada (ignora duplicatas)
+                            const newRules = ruleAccts
+                              .filter((a: any) => !rules.find((r: any) => r.conta === a.conta))
+                              .map((a: any) => buildRuleData(crypto.randomUUID(), a))
+                            if (newRules.length === 0) return
+                            updateProfile({ accountRules: [...rules, ...newRules] } as any)
                           }
                           resetRuleForm()
                         }
 
                         const editRule = (rule: any) => {
                           const acc = accounts.find((a: any) => a.conta === rule.conta) || { conta: rule.conta, nome: rule.nome }
-                          setRuleAcct(acc)
+                          setRuleAccts([acc])
                           setRuleAvOp(rule.avOp ?? 'none')
                           setRuleAvV1(rule.avV1 ?? '')
                           setRuleAvV2(rule.avV2 ?? '')
@@ -13039,26 +13061,35 @@ export default function App() {
                                 <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 border-b border-slate-100">
                                   <input
                                     value={ruleSearch}
-                                    onChange={(e) => { setRuleAcct(null); setRuleSearch(e.target.value) }}
+                                    onChange={(e) => setRuleSearch(e.target.value)}
                                     placeholder="Filtrar..."
                                     className="flex-1 text-[11px] bg-transparent outline-none placeholder:text-slate-300 text-slate-600 min-w-0"
                                   />
                                   <button onClick={expandAllTree} className="text-[10px] text-indigo-500 hover:text-indigo-700 font-semibold whitespace-nowrap shrink-0 transition-colors">Expandir tudo</button>
                                   <span className="text-slate-200 text-xs">|</span>
                                   <button onClick={collapseAllTree} className="text-[10px] text-slate-400 hover:text-slate-600 font-medium whitespace-nowrap shrink-0 transition-colors">Recolher</button>
-                                  {ruleAcct && (
+                                  {ruleAccts.length > 0 && (
                                     <>
                                       <span className="text-slate-200 text-xs">|</span>
-                                      <button onClick={() => setRuleAcct(null)} className="text-[10px] text-rose-400 hover:text-rose-600 font-medium whitespace-nowrap shrink-0">Limpar</button>
+                                      <button onClick={() => setRuleAccts([])} className="text-[10px] text-rose-400 hover:text-rose-600 font-medium whitespace-nowrap shrink-0">Limpar tudo</button>
                                     </>
                                   )}
                                 </div>
-                                {/* Conta selecionada (topo) */}
-                                {ruleAcct && (
-                                  <div className="flex items-center gap-2 px-2.5 py-1.5 bg-indigo-50 border-b border-indigo-100">
-                                    <span className="text-[11px] font-mono font-bold text-indigo-700">{ruleAcct.conta}</span>
-                                    <span className="text-[11px] text-indigo-600 truncate flex-1">{ruleAcct.nome}</span>
-                                    <span className="text-[9px] bg-indigo-200 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold shrink-0">Selecionado</span>
+                                {/* Chips de contas selecionadas */}
+                                {ruleAccts.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 px-2.5 py-1.5 bg-indigo-50 border-b border-indigo-100">
+                                    {ruleAccts.map((a: any) => (
+                                      <span key={a.conta} className="flex items-center gap-1 bg-white border border-indigo-200 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded-full shadow-sm">
+                                        <span className="font-mono font-bold">{a.conta}</span>
+                                        <span className="text-indigo-500 max-w-[80px] truncate hidden sm:inline">{a.nome}</span>
+                                        {!ruleEditId && (
+                                          <button onClick={() => setRuleAccts(prev => prev.filter((x: any) => x.conta !== a.conta))} className="text-indigo-300 hover:text-rose-500 ml-0.5 transition-colors leading-none font-bold">×</button>
+                                        )}
+                                      </span>
+                                    ))}
+                                    {!ruleEditId && ruleAccts.length > 1 && (
+                                      <span className="text-[10px] text-indigo-400 self-center">{ruleAccts.length} contas</span>
+                                    )}
                                   </div>
                                 )}
                                 {/* Árvore */}
@@ -13116,10 +13147,12 @@ export default function App() {
 
                               <button
                                 onClick={addRule}
-                                disabled={!ruleAcct}
+                                disabled={ruleAccts.length === 0}
                                 className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-colors text-white disabled:opacity-40 disabled:cursor-not-allowed self-end ${ruleEditId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                               >
-                                {ruleEditId ? <><Edit2 className="w-3.5 h-3.5" /> Salvar alterações</> : <><Plus className="w-3.5 h-3.5" /> Adicionar regra</>}
+                                {ruleEditId
+                                  ? <><Edit2 className="w-3.5 h-3.5" /> Salvar alterações</>
+                                  : <><Plus className="w-3.5 h-3.5" /> {ruleAccts.length > 1 ? `Adicionar ${ruleAccts.length} regras` : 'Adicionar regra'}</>}
                               </button>
                               {ruleEditId && (
                                 <button onClick={resetRuleForm} className="self-end text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2 transition-colors">Cancelar</button>
