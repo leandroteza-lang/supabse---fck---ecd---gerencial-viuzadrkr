@@ -7026,8 +7026,8 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* Ano de acumulação (só aparece no modo Acumulado Mensal com múltiplos anos) */}
-                  {dreIsAccumulated && dreStructuredData?.periods?.length > 0 && (() => {
+                  {/* Filtro de ano (aparece sempre que há múltiplos anos na base) */}
+                  {dreStructuredData?.periods?.length > 0 && (() => {
                     const years = [...new Set(
                       dreStructuredData.periods.map((p: any) => {
                         const mm_aaaa = p.split(' a ')[0].substring(3) // "01/2026"
