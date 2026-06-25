@@ -5128,7 +5128,8 @@ export default function App() {
     columns.push({ label: `Acumulado (${n})`, kind: 'num' }, { label: 'D/C', kind: 'ind' })
     columns.push({ label: `Média (${n})`, kind: 'num' }, { label: 'D/C', kind: 'ind' })
 
-    const rows = monthlyData.accounts
+    // usa rowsToRender para respeitar a ordem customizada (drag-and-drop) da tela
+    const rows = rowsToRender
       .filter((acc: any) => selectedMonthlyAccounts.includes(acc.conta))
       .map((acc: any) => {
         const cells: any[] = [{ text: acc.conta }, { text: acc.nome }]
