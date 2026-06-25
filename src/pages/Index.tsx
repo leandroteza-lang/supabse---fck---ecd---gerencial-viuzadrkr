@@ -806,6 +806,38 @@ const effCond = (profile: any, kind: 'av' | 'ah') => {
   return { op: 'none' }
 }
 
+// Resolução hierárquica de alertas por conta/grupo:
+// verifica regras específicas (conta → grupo pai → avô…) antes do global do perfil.
+const effCondForAccountFn = (profile: any, kind: 'av' | 'ah', conta: string, parentMap: any) => {
+  if (!profile || !conta) return effCond(profile, kind)
+  const rules: any[] = profile.accountRules || []
+  let current: string | undefined = conta
+  while (current) {
+    const rule = rules.find((r: any) => r.conta === current)
+    if (rule) {
+      const op = rule[`${kind}Op`]
+      if (op !== undefined && op !== null) {
+        if (op === 'none') return { op: 'none' }
+        return { op, v1: rule[`${kind}V1`] ?? null, v2: rule[`${kind}V2`] ?? null }
+      }
+    }
+    current = parentMap?.[current]
+  }
+  return effCond(profile, kind)
+}
+
+// Texto legível de uma regra de conta
+const ruleCondTexto = (op: string, v1: any, v2: any) => {
+  if (!op || op === 'none') return 'Sem alerta'
+  switch (op) {
+    case 'gt': return `> ${v1}%`
+    case 'lt': return `< ${v1}%`
+    case 'between': return `entre ${v1}% e ${v2}%`
+    case 'outside': return `fora de ${v1}% a ${v2}%`
+    default: return op
+  }
+}
+
 const EditableTitle = ({
   initialTitle,
   defaultTitle,
@@ -1531,6 +1563,18 @@ export default function App() {
   const [customMultiBaseTargetAcc, setCustomMultiBaseTargetAcc] = useState<string | null>(null)
   const [customMultiBaseSearch, setCustomMultiBaseSearch] = useState('')
   const [customMultiBaseSelection, setCustomMultiBaseSelection] = useState<string[]>([])
+
+  // Estados para o formulário de nova regra de alerta por conta/grupo
+  const [ruleSearch, setRuleSearch] = useState('')
+  const [ruleAcct, setRuleAcct] = useState<any>(null)
+  const [ruleAvOp, setRuleAvOp] = useState('none')
+  const [ruleAvV1, setRuleAvV1] = useState('')
+  const [ruleAvV2, setRuleAvV2] = useState('')
+  const [ruleAhOp, setRuleAhOp] = useState('none')
+  const [ruleAhV1, setRuleAhV1] = useState('')
+  const [ruleAhV2, setRuleAhV2] = useState('')
+
+  const resetRuleForm = () => { setRuleSearch(''); setRuleAcct(null); setRuleAvOp('none'); setRuleAvV1(''); setRuleAvV2(''); setRuleAhOp('none'); setRuleAhV1(''); setRuleAhV2('') }
 
   const [selectedMonthlyAccounts, setSelectedMonthlyAccounts] = useState<string[]>([])
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set())
@@ -5542,12 +5586,8 @@ export default function App() {
   // Linhas a renderizar no Balancete: aplica o filtro "Só divergências" (mostra
   // apenas contas que disparam algum alerta AV%/AH% do perfil ativo + seus pais).
   const rowsToRender = useMemo(() => {
-    const avC = effCond(activeProfile, 'av') as any
-    const ahC = effCond(activeProfile, 'ah') as any
-    // Só considera os alertas das colunas visíveis (espelha os ⚠️ que aparecem na tela)
-    const avActive = showAV && avC.op !== 'none'
-    const ahActive = showAH && ahC.op !== 'none'
-    const filtroDiv = soDivergencias && (avActive || ahActive)
+    // filtroDiv: ativo sempre que soDivergencias está ligado (resolução por conta dentro de diverge)
+    const filtroDiv = soDivergencias
     const filtroAus = soAusencias && recorrentesSet.size > 0
     const filtroLac = soLacunas
     const filtroAna = soAnaliticas
@@ -5566,19 +5606,25 @@ export default function App() {
     const diverge = (acc: any) => {
       for (const p of periodsToDisplay) {
         const rawVal = getBalanceteRawVal(acc, p)
-        if (avActive && rawVal > 0) {
-          const base = getBaseValueForAccountWithProfile(acc, p, activeProfile)
-          if (base > 0 && condDispara((rawVal / base) * 100, avC)) return true
-        }
-        if (ahActive) {
-          let prevVal = 0
-          if (activeProfile.globalAhMode === 'base_period' && activeProfile.basePeriodForAh) {
-            prevVal = getBalanceteRawVal(acc, activeProfile.basePeriodForAh)
-          } else {
-            const idx = allP.indexOf(p)
-            if (idx > 0) prevVal = getBalanceteRawVal(acc, allP[idx - 1])
+        if (showAV && rawVal > 0) {
+          const avC = effCondForAccountFn(activeProfile, 'av', acc.conta, accountParentMap) as any
+          if (avC.op !== 'none') {
+            const base = getBaseValueForAccountWithProfile(acc, p, activeProfile)
+            if (base > 0 && condDispara((rawVal / base) * 100, avC)) return true
           }
-          if (prevVal > 0 && condDispara((rawVal / prevVal - 1) * 100, ahC)) return true
+        }
+        if (showAH) {
+          const ahC = effCondForAccountFn(activeProfile, 'ah', acc.conta, accountParentMap) as any
+          if (ahC.op !== 'none') {
+            let prevVal = 0
+            if (activeProfile.globalAhMode === 'base_period' && activeProfile.basePeriodForAh) {
+              prevVal = getBalanceteRawVal(acc, activeProfile.basePeriodForAh)
+            } else {
+              const idx = allP.indexOf(p)
+              if (idx > 0) prevVal = getBalanceteRawVal(acc, allP[idx - 1])
+            }
+            if (prevVal > 0 && condDispara((rawVal / prevVal - 1) * 100, ahC)) return true
+          }
         }
       }
       return false
@@ -5642,8 +5688,8 @@ export default function App() {
   // alerta visível (AV%/AH%). Usado p/ mascarar os meses que não bateram.
   const periodoDiverge = (acc: any, p: string) => {
     if (!soDivergencias) return true
-    const avC = effCond(activeProfile, 'av') as any
-    const ahC = effCond(activeProfile, 'ah') as any
+    const avC = effCondForAccountFn(activeProfile, 'av', acc.conta, accountParentMap) as any
+    const ahC = effCondForAccountFn(activeProfile, 'ah', acc.conta, accountParentMap) as any
     const avActive = showAV && avC.op !== 'none'
     const ahActive = showAH && ahC.op !== 'none'
     if (!avActive && !ahActive) return true
@@ -10092,8 +10138,9 @@ export default function App() {
                           )
                         }
                         const avPct = (rawVal / base) * 100
-                        const avCond = effCond(profile, 'av')
+                        const avCond = effCondForAccountFn(profile, 'av', acc.conta, accountParentMap)
                         const hasAlert = condDispara(avPct, avCond)
+                        const avHasCustomRule = (profile.accountRules || []).some((r: any) => { let c = acc.conta; while(c){ if(r.conta===c && r.avOp!=null) return true; c=accountParentMap?.[c] } return false })
 
                         const avAlertNode = hasAlert ? (
                           <UITooltip delayDuration={0}>
@@ -10135,6 +10182,7 @@ export default function App() {
                                   title="Clique para ver a memória de cálculo"
                                 >
                                   {avPct.toFixed(2)}%
+                                  {avHasCustomRule && <span className="text-violet-400 text-[8px] ml-0.5" title="Limiar de alerta customizado para esta conta/grupo">✦</span>}
                                 </span>
                               </PopoverTrigger>
                               <PopoverContent
@@ -10548,8 +10596,9 @@ export default function App() {
                                           ? 'text-white/50'
                                           : 'text-blue-800/50'
 
-                                  const ahCond = effCond(activeProfile, 'ah')
+                                  const ahCond = effCondForAccountFn(activeProfile, 'ah', acc.conta, accountParentMap)
                                   const hasAlert = condDispara(ahPct, ahCond)
+                                  const ahHasCustomRule = (activeProfile?.accountRules || []).some((r: any) => { let c = acc.conta; while(c){ if(r.conta===c && r.ahOp!=null) return true; c=accountParentMap?.[c] } return false })
 
                                   ahAlertNode = hasAlert ? (
                                     <UITooltip delayDuration={0}>
@@ -10575,6 +10624,7 @@ export default function App() {
                                           >
                                             {ahPct > 0 ? '+' : ''}
                                             {ahPct.toFixed(2)}%
+                                            {ahHasCustomRule && <span className="text-violet-400 text-[8px] ml-0.5" title="Limiar customizado para esta conta/grupo">✦</span>}
                                           </span>
                                         </PopoverTrigger>
                                         <PopoverContent
@@ -12795,6 +12845,170 @@ export default function App() {
                           )
                         })}
                       </div>
+
+                      {/* ─── Regras de alerta por conta / grupo ───────────────── */}
+                      {(() => {
+                        const rules: any[] = profile.accountRules || []
+                        const accounts = monthlyData.allAccounts || []
+                        const filteredAccts = ruleSearch.trim().length > 0
+                          ? accounts.filter((a: any) => a.conta.includes(ruleSearch) || a.nome.toLowerCase().includes(ruleSearch.toLowerCase())).slice(0, 8)
+                          : []
+
+                        const addRule = () => {
+                          if (!ruleAcct) return
+                          if (rules.find((r: any) => r.conta === ruleAcct.conta)) return
+                          const newRule = {
+                            id: crypto.randomUUID(),
+                            conta: ruleAcct.conta,
+                            nome: ruleAcct.nome,
+                            avOp: ruleAvOp !== 'none' ? ruleAvOp : null,
+                            avV1: ruleAvOp !== 'none' ? (ruleAvV1 || null) : null,
+                            avV2: ruleAvOp !== 'none' ? (ruleAvV2 || null) : null,
+                            ahOp: ruleAhOp !== 'none' ? ruleAhOp : null,
+                            ahV1: ruleAhOp !== 'none' ? (ruleAhV1 || null) : null,
+                            ahV2: ruleAhOp !== 'none' ? (ruleAhV2 || null) : null,
+                          }
+                          updateProfile({ accountRules: [...rules, newRule] } as any)
+                          resetRuleForm()
+                        }
+
+                        const deleteRule = (id: string) => {
+                          updateProfile({ accountRules: rules.filter((r: any) => r.id !== id) } as any)
+                        }
+
+                        const OpSelect = ({ value, onChange, label }: any) => (
+                          <div className="flex-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase block mb-0.5">{label}</label>
+                            <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 outline-none bg-white">
+                              <option value="none">Sem alerta (herda)</option>
+                              <option value="gt">Maior que</option>
+                              <option value="lt">Menor que</option>
+                              <option value="between">Entre (dentro)</option>
+                              <option value="outside">Fora da faixa</option>
+                            </select>
+                          </div>
+                        )
+
+                        return (
+                          <div className="mt-4 border-t border-slate-100 pt-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <label className="text-xs font-bold text-slate-700 block">Regras por Conta / Grupo</label>
+                                <p className="text-[11px] text-slate-400">Limiar específico por conta, subgrupo ou nível — herança hierárquica automática.</p>
+                              </div>
+                            </div>
+
+                            {/* Regras existentes */}
+                            {rules.length > 0 && (
+                              <div className="mb-3 flex flex-col gap-1.5 max-h-44 overflow-y-auto custom-scrollbar pr-1">
+                                {rules.map((rule: any) => {
+                                  const accInfo = accounts.find((a: any) => a.conta === rule.conta)
+                                  return (
+                                    <div key={rule.id} className="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <span className="text-[11px] font-mono font-bold text-indigo-700">{rule.conta}</span>
+                                          <span className="text-[11px] text-slate-500 truncate">{accInfo?.nome || rule.nome}</span>
+                                        </div>
+                                        <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                                          {rule.avOp && <span className="text-[10px] bg-blue-50 border border-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">AV% {ruleCondTexto(rule.avOp, rule.avV1, rule.avV2)}</span>}
+                                          {rule.ahOp && <span className="text-[10px] bg-violet-50 border border-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full">AH% {ruleCondTexto(rule.ahOp, rule.ahV1, rule.ahV2)}</span>}
+                                          {!rule.avOp && !rule.ahOp && <span className="text-[10px] text-slate-400 italic">herda perfil global</span>}
+                                        </div>
+                                      </div>
+                                      <button onClick={() => deleteRule(rule.id)} className="p-1 rounded-lg hover:bg-rose-50 transition-colors shrink-0">
+                                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                                      </button>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+
+                            {/* Formulário nova regra */}
+                            <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-3 flex flex-col gap-2">
+                              <p className="text-[10px] font-bold text-slate-500 uppercase">+ Nova regra</p>
+
+                              {/* Seletor de conta */}
+                              <div className="relative">
+                                <input
+                                  value={ruleAcct ? `${ruleAcct.conta} — ${ruleAcct.nome}` : ruleSearch}
+                                  onChange={(e) => { setRuleAcct(null); setRuleSearch(e.target.value) }}
+                                  placeholder="Buscar conta ou grupo..."
+                                  className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-indigo-300 bg-white"
+                                />
+                                {filteredAccts.length > 0 && !ruleAcct && (
+                                  <div className="absolute z-10 top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl mt-1 max-h-44 overflow-y-auto">
+                                    {filteredAccts.map((a: any) => (
+                                      <button
+                                        key={a.conta}
+                                        onClick={() => { setRuleAcct(a); setRuleSearch('') }}
+                                        className="w-full text-left px-3 py-2 hover:bg-indigo-50 flex items-center gap-2"
+                                      >
+                                        <span className="text-[11px] font-mono text-indigo-600 w-20 shrink-0">{a.conta}</span>
+                                        <span className="text-[11px] text-slate-600 truncate">{a.nome}</span>
+                                        <span className="text-[10px] text-slate-400 shrink-0">{a.tipo === 'S' ? 'grupo' : 'analítica'}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Condições AV% e AH% */}
+                              <div className="flex gap-2">
+                                <OpSelect label="AV%" value={ruleAvOp} onChange={setRuleAvOp} />
+                                <OpSelect label="AH%" value={ruleAhOp} onChange={setRuleAhOp} />
+                              </div>
+
+                              {/* Valores AV% */}
+                              {(ruleAvOp === 'gt' || ruleAvOp === 'lt') && (
+                                <div className="flex gap-2 items-center">
+                                  <span className="text-[10px] text-slate-400 w-8">AV%</span>
+                                  <div className="relative flex-1">
+                                    <input type="text" inputMode="decimal" value={ruleAvV1} onChange={(e) => setRuleAvV1(e.target.value)} placeholder={ruleAvOp === 'gt' ? 'ex.: 80' : 'ex.: 5'} className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 pr-5 outline-none focus:ring-1 focus:ring-indigo-300" />
+                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">%</span>
+                                  </div>
+                                </div>
+                              )}
+                              {(ruleAvOp === 'between' || ruleAvOp === 'outside') && (
+                                <div className="flex gap-2 items-center">
+                                  <span className="text-[10px] text-slate-400 w-8">AV%</span>
+                                  <div className="relative flex-1"><input type="text" inputMode="decimal" value={ruleAvV1} onChange={(e) => setRuleAvV1(e.target.value)} placeholder="De" className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 pr-5 outline-none focus:ring-1 focus:ring-indigo-300" /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">%</span></div>
+                                  <span className="text-[10px] text-slate-400">a</span>
+                                  <div className="relative flex-1"><input type="text" inputMode="decimal" value={ruleAvV2} onChange={(e) => setRuleAvV2(e.target.value)} placeholder="Até" className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 pr-5 outline-none focus:ring-1 focus:ring-indigo-300" /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">%</span></div>
+                                </div>
+                              )}
+
+                              {/* Valores AH% */}
+                              {(ruleAhOp === 'gt' || ruleAhOp === 'lt') && (
+                                <div className="flex gap-2 items-center">
+                                  <span className="text-[10px] text-slate-400 w-8">AH%</span>
+                                  <div className="relative flex-1">
+                                    <input type="text" inputMode="decimal" value={ruleAhV1} onChange={(e) => setRuleAhV1(e.target.value)} placeholder={ruleAhOp === 'gt' ? 'ex.: 20' : 'ex.: -10'} className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 pr-5 outline-none focus:ring-1 focus:ring-indigo-300" />
+                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">%</span>
+                                  </div>
+                                </div>
+                              )}
+                              {(ruleAhOp === 'between' || ruleAhOp === 'outside') && (
+                                <div className="flex gap-2 items-center">
+                                  <span className="text-[10px] text-slate-400 w-8">AH%</span>
+                                  <div className="relative flex-1"><input type="text" inputMode="decimal" value={ruleAhV1} onChange={(e) => setRuleAhV1(e.target.value)} placeholder="De" className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 pr-5 outline-none focus:ring-1 focus:ring-indigo-300" /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">%</span></div>
+                                  <span className="text-[10px] text-slate-400">a</span>
+                                  <div className="relative flex-1"><input type="text" inputMode="decimal" value={ruleAhV2} onChange={(e) => setRuleAhV2(e.target.value)} placeholder="Até" className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 pr-5 outline-none focus:ring-1 focus:ring-indigo-300" /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">%</span></div>
+                                </div>
+                              )}
+
+                              <button
+                                onClick={addRule}
+                                disabled={!ruleAcct}
+                                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-colors bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-40 disabled:cursor-not-allowed self-end"
+                              >
+                                <Plus className="w-3.5 h-3.5" /> Adicionar regra
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })()}
 
                       {Object.keys(profile.customAvBases || {}).length > 0 && (
                         <div className="mt-4 border-t border-slate-100 pt-4">
