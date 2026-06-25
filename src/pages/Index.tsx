@@ -986,6 +986,9 @@ export default function App() {
   // Preferências de visualização da tabela do Balancete Comparativo
   const { prefs: balancetePrefs, updatePrefs: updateBalancetePrefs } =
     useTablePreferences('balancete_comparativo')
+  // Preferências de visualização da tabela da DRE
+  const { prefs: drePrefs, updatePrefs: updateDrePrefs } =
+    useTablePreferences('dre')
 
   // Alinhamento por coluna (persistido nas prefs)
   const setColAlign = (key: string, val: 'left' | 'center' | 'right') =>
@@ -1490,10 +1493,13 @@ export default function App() {
   )
   const [openDropdownId, setOpenDropdownId] = useState(null)
   const [expandedDreGroups, setExpandedDreGroups] = useState({})
-  const [dreFontSize, setDreFontSize] = useState(11)
   const [dreSelectedPeriods, setDreSelectedPeriods] = useState<string[]>([])
+  const [drePeriodsNone, setDrePeriodsNone] = useState(false)
   const [dreIsAccumulated, setDreIsAccumulated] = useState(false)
   const [drePeriodPopover, setDrePeriodPopover] = useState(false)
+  const setAllDreColAlign = (val: 'left' | 'center' | 'right') =>
+    updateDrePrefs({ alignments: { ...(drePrefs.alignments || {}), value: val } })
+  const dreValAlign = (drePrefs.alignments?.value as 'left' | 'center' | 'right') || 'right'
   const dropdownRef = useRef(null)
 
   const [customMapping, setCustomMapping] = useState(() => getSavedState('customMapping', {}))
@@ -7027,29 +7033,50 @@ export default function App() {
                         className="flex items-center gap-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm"
                       >
                         <CalendarDays className="w-3.5 h-3.5 text-slate-400" />
-                        Períodos ({dreSelectedPeriods.length > 0 ? dreSelectedPeriods.length : dreStructuredData.periods.length})
+                        {(() => {
+                          if (drePeriodsNone) return `Períodos (0)`
+                          if (dreSelectedPeriods.length === 0) return `Períodos (${dreStructuredData.periods.length})`
+                          return `Períodos (${dreSelectedPeriods.length})`
+                        })()}
                       </button>
                       {drePeriodPopover && (
-                        <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl p-3 min-w-[220px]">
+                        <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl p-3 min-w-[230px]">
                           <div className="flex justify-between items-center mb-2">
                             <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Períodos</span>
-                            <button
-                              onClick={() => { setDreSelectedPeriods([]); setDrePeriodPopover(false) }}
-                              className="text-xs text-indigo-600 font-bold hover:underline"
-                            >
-                              Todos
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => { setDreSelectedPeriods([]); setDrePeriodsNone(false) }}
+                                className="text-xs text-indigo-600 font-bold hover:underline"
+                              >
+                                Todos
+                              </button>
+                              <button
+                                onClick={() => { setDrePeriodsNone(true) }}
+                                className="text-xs text-slate-500 font-bold hover:underline"
+                              >
+                                Nenhum
+                              </button>
+                              <button
+                                onClick={() => { setDreSelectedPeriods([]); setDrePeriodsNone(false) }}
+                                className="text-xs text-rose-500 font-bold hover:underline"
+                              >
+                                Limpar
+                              </button>
+                            </div>
                           </div>
                           <div className="flex flex-col gap-1 max-h-52 overflow-y-auto">
                             {dreStructuredData.periods.map((p: any) => {
-                              const checked = dreSelectedPeriods.length === 0 || dreSelectedPeriods.includes(p)
+                              const checked = !drePeriodsNone && (dreSelectedPeriods.length === 0 || dreSelectedPeriods.includes(p))
                               return (
                                 <label key={p} className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 rounded px-1 py-0.5">
                                   <input
                                     type="checkbox"
                                     checked={checked}
                                     onChange={() => {
-                                      if (dreSelectedPeriods.length === 0) {
+                                      if (drePeriodsNone) {
+                                        setDrePeriodsNone(false)
+                                        setDreSelectedPeriods([p])
+                                      } else if (dreSelectedPeriods.length === 0) {
                                         setDreSelectedPeriods(dreStructuredData.periods.filter((x: any) => x !== p))
                                       } else if (checked) {
                                         const next = dreSelectedPeriods.filter((x) => x !== p)
@@ -7077,28 +7104,30 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Font size */}
+                  {/* Font size + Visualização */}
                   <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-sm">
                     <button
-                      onClick={() => setDreFontSize((s) => Math.max(8, s - 1))}
-                      className="text-slate-500 hover:text-slate-800 font-bold text-xs px-1"
+                      onClick={() => updateDrePrefs({ fontSize: Math.max(FONT_SIZE_MIN, drePrefs.fontSize - 1) })}
+                      className="h-7 w-7 flex items-center justify-center rounded text-[12px] font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                      title="Diminuir fonte"
                     >
                       A-
                     </button>
-                    <span className="text-xs font-bold text-slate-600 w-5 text-center">{dreFontSize}</span>
+                    <span className="text-xs font-bold text-slate-500 w-5 text-center select-none">{drePrefs.fontSize}</span>
                     <button
-                      onClick={() => setDreFontSize((s) => Math.min(18, s + 1))}
-                      className="text-slate-500 hover:text-slate-800 font-bold text-xs px-1"
+                      onClick={() => updateDrePrefs({ fontSize: Math.min(FONT_SIZE_MAX, drePrefs.fontSize + 1) })}
+                      className="h-7 w-7 flex items-center justify-center rounded text-[15px] font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                      title="Aumentar fonte"
                     >
                       A+
                     </button>
-                    <button
-                      onClick={() => setDreFontSize(11)}
-                      title="Resetar tamanho"
-                      className="text-slate-400 hover:text-slate-600 ml-1"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                    </button>
+                    <div className="w-px h-5 bg-slate-200 mx-0.5" />
+                    <TableSettingsControls
+                      prefs={drePrefs}
+                      updatePrefs={updateDrePrefs}
+                      onAlignAll={setAllDreColAlign}
+                      className="border-0 shadow-none bg-transparent h-7 w-7"
+                    />
                   </div>
 
                   <button
@@ -7117,22 +7146,34 @@ export default function App() {
               </div>
 
               {dreStructuredData?.lines?.length > 0 ? (() => {
-                const drePeriodsToDisplay = dreSelectedPeriods.length > 0
-                  ? dreStructuredData.periods.filter((p: any) => dreSelectedPeriods.includes(p))
-                  : dreStructuredData.periods
+                const allDrePeriods = dreStructuredData.periods
+                const drePeriodsToDisplay = drePeriodsNone
+                  ? []
+                  : dreSelectedPeriods.length === 0
+                    ? allDrePeriods
+                    : allDrePeriods.filter((p: any) => dreSelectedPeriods.includes(p))
                 const getDreLineVal = (line: any, period: string) => {
                   if (!dreIsAccumulated) return line.totals[period] || 0
-                  const idx = dreStructuredData.periods.indexOf(period)
-                  return dreStructuredData.periods.slice(0, idx + 1).reduce((s: number, p: any) => s + (line.totals[p] || 0), 0)
+                  const idx = allDrePeriods.indexOf(period)
+                  return allDrePeriods.slice(0, idx + 1).reduce((s: number, p: any) => s + (line.totals[p] || 0), 0)
                 }
                 const getDreAccVal = (acc: any, period: string) => {
                   if (!dreIsAccumulated) return acc.saldos[period] || 0
-                  const idx = dreStructuredData.periods.indexOf(period)
-                  return dreStructuredData.periods.slice(0, idx + 1).reduce((s: number, p: any) => s + (acc.saldos[p] || 0), 0)
+                  const idx = allDrePeriods.indexOf(period)
+                  return allDrePeriods.slice(0, idx + 1).reduce((s: number, p: any) => s + (acc.saldos[p] || 0), 0)
                 }
                 return (
                 <div className="overflow-x-auto custom-scrollbar">
-                  <Table className="w-full text-left" style={{ fontSize: dreFontSize }}>
+                  <Table
+                    className="w-full text-left dre-viz-table"
+                    data-grid={drePrefs.showGridlines ? 'on' : 'off'}
+                    data-density={drePrefs.rowHeight || 'standard'}
+                    style={{
+                      fontSize: `${drePrefs.fontSize}px`,
+                      ['--dre-gw']: `${drePrefs.gridlineWidth}px`,
+                      ['--dre-gl']: drePrefs.gridlineColor,
+                    } as any}
+                  >
                     <TableHeader>
                       <TableRow className="bg-slate-50/80 border-b-2 border-slate-200 hover:bg-slate-50/80">
                         <TableHead className="p-5 font-bold text-slate-500 uppercase tracking-widest text-[11px] min-w-[400px]">
@@ -7141,7 +7182,7 @@ export default function App() {
                         {drePeriodsToDisplay.map((period: any) => (
                           <TableHead
                             key={period}
-                            className="p-5 whitespace-nowrap text-right border-l border-slate-100 h-auto"
+                            className={`p-5 whitespace-nowrap text-${dreValAlign} border-l border-slate-100 h-auto`}
                           >
                             <div className="text-[10px] text-slate-400 uppercase font-bold tracking-widest mb-1">
                               {period.split(' a ')[0].substring(3)}
@@ -7207,7 +7248,7 @@ export default function App() {
                               {drePeriodsToDisplay.map((period: any) => (
                                 <TableCell
                                   key={period}
-                                  className={`p-4 md:px-6 text-right whitespace-nowrap border-l border-slate-100/50 ${valClass}`}
+                                  className={`p-4 md:px-6 whitespace-nowrap border-l border-slate-100/50 ${valClass} text-${dreValAlign}`}
                                 >
                                   {formatDreValue(getDreLineVal(line, period))}
                                 </TableCell>
@@ -7232,7 +7273,7 @@ export default function App() {
                                   {drePeriodsToDisplay.map((period: any) => (
                                     <TableCell
                                       key={period}
-                                      className="p-3 md:px-6 text-right whitespace-nowrap border-l border-slate-100/50 text-slate-500 text-[13px] font-medium"
+                                      className={`p-3 md:px-6 whitespace-nowrap border-l border-slate-100/50 text-slate-500 text-[13px] font-medium text-${dreValAlign}`}
                                     >
                                       {formatDreValue(getDreAccVal(acc, period))}
                                     </TableCell>
@@ -13663,6 +13704,23 @@ export default function App() {
         }
         .bc-viz-table[data-density='comfortable'] th,
         .bc-viz-table[data-density='comfortable'] td {
+          padding-top: 14px !important;
+          padding-bottom: 14px !important;
+        }
+        /* Visualização da Tabela (DRE) */
+        .dre-viz-table[data-grid='on'] th,
+        .dre-viz-table[data-grid='on'] td {
+          border-width: var(--dre-gw, 1px) !important;
+          border-style: solid !important;
+          border-color: var(--dre-gl, #cbd5e1) !important;
+        }
+        .dre-viz-table[data-density='compact'] th,
+        .dre-viz-table[data-density='compact'] td {
+          padding-top: 2px !important;
+          padding-bottom: 2px !important;
+        }
+        .dre-viz-table[data-density='comfortable'] th,
+        .dre-viz-table[data-density='comfortable'] td {
           padding-top: 14px !important;
           padding-bottom: 14px !important;
         }
