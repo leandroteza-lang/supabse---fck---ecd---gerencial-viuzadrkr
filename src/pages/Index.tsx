@@ -7233,8 +7233,11 @@ export default function App() {
                 }
                 return (
                 <div className="overflow-auto custom-scrollbar" style={{ maxHeight: 'calc(100vh - 320px)' }}>
-                  <Table
-                    className="w-full text-left dre-viz-table"
+                  {/* <table> puro: evita o <div overflow-auto> interno do Shadcn <Table>
+                      que quebraria o sticky; border-separate necessário porque
+                      border-collapse:collapse (Tailwind preflight) também quebra sticky */}
+                  <table
+                    className="w-full text-left dre-viz-table border-separate border-spacing-0"
                     data-grid={drePrefs.showGridlines ? 'on' : 'off'}
                     data-density={drePrefs.rowHeight || 'standard'}
                     style={{
@@ -7243,15 +7246,16 @@ export default function App() {
                       ['--dre-gl']: drePrefs.gridlineColor,
                     } as any}
                   >
-                    <TableHeader>
-                      <TableRow className="border-b-2 border-slate-200 hover:bg-slate-50/80">
-                        <TableHead className="p-5 font-bold text-slate-500 uppercase tracking-widest text-[11px] min-w-[400px] bg-slate-50 sticky top-0 z-20 shadow-[0_1px_0_0_#e2e8f0]">
+                    <thead>
+                      <tr className="border-b-2 border-slate-200">
+                        <th className="p-5 font-bold text-slate-500 uppercase tracking-widest text-[11px] min-w-[400px] bg-slate-50 sticky top-0 z-20" style={{ boxShadow: '0 1px 0 #e2e8f0' }}>
                           Estrutura Contábil Analítica
-                        </TableHead>
+                        </th>
                         {drePeriodsToDisplay.map((period: any) => (
-                          <TableHead
+                          <th
                             key={period}
-                            className={`p-5 whitespace-nowrap text-${dreValAlign} border-l border-slate-100 h-auto bg-slate-50 sticky top-0 z-10 shadow-[0_1px_0_0_#e2e8f0]`}
+                            className={`p-5 whitespace-nowrap text-${dreValAlign} border-l border-slate-100 bg-slate-50 sticky top-0 z-10`}
+                            style={{ boxShadow: '0 1px 0 #e2e8f0' }}
                           >
                             <div className="text-[10px] text-slate-400 uppercase font-bold tracking-widest mb-1">
                               {period.split(' a ')[0].substring(3)}
@@ -7259,11 +7263,11 @@ export default function App() {
                             <span className="font-bold text-slate-700 text-sm">
                               {dreIsAccumulated ? 'Saldo Acumulado' : 'Saldo no Período'}
                             </span>
-                          </TableHead>
+                          </th>
                         ))}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody className="divide-y divide-slate-100">
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
                       {dreStructuredData.lines.map((line: any) => {
                         const isExpanded = expandedDreGroups[line.id]
                         const isSubtotal = line.isSubtotal
@@ -7274,25 +7278,20 @@ export default function App() {
                         let rowBg = ''
                         let textClass = 'text-slate-700 font-semibold text-[13px]'
                         let valClass = 'text-slate-700'
-                        let chevronClass = 'bg-white/20 text-white'
 
                         if (line.id === '14_LUCRO_LIQUIDO') {
-                          // Resultado final → azul mais escuro (nível 1 do Balancete)
                           rowBg = 'bg-[#1E1B4B]'
                           textClass = 'text-white font-black text-[13px] uppercase tracking-wide'
                           valClass = 'text-white font-black'
                         } else if (line.id === '08_EBIT' || line.id === '05_LUCRO_BRUTO') {
-                          // Resultados intermediários importantes → azul-800
                           rowBg = 'bg-[#1E40AF]'
                           textClass = 'text-white font-black text-[13px] uppercase tracking-wide'
                           valClass = 'text-white font-black'
                         } else if (isSubtotal) {
-                          // Demais subtotais → azul-500
                           rowBg = 'bg-[#3B82F6]'
                           textClass = 'text-white font-bold text-[12px] uppercase tracking-wide'
                           valClass = 'text-white font-bold'
                         } else if (hasChildren) {
-                          // Grupos sintéticos expandíveis → azul mais escuro (nível 1)
                           rowBg = 'bg-[#1E1B4B] cursor-pointer group'
                           textClass = 'text-white font-bold text-[13px]'
                           valClass = 'text-white font-bold'
@@ -7304,60 +7303,62 @@ export default function App() {
 
                         return (
                           <React.Fragment key={line.id}>
-                            <TableRow
+                            <tr
                               onClick={() => hasChildren && toggleDreGroup(line.id)}
                               className={rowClass}
                             >
-                              <TableCell className="p-4 md:px-6 flex items-center gap-3">
-                                {hasChildren ? (
-                                  <span
-                                    className={`p-1 rounded transition-colors ${isExpanded ? 'bg-white/30' : 'bg-white/10 hover:bg-white/20'}`}
-                                  >
-                                    <ChevronDown
-                                      className={`w-4 h-4 text-white transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
-                                    />
-                                  </span>
-                                ) : (
-                                  <span className="w-6" />
-                                )}
-                                <span className={textClass}>{line.label}</span>
-                              </TableCell>
+                              <td className="p-4 md:px-6">
+                                <div className="flex items-center gap-3">
+                                  {hasChildren ? (
+                                    <span
+                                      className={`p-1 rounded transition-colors ${isExpanded ? 'bg-white/30' : 'bg-white/10 hover:bg-white/20'}`}
+                                    >
+                                      <ChevronDown
+                                        className={`w-4 h-4 text-white transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+                                      />
+                                    </span>
+                                  ) : (
+                                    <span className="w-6" />
+                                  )}
+                                  <span className={textClass}>{line.label}</span>
+                                </div>
+                              </td>
                               {drePeriodsToDisplay.map((period: any) => (
-                                <TableCell
+                                <td
                                   key={period}
                                   className={`p-4 md:px-6 whitespace-nowrap border-l border-slate-100/50 ${valClass} text-${dreValAlign}`}
                                 >
                                   {formatDreValue(getDreLineVal(line, period))}
-                                </TableCell>
+                                </td>
                               ))}
-                            </TableRow>
+                            </tr>
 
                             {hasChildren &&
                               isExpanded &&
                               line.accounts.map((acc: any) => (
-                                <TableRow
+                                <tr
                                   key={acc.conta}
                                   className="bg-white hover:bg-slate-50/80 transition-colors"
                                 >
-                                  <TableCell className="py-3 px-6 pl-14 whitespace-nowrap">
+                                  <td className="py-3 px-6 pl-14 whitespace-nowrap">
                                     <span className="font-mono text-[11px] font-bold text-slate-900 tracking-wider mr-2">{acc.conta}</span>
                                     <span className="text-slate-900 font-medium text-[13px]">{acc.nome}</span>
-                                  </TableCell>
+                                  </td>
                                   {drePeriodsToDisplay.map((period: any) => (
-                                    <TableCell
+                                    <td
                                       key={period}
                                       className={`p-3 md:px-6 whitespace-nowrap border-l border-slate-100/50 text-slate-900 text-[13px] font-medium text-${dreValAlign}`}
                                     >
                                       {formatDreValue(getDreAccVal(acc, period))}
-                                    </TableCell>
+                                    </td>
                                   ))}
-                                </TableRow>
+                                </tr>
                               ))}
                           </React.Fragment>
                         )
                       })}
-                    </TableBody>
-                  </Table>
+                    </tbody>
+                  </table>
                 </div>
                 )
               })() : (
