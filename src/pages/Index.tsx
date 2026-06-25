@@ -82,6 +82,7 @@ import {
   Eye,
   EyeOff,
   GripHorizontal,
+  GripVertical,
   Pin,
   ClipboardList,
   Trash2,
@@ -1235,6 +1236,35 @@ export default function App() {
           }),
         }
       )
+    )
+  }
+
+  // DnD de itens no editor (intra e inter-seção)
+  const [clDragItem, setClDragItem] = useState(null)   // { clId, secId, itemId }
+  const [clDragTarget, setClDragTarget] = useState(null) // { secId, insertAfterItemId: string|null }
+
+  const moveItemDnD = (clId, srcSecId, srcItemId, dstSecId, insertAfterItemId) => {
+    if (srcSecId === dstSecId && srcItemId === insertAfterItemId) return
+    setChecklists((prev) =>
+      prev.map((c) => {
+        if (c.id !== clId) return c
+        let draggedItem = null
+        const afterRemove = c.sections.map((s) => {
+          if (s.id !== srcSecId) return s
+          const items = s.items.filter((it) => { if (it.id === srcItemId) { draggedItem = it; return false } return true })
+          return { ...s, items }
+        })
+        if (!draggedItem) return c
+        const afterInsert = afterRemove.map((s) => {
+          if (s.id !== dstSecId) return s
+          if (insertAfterItemId === null) return { ...s, items: [draggedItem, ...s.items] }
+          const idx = s.items.findIndex((it) => it.id === insertAfterItemId)
+          const items = [...s.items]
+          items.splice(idx === -1 ? items.length : idx + 1, 0, draggedItem)
+          return { ...s, items }
+        })
+        return { ...c, sections: afterInsert }
+      })
     )
   }
 
@@ -13515,9 +13545,16 @@ export default function App() {
 
                     {/* Seções e itens */}
                     <div className="flex flex-col gap-3">
-                      {cl.sections.map((sec, si) => (
+                      {cl.sections.map((sec, si) => {
+                        const isSecDragTarget = clDragTarget?.secId === sec.id
+                        return (
                         <div key={sec.id} className="border border-slate-100 rounded-2xl overflow-hidden">
-                          <div className="flex items-center gap-2 bg-slate-50 px-3 py-2">
+                          {/* Cabeçalho da seção — drop zone para inserir no início */}
+                          <div
+                            className={`flex items-center gap-2 bg-slate-50 px-3 py-2 transition-colors ${isSecDragTarget && clDragTarget?.insertAfterItemId === null ? 'bg-indigo-50 border-b-2 border-indigo-400' : ''}`}
+                            onDragOver={(e) => { if (!clDragItem) return; e.preventDefault(); setClDragTarget({ secId: sec.id, insertAfterItemId: null }) }}
+                            onDrop={(e) => { e.preventDefault(); if (clDragItem) { moveItemDnD(cl.id, clDragItem.secId, clDragItem.itemId, sec.id, null); setClDragItem(null); setClDragTarget(null) } }}
+                          >
                             <span className={`text-xs font-black ${cc.text} shrink-0`}>{si + 1}.</span>
                             <input
                               value={sec.title}
@@ -13534,62 +13571,85 @@ export default function App() {
                               <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                             </button>
                           </div>
-                          <div className="p-2 flex flex-col gap-1">
-                            {sec.items.map((item, ii) => (
-                              <div key={item.id} className="rounded-xl border border-transparent hover:border-slate-100 hover:bg-slate-50/60 group px-2 py-1.5">
-                                <div className="flex items-center gap-2">
-                                  {/* Número automático */}
-                                  <span className="text-[10px] font-mono text-slate-400 shrink-0 w-7 text-right">{si + 1}.{ii + 1}</span>
-                                  <div className={`w-3.5 h-3.5 rounded-sm border-2 shrink-0 ${item.checked ? `${cc.badge} border-transparent` : 'border-slate-300'} flex items-center justify-center`}>
-                                    {item.checked && <Check className="w-2 h-2 text-white" />}
-                                  </div>
-                                  <input
-                                    value={item.text}
-                                    onChange={(e) => {
-                                      setChecklists((prev) => prev.map((c) => c.id !== cl.id ? c : {
-                                        ...c,
-                                        sections: c.sections.map((s) => s.id !== sec.id ? s : {
-                                          ...s,
-                                          items: s.items.map((it) => it.id !== item.id ? it : { ...it, text: e.target.value }),
-                                        }),
-                                      }))
-                                    }}
-                                    className="flex-1 text-xs text-slate-700 bg-transparent outline-none"
-                                    placeholder="Descrição do item"
-                                  />
-                                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button disabled={ii === 0} onClick={() => moveCLItem(cl.id, sec.id, item.id, -1)} className="p-0.5 rounded disabled:opacity-20 hover:bg-slate-100" title="Mover para cima">
-                                      <ArrowUp className="w-3 h-3 text-slate-400" />
-                                    </button>
-                                    <button disabled={ii === sec.items.length - 1} onClick={() => moveCLItem(cl.id, sec.id, item.id, 1)} className="p-0.5 rounded disabled:opacity-20 hover:bg-slate-100" title="Mover para baixo">
-                                      <ArrowDown className="w-3 h-3 text-slate-400" />
-                                    </button>
-                                    <button onClick={() => deleteCLItem(cl.id, sec.id, item.id)} className="p-0.5 rounded hover:bg-rose-50" title="Excluir item">
-                                      <X className="w-3 h-3 text-rose-400" />
-                                    </button>
-                                  </div>
-                                </div>
-                                {/* Toggles: obrigatório / pré-requisito */}
-                                <div className="flex items-center gap-2 mt-1 ml-9 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button
-                                    onClick={() => updateCLItemProp(cl.id, sec.id, item.id, 'required', !item.required)}
-                                    className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full border transition-all ${item.required !== false ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}
-                                    title="Alternar obrigatório / facultativo"
+                          <div className="p-2 flex flex-col">
+                            {sec.items.map((item, ii) => {
+                              const isDragSource = clDragItem?.itemId === item.id
+                              const isDropTarget = isSecDragTarget && clDragTarget?.insertAfterItemId === item.id
+                              return (
+                                <div key={item.id}>
+                                  <div
+                                    draggable
+                                    onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setClDragItem({ clId: cl.id, secId: sec.id, itemId: item.id }) }}
+                                    onDragEnd={() => { setClDragItem(null); setClDragTarget(null) }}
+                                    onDragOver={(e) => { if (!clDragItem) return; e.preventDefault(); setClDragTarget({ secId: sec.id, insertAfterItemId: item.id }) }}
+                                    onDrop={(e) => { e.preventDefault(); if (clDragItem) { moveItemDnD(cl.id, clDragItem.secId, clDragItem.itemId, sec.id, item.id); setClDragItem(null); setClDragTarget(null) } }}
+                                    className={`rounded-xl border border-transparent hover:border-slate-100 hover:bg-slate-50/60 group px-2 py-1.5 transition-all ${isDragSource ? 'opacity-40' : ''}`}
                                   >
-                                    {item.required !== false ? '★ Obrigatório' : '◇ Facultativo'}
-                                  </button>
-                                  {ii < sec.items.length - 1 && (
-                                    <button
-                                      onClick={() => updateCLItemProp(cl.id, sec.id, item.id, 'isPrereq', !item.isPrereq)}
-                                      className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full border transition-all ${item.isPrereq ? 'bg-violet-50 border-violet-300 text-violet-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
-                                      title="Marcar como pré-requisito do próximo item"
-                                    >
-                                      🔒 Pré-req do próximo
-                                    </button>
+                                    <div className="flex items-center gap-1.5">
+                                      {/* Handle de drag */}
+                                      <GripVertical className="w-3 h-3 text-slate-300 shrink-0 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity" />
+                                      {/* Número automático */}
+                                      <span className="text-[10px] font-mono text-slate-400 shrink-0 w-6 text-right">{si + 1}.{ii + 1}</span>
+                                      <div className={`w-3.5 h-3.5 rounded-sm border-2 shrink-0 ${item.checked ? `${cc.badge} border-transparent` : 'border-slate-300'} flex items-center justify-center`}>
+                                        {item.checked && <Check className="w-2 h-2 text-white" />}
+                                      </div>
+                                      <input
+                                        value={item.text}
+                                        onChange={(e) => {
+                                          setChecklists((prev) => prev.map((c) => c.id !== cl.id ? c : {
+                                            ...c,
+                                            sections: c.sections.map((s) => s.id !== sec.id ? s : {
+                                              ...s,
+                                              items: s.items.map((it) => it.id !== item.id ? it : { ...it, text: e.target.value }),
+                                            }),
+                                          }))
+                                        }}
+                                        className="flex-1 text-xs text-slate-700 bg-transparent outline-none"
+                                        placeholder="Descrição do item"
+                                      />
+                                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button disabled={ii === 0} onClick={() => moveCLItem(cl.id, sec.id, item.id, -1)} className="p-0.5 rounded disabled:opacity-20 hover:bg-slate-100" title="Mover para cima">
+                                          <ArrowUp className="w-3 h-3 text-slate-400" />
+                                        </button>
+                                        <button disabled={ii === sec.items.length - 1} onClick={() => moveCLItem(cl.id, sec.id, item.id, 1)} className="p-0.5 rounded disabled:opacity-20 hover:bg-slate-100" title="Mover para baixo">
+                                          <ArrowDown className="w-3 h-3 text-slate-400" />
+                                        </button>
+                                        <button onClick={() => deleteCLItem(cl.id, sec.id, item.id)} className="p-0.5 rounded hover:bg-rose-50" title="Excluir item">
+                                          <X className="w-3 h-3 text-rose-400" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                    {/* Toggles: obrigatório / pré-requisito — sempre visíveis no hover */}
+                                    <div className="flex items-center gap-2 mt-1 ml-9 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button
+                                        onClick={() => updateCLItemProp(cl.id, sec.id, item.id, 'required', item.required === false ? true : false)}
+                                        className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full border transition-all ${item.required !== false ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}
+                                        title="Alternar obrigatório / facultativo"
+                                      >
+                                        {item.required !== false ? '★ Obrigatório' : '◇ Facultativo'}
+                                      </button>
+                                      <button
+                                        onClick={() => updateCLItemProp(cl.id, sec.id, item.id, 'isPrereq', !item.isPrereq)}
+                                        className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full border transition-all ${item.isPrereq ? 'bg-violet-50 border-violet-300 text-violet-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                                        title="Bloqueia todos os itens seguintes até ser concluído"
+                                      >
+                                        🔒 Pré-req dos seguintes
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {/* Linha indicadora de drop após este item */}
+                                  {isDropTarget && (
+                                    <div className="h-0.5 bg-indigo-400 rounded-full mx-2 my-0.5" />
                                   )}
                                 </div>
-                              </div>
-                            ))}
+                              )
+                            })}
+                            {/* Drop zone no final da seção */}
+                            <div
+                              className={`h-6 rounded-lg flex items-center justify-center transition-all mt-1 ${isSecDragTarget && clDragTarget?.insertAfterItemId === 'END' ? 'bg-indigo-50 border border-dashed border-indigo-300' : ''}`}
+                              onDragOver={(e) => { if (!clDragItem) return; e.preventDefault(); setClDragTarget({ secId: sec.id, insertAfterItemId: 'END' }) }}
+                              onDrop={(e) => { e.preventDefault(); if (clDragItem) { const lastId = sec.items[sec.items.length - 1]?.id || null; moveItemDnD(cl.id, clDragItem.secId, clDragItem.itemId, sec.id, lastId); setClDragItem(null); setClDragTarget(null) } }}
+                            />
                             {/* Adicionar item */}
                             <div className="flex items-center gap-2 px-2 pt-1">
                               <input
@@ -13608,7 +13668,8 @@ export default function App() {
                             </div>
                           </div>
                         </div>
-                      ))}
+                        )
+                      })}
                     </div>
 
                     {/* Adicionar seção */}
