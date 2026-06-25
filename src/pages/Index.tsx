@@ -720,7 +720,7 @@ const ExplanationPanel = ({
 interface AnalysisProfile {
   id: string
   name: string
-  globalAvMode: 'default' | 'parent'
+  globalAvMode: 'default' | 'parent' | 'lowest_synthetic'
   globalAhMode: 'previous' | 'base_period'
   basePeriodForAh?: string
   customAvBases: Record<string, string | string[]>
@@ -5538,6 +5538,17 @@ export default function App() {
     if (!baseAccCode) {
       if (profile.globalAvMode === 'parent') {
         baseAccCode = accountParentMap[acc.conta]
+      } else if (profile.globalAvMode === 'lowest_synthetic') {
+        if (acc.tipo === 'S') {
+          // Sintética folha = nenhum filho sintético → ela mesma é 100%
+          const hasSyntheticChild = monthlyData.allAccounts.some(
+            (a: any) => accountParentMap[a.conta] === acc.conta && a.tipo === 'S'
+          )
+          baseAccCode = hasSyntheticChild ? accountParentMap[acc.conta] : acc.conta
+        } else {
+          // Analítica → usa o pai imediato (sintético folha)
+          baseAccCode = accountParentMap[acc.conta]
+        }
       } else {
         const isPatrimonial = acc.conta.startsWith('1') || acc.conta.startsWith('2')
         const type = isPatrimonial
@@ -5550,7 +5561,15 @@ export default function App() {
       }
     }
 
-    if (baseAccCode === 'parent') {
+    if (baseAccCode === acc.conta) {
+      // modo lowest_synthetic: a conta é sua própria base (100%)
+      const val = computeVal(acc)
+      return {
+        type: `Sub-nível mais baixo — ${acc.conta} (100%)`,
+        totalValue: val,
+        accounts: [{ conta: acc.conta, nome: acc.nome, valor: val }],
+      }
+    } else if (baseAccCode === 'parent') {
       baseAccCode = accountParentMap[acc.conta]
     } else if (baseAccCode === 'root') {
       baseAccCode = monthlyData.allAccounts.find(
@@ -12753,6 +12772,7 @@ export default function App() {
                               Padrão (Ativo Total / Receita Líquida)
                             </SelectItem>
                             <SelectItem value="parent">Relativa à Conta Pai Imediata</SelectItem>
+                            <SelectItem value="lowest_synthetic">Relativa ao Sub-nível Mais Baixo (Grupo Folha = 100%)</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
