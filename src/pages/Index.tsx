@@ -7290,13 +7290,9 @@ export default function App() {
                                   key={acc.conta}
                                   className="bg-white hover:bg-slate-50/80 transition-colors"
                                 >
-                                  <TableCell className="py-3 px-6 pl-14 flex flex-col border-l-4 border-l-blue-400/30">
-                                    <span className="font-mono text-[11px] font-bold text-slate-400 tracking-wider">
-                                      {acc.conta}
-                                    </span>
-                                    <span className="text-slate-600 font-medium text-[13px] mt-0.5">
-                                      {acc.nome}
-                                    </span>
+                                  <TableCell className="py-3 px-6 pl-14 whitespace-nowrap">
+                                    <span className="font-mono text-[11px] font-bold text-slate-400 tracking-wider mr-2">{acc.conta}</span>
+                                    <span className="text-slate-600 font-medium text-[13px]">{acc.nome}</span>
                                   </TableCell>
                                   {drePeriodsToDisplay.map((period: any) => (
                                     <TableCell
@@ -13738,7 +13734,10 @@ export default function App() {
         /* Visualização da Tabela (DRE) */
         .dre-viz-table[data-grid='on'] th,
         .dre-viz-table[data-grid='on'] td {
-          border-width: var(--dre-gw, 1px) !important;
+          border-top-width: var(--dre-gw, 1px) !important;
+          border-right-width: var(--dre-gw, 1px) !important;
+          border-bottom-width: var(--dre-gw, 1px) !important;
+          border-left-width: var(--dre-gw, 1px) !important;
           border-style: solid !important;
           border-color: var(--dre-gl, #cbd5e1) !important;
         }
