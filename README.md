@@ -129,3 +129,10 @@ npm run build
 ```
 
 Os arquivos otimizados serão gerados na pasta `dist/` e estarão prontos para deploy.
+
+## 📖 Documentação Funcional
+
+| Módulo | Descrição |
+|---|---|
+| [PRD — Documento de Requisitos do Produto](docs/prd.md) | Visão completa do produto: personas, todas as funcionalidades, arquitetura técnica, modelo de dados e roadmap. |
+| [Dashboard de Evolução](docs/dashboard-de-evolucao.md) | Documentação técnica detalhada do painel principal: fluxo de dados, filtros, gráficos, KPIs e integrações com o Supabase. |
