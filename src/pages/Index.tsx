@@ -7208,9 +7208,9 @@ export default function App() {
 
               {dreStructuredData?.lines?.length > 0 ? (() => {
                 const allDrePeriods = dreStructuredData.periods
-                // Períodos do ano selecionado para acumulação (ou todos)
+                // Filtra por ano selecionado (vale para ambos os modos)
                 const getPeriodYear = (p: string) => p.split(' a ')[0].substring(3).split('/')[1] || ''
-                const accumBasePeriods = (dreIsAccumulated && dreAccumulateYear)
+                const accumBasePeriods = dreAccumulateYear
                   ? allDrePeriods.filter((p: any) => getPeriodYear(p) === dreAccumulateYear)
                   : allDrePeriods
                 // Períodos exibidos: respeitam o seletor de períodos e, em modo acumulado por ano, só mostram o ano escolhido
